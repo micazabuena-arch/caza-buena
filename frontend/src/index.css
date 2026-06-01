@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/* Brand palette: white + #498bc3 */
+@theme {
+  --color-aegean-50: #f7fafc;
+  --color-aegean-100: #eef4fa;
+  --color-aegean-200: #dceaf5;
+  --color-aegean-300: #b8d4eb;
+  --color-aegean-400: #7eb0d8;
+  --color-aegean-500: #498bc3;
+  --color-aegean-600: #3d7aab;
+  --color-aegean-700: #336894;
+  --color-aegean-800: #2a567d;
+  --color-aegean-900: #214566;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans text-aegean-900 bg-white antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-serif font-medium tracking-tight;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-aegean-500 text-white rounded-full font-medium transition-all hover:bg-aegean-600 hover:shadow-lg;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-aegean-500 text-aegean-500 rounded-full font-medium transition-all hover:bg-aegean-50;
+  }
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8 py-16 md:py-24;
+  }
+  .container-narrow {
+    @apply max-w-6xl mx-auto;
+  }
+}

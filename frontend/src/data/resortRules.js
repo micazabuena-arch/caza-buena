@@ -1,0 +1,38 @@
+/** Guest-facing copy for Caza Buena occupancy & pricing rules */
+
+export const ROOM_INVENTORY = {
+  suite: {
+    label: 'Suite Room (2 bedrooms)',
+    subtitle: 'Two-bedroom suite',
+    units: ['ROOM 101', 'ROOM 201', 'ROOM 301'],
+    count: 3,
+    capacityNote:
+      'Up to 8 adults + 2 children (below 6) + 2 children (7–12), OR 10 adults + 2 children (below 6).',
+  },
+  queen: {
+    label: 'Queen Room (1 bedroom)',
+    subtitle: 'One-bedroom room',
+    units: ['ROOM 102', 'ROOM 103', 'ROOM 202', 'ROOM 203', 'ROOM 302', 'ROOM 303'],
+    count: 6,
+    capacityNote:
+      'Up to 5 adults, OR 4 adults + 1 child (below 6), OR 4 adults + 1 child (7–12).',
+  },
+};
+
+export const EXTRA_PERSON_RATES = {
+  adult: 800,
+  child_under_6: 0,
+  child_7_12: 400,
+};
+
+/** Guest-facing bedroom count from room type */
+export function bedroomCountLabel(roomType) {
+  return roomType === 'suite' ? '2 bedrooms' : '1 bedroom';
+}
+
+export const DISCOUNT_POLICY = [
+  'Discounts cannot be combined with other promos, flash sales, early bird rates, or group discounts.',
+  'If multiple discounts apply, only the single highest discount is used.',
+  'All discounts are net of VAT.',
+  'PWD/Senior Citizen (20%) discounts are prorated per eligible guest—not on the full booking total.',
+];
