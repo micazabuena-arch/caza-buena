@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Users, Check, BedDouble } from 'lucide-react';
-import { bedroomCountLabel } from '../data/resortRules';
+import { bedroomCountLabel, roomShortDescription } from '../data/resortRules';
 import api from '../api/client';
 import PageHero from '../components/ui/PageHero';
 import ImageDotSlider from '../components/ui/ImageDotSlider';
@@ -64,7 +64,7 @@ export default function RoomDetail() {
       <PageHero
         eyebrow="Accommodation"
         title={room.name}
-        subtitle={room.short_description}
+        subtitle={roomShortDescription(room)}
         image={images.pageHero}
         imagePosition={images.pageHeroObjectPosition}
       />

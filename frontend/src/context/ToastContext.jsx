@@ -1,17 +1,19 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
 const styles = {
   success: 'bg-green-50 border-green-200 text-green-800',
   error: 'bg-red-50 border-red-200 text-red-800',
+  warning: 'bg-amber-50 border-amber-200 text-amber-900',
   info: 'bg-aegean-50 border-aegean-200 text-aegean-800',
 };
 
 const icons = {
   success: CheckCircle,
   error: AlertCircle,
+  warning: AlertTriangle,
   info: Info,
 };
 
@@ -35,6 +37,7 @@ export function ToastProvider({ children }) {
     () => ({
       success: (message) => addToast('success', message),
       error: (message) => addToast('error', message),
+      warning: (message) => addToast('warning', message),
       info: (message) => addToast('info', message),
     }),
     [addToast]

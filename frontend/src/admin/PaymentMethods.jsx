@@ -4,6 +4,7 @@ import { getAssetUrl } from '../utils/assetUrl';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminPaymentMethods() {
   const [methods, setMethods] = useState([]);
@@ -11,6 +12,7 @@ export default function AdminPaymentMethods() {
   const [saving, setSaving] = useState(null);
   const [error, setError] = useState('');
   const toast = useToast();
+  const confirm = useConfirm();
 
   const load = () => {
     setLoading(true);
@@ -30,6 +32,12 @@ export default function AdminPaymentMethods() {
   };
 
   const save = async (method) => {
+    const ok = await confirm({
+      title: 'Save payment method?',
+      message: `Update ${method.name} details on the website?`,
+      confirmLabel: 'Yes, save',
+    });
+    if (!ok) return;
     setSaving(method.id);
     setError('');
     try {

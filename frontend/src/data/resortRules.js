@@ -30,6 +30,37 @@ export function bedroomCountLabel(roomType) {
   return roomType === 'suite' ? '2 bedrooms' : '1 bedroom';
 }
 
+function roomTypeSubtitle(roomType) {
+  return roomType === 'suite' ? 'Two-bedroom suite' : 'One-bedroom queen';
+}
+
+/** Floor number from sort_order (e.g. 101 → 1) or room name (e.g. ROOM 201 → 2) */
+export function roomFloor(room) {
+  const sort = Number(room?.sort_order);
+  if (Number.isFinite(sort) && sort >= 100) return Math.floor(sort / 100);
+  const match = String(room?.name || '').match(/\b(\d{3})\b/);
+  if (match) return Math.floor(parseInt(match[1], 10) / 100);
+  return null;
+}
+
+/** Room card subtitle — fixes corrupted middle-dot (shows as ??) in stored text */
+export function roomShortDescription(room) {
+  const raw = String(room?.short_description || '').trim();
+  const cleaned = raw
+    .replace(/\u00B7/g, '-')
+    .replace(/\u2022/g, '-')
+    .replace(/\s*\?\?\s*/g, ' - ')
+    .replace(/\s*-\s*-\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned && !/\?\?/.test(cleaned)) return cleaned;
+
+  const type = roomTypeSubtitle(room?.room_type);
+  const floor = roomFloor(room);
+  return floor ? `${type} - Floor ${floor}` : type;
+}
+
 export const DISCOUNT_POLICY = [
   'Discounts cannot be combined with other promos, flash sales, early bird rates, or group discounts.',
   'If multiple discounts apply, only the single highest discount is used.',

@@ -9,7 +9,7 @@ A modern, mobile-responsive booking platform for **Caza Buena** resort in Alamin
 - Online booking with room selection & availability check
 - QR payment workflow (GCash, Maya, BDO, BPI) — no payment gateway
 - Payment proof upload
-- Booking acknowledgment emails (when SMTP configured)
+- Payment-proof acknowledgment emails after upload (when SMTP configured)
 
 ### Admin dashboard (`/admin`)
 - Secure login
@@ -98,7 +98,7 @@ Site runs at **http://localhost:5173** (API proxied via Vite)
 
 1. Guest submits booking → status `awaiting_payment`
 2. Guest sees QR instructions on confirmation page
-3. Guest uploads payment proof → status `payment_submitted`
+3. Guest uploads payment proof → status `payment_submitted` + acknowledgment email to guest
 4. Admin verifies in dashboard → Approve → `confirmed` + confirmation email
 
 Upload QR images in the database or via admin (configure Cloudinary for image hosting).

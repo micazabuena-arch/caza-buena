@@ -8,7 +8,7 @@ import ImageDotSlider from '../components/ui/ImageDotSlider';
 import PlaceholderImage from '../components/ui/PlaceholderImage';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import { pages, images, placeholderRooms } from '../data/placeholders';
-import { bedroomCountLabel } from '../data/resortRules';
+import { bedroomCountLabel, roomShortDescription } from '../data/resortRules';
 
 function formatStayDate(dateStr) {
   try {
@@ -215,7 +215,7 @@ export default function Rooms() {
                       </span>
                     </div>
 
-                    <p className="text-aegean-600/70 text-sm mt-1">{room.short_description}</p>
+                    <p className="text-aegean-600/70 text-sm mt-1">{roomShortDescription(room)}</p>
 
                     <div className="mt-4">
                       {isAvailabilitySearch && room.subtotal != null ? (

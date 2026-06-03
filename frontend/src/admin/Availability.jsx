@@ -3,6 +3,7 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminAvailability() {
   const [rooms, setRooms] = useState([]);
@@ -13,6 +14,7 @@ export default function AdminAvailability() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     api.get('/rooms/admin/all').then((r) => {
@@ -28,6 +30,12 @@ export default function AdminAvailability() {
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    const ok = await confirm({
+      title: 'Block dates?',
+      message: 'These dates will be unavailable for new bookings on the selected room.',
+      confirmLabel: 'Yes, block dates',
+    });
+    if (!ok) return;
     setError('');
     setSubmitting(true);
     try {
@@ -46,6 +54,13 @@ export default function AdminAvailability() {
   };
 
   const remove = async (id) => {
+    const ok = await confirm({
+      title: 'Remove block?',
+      message: 'These dates will become available for booking again.',
+      confirmLabel: 'Yes, remove',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/availability/${id}`);
       setBlocks((prev) => prev.filter((b) => b.id !== id));

@@ -6,6 +6,7 @@ import PlaceholderImage from '../components/ui/PlaceholderImage';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import BookingSearchBar from '../components/booking/BookingSearchBar';
 import { pages, images, placeholderRooms, resort } from '../data/placeholders';
+import { roomShortDescription } from '../data/resortRules';
 
 export default function Home() {
   const { home } = pages;
@@ -95,7 +96,7 @@ export default function Home() {
                   />
                   <div className="p-6">
                     <h3 className="text-xl text-aegean-800">{room.name}</h3>
-                    <p className="text-aegean-600/70 text-sm mt-1 line-clamp-2">{room.short_description}</p>
+                    <p className="text-aegean-600/70 text-sm mt-1 line-clamp-2">{roomShortDescription(room)}</p>
                     <p className="mt-4 text-aegean-600 font-medium">
                       From ₱{Number(room.price_per_night).toLocaleString()} / night
                     </p>

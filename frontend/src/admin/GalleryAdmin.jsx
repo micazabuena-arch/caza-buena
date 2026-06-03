@@ -4,12 +4,14 @@ import { getAssetUrl } from '../utils/assetUrl';
 import Loading from '../components/ui/Loading';
 import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminGallery() {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const load = () =>
     api
@@ -25,6 +27,15 @@ export default function AdminGallery() {
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const ok = await confirm({
+      title: 'Upload photo?',
+      message: 'Add this image to the website gallery?',
+      confirmLabel: 'Yes, upload',
+    });
+    if (!ok) {
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     const form = new FormData();
     form.append('image', file);
@@ -40,7 +51,13 @@ export default function AdminGallery() {
   };
 
   const remove = async (id) => {
-    if (!confirm('Remove this image?')) return;
+    const ok = await confirm({
+      title: 'Remove photo?',
+      message: 'This image will be removed from the gallery.',
+      confirmLabel: 'Yes, remove',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete(`/gallery/admin/${id}`);
       setImages((prev) => prev.filter((i) => i.id !== id));

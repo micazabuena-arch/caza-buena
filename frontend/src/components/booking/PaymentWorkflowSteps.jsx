@@ -3,7 +3,7 @@ import { ClipboardList, QrCode, Upload, UserCheck, Mail } from 'lucide-react';
 const steps = [
   { icon: ClipboardList, title: 'Submit request', desc: 'Complete the form with room, stay dates, guest details, and valid ID.' },
   { icon: QrCode, title: 'Pay downpayment', desc: 'Pay the required deposit via GCash, Maya, BDO, or BPI QR with your booking reference.' },
-  { icon: Upload, title: 'Upload proof', desc: 'Submit a screenshot or photo of your payment receipt.' },
+  { icon: Upload, title: 'Upload proof', desc: 'Submit payment proof — we email you once it is received.' },
   { icon: UserCheck, title: 'Staff verifies', desc: 'Our booking team confirms your payment is reflected on our end.' },
   { icon: Mail, title: 'Confirmation email', desc: 'Once verified, you receive your booking confirmation by email.' },
 ];

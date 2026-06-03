@@ -9,6 +9,7 @@ import SeniorIdUploadPanel from '../components/booking/SeniorIdUploadPanel';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { images } from '../data/placeholders';
 import { parseIslandHoppingData } from '../data/islandHoppingRates';
 
@@ -26,6 +27,7 @@ export default function BookingConfirmation() {
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [file, setFile] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -56,16 +58,30 @@ export default function BookingConfirmation() {
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
+    const ok = await confirm({
+      title: 'Submit payment proof?',
+      message: 'Make sure your screenshot or receipt is clear and shows the correct amount.',
+      confirmLabel: 'Yes, submit proof',
+    });
+    if (!ok) return;
     setUploading(true);
     const formData = new FormData();
     formData.append('proof', file);
     if (paymentMethodId) formData.append('payment_method_id', paymentMethodId);
 
     try {
-      await api.post(`/bookings/${reference}/payment-proof`, formData);
+      const { data } = await api.post(`/bookings/${reference}/payment-proof`, formData);
       setUploadSuccess(true);
       setBooking((b) => ({ ...b, status: 'payment_submitted' }));
-      toast.success('Payment proof submitted. We will verify and confirm your booking.');
+      if (data.email_sent) {
+        toast.success(
+          `Payment proof submitted. A booking request email was sent to ${booking.guest_email}.`
+        );
+      } else if (data.email_hint) {
+        toast.warning(`Payment proof saved. ${data.email_hint}`);
+      } else {
+        toast.success('Payment proof submitted. We will verify and confirm your booking.');
+      }
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
@@ -150,7 +166,8 @@ export default function BookingConfirmation() {
           {booking.status === 'awaiting_payment' && (
             <p className="flex items-start gap-2 text-sm text-aegean-600 mb-6 p-4 bg-white rounded-xl border border-aegean-100">
               <Mail className="shrink-0 mt-0.5" size={18} />
-              An acknowledgment email was sent to {booking.guest_email} with this page link (when SMTP is configured in admin).
+              After you upload payment proof, we will email {booking.guest_email} to confirm we received it.
+              Your final booking confirmation email is sent once our team verifies payment.
             </p>
           )}
 
@@ -161,7 +178,8 @@ export default function BookingConfirmation() {
           ) : uploadSuccess || booking.status === 'payment_submitted' ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-6 bg-green-50 text-green-800 rounded-2xl">
-                <CheckCircle size={24} /> Payment proof received. Our team will verify and send confirmation by email.
+                <CheckCircle size={24} /> Payment proof received. Check {booking.guest_email} for a receipt email.
+                Our team will verify payment and send your booking confirmation when approved.
               </div>
               <Link to="/" className="btn-outline inline-block text-center">Back to home</Link>
             </div>

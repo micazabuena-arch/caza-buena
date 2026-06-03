@@ -129,9 +129,53 @@ async function run() {
     console.log('  ✓ room_holiday_rates (already exists)');
   }
 
+  const [menuTable] = await pool.query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'menu_items'`
+  );
+  if (Number(menuTable[0].c) === 0) {
+    await pool.query(`
+      CREATE TABLE menu_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        description VARCHAR(500),
+        price DECIMAL(10, 2) NOT NULL,
+        image_url VARCHAR(500),
+        cloudinary_public_id VARCHAR(255),
+        sort_order INT DEFAULT 0,
+        is_active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('  + created menu_items');
+  } else {
+    console.log('  ✓ menu_items (already exists)');
+  }
+
   await pool.query(
     'UPDATE rooms SET price_weekend = ROUND(price_per_night * 1.2, 2) WHERE price_weekend IS NULL'
   );
+
+  console.log('\nroom descriptions (fix ?? encoding):');
+  const [descFix] = await pool.query(`
+    UPDATE rooms SET short_description = CONCAT(
+      IF(room_type = 'suite', 'Two-bedroom suite', 'One-bedroom queen'),
+      ' - Floor ',
+      FLOOR(sort_order / 100)
+    )
+    WHERE sort_order >= 100
+  `);
+  console.log(`  updated ${descFix.affectedRows} room short_description row(s)`);
+
+  const [imgFix] = await pool.query(`
+    UPDATE room_images SET image_url = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800'
+    WHERE image_url LIKE '%1611892440504%'
+  `);
+  if (imgFix.affectedRows > 0) {
+    console.log(`  fixed ${imgFix.affectedRows} broken room image URL(s)`);
+  }
 
   console.log('\nDone. Restart the API (npm run dev) and try saving the room again.');
   await pool.end();

@@ -4,6 +4,7 @@ import api, { getApiError } from '../api/client';
 import StaticPageLayout from '../components/layout/StaticPageLayout';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { pages, images, resort } from '../data/placeholders';
 
 export default function Contact() {
@@ -11,9 +12,16 @@ export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const ok = await confirm({
+      title: 'Send message?',
+      message: 'We will receive your inquiry and reply as soon as we can.',
+      confirmLabel: 'Yes, send message',
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       await api.post('/contact', form);

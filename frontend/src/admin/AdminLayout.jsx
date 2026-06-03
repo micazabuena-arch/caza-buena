@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Calendar, Users, Image, LogOut, Bed, CreditCard, Mail, Ban, HelpCircle, FileText } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Image, LogOut, Bed, CreditCard, Mail, Ban, HelpCircle, FileText, UtensilsCrossed } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/ui/Loading';
 
@@ -13,6 +13,7 @@ const nav = [
   { to: '/admin/guests', icon: Users, label: 'Guests' },
   { to: '/admin/inquiries', icon: Mail, label: 'Inquiries' },
   { to: '/admin/gallery', icon: Image, label: 'Gallery' },
+  { to: '/admin/menu', icon: UtensilsCrossed, label: 'Meals' },
   { to: '/admin/faq', icon: HelpCircle, label: 'FAQ' },
   { to: '/admin/policies', icon: FileText, label: 'Policies' },
 ];

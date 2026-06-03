@@ -3,6 +3,7 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminPolicies() {
   const [policies, setPolicies] = useState([]);
@@ -10,12 +11,19 @@ export default function AdminPolicies() {
   const [saving, setSaving] = useState(null);
   const [error, setError] = useState('');
   const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     api.get('/policies').then((r) => setPolicies(r.data)).finally(() => setLoading(false));
   }, []);
 
   const save = async (policy) => {
+    const ok = await confirm({
+      title: 'Save policy?',
+      message: `Update "${policy.title}" on the website?`,
+      confirmLabel: 'Yes, save',
+    });
+    if (!ok) return;
     setSaving(policy.id);
     setError('');
     try {

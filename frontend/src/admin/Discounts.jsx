@@ -3,12 +3,14 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminDiscounts() {
   const [discounts, setDiscounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState({
     code: '', description: '', type: 'percentage', value: 10, min_nights: 1,
   });
@@ -20,6 +22,12 @@ export default function AdminDiscounts() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    const ok = await confirm({
+      title: 'Create discount code?',
+      message: `Add code "${form.code.trim().toUpperCase()}" for guests to use when booking?`,
+      confirmLabel: 'Yes, create',
+    });
+    if (!ok) return;
     setSubmitting(true);
     try {
       await api.post('/admin/discounts', form);
@@ -34,6 +42,15 @@ export default function AdminDiscounts() {
   };
 
   const toggle = async (id, is_active) => {
+    const ok = await confirm({
+      title: is_active ? 'Deactivate discount?' : 'Activate discount?',
+      message: is_active
+        ? 'Guests will no longer be able to use this code.'
+        : 'This discount code will be available for bookings again.',
+      confirmLabel: is_active ? 'Yes, deactivate' : 'Yes, activate',
+      variant: is_active ? 'danger' : 'primary',
+    });
+    if (!ok) return;
     try {
       await api.patch(`/admin/discounts/${id}`, { is_active: !is_active });
       load();

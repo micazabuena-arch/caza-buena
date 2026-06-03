@@ -37,7 +37,7 @@ export default function AdminDashboard() {
       <div className="bg-aegean-50 rounded-xl p-6 mb-10 text-sm text-aegean-700">
         <h2 className="font-serif text-lg text-aegean-800 mb-2">QR booking workflow</h2>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Guest submits booking → receives acknowledgment email</li>
+          <li>Guest submits booking → pays and uploads proof → receives acknowledgment email</li>
           <li>Guest pays via GCash / Maya / BDO / BPI QR on confirmation page</li>
           <li>Guest uploads payment proof</li>
           <li>Admin verifies in <Link to="/admin/bookings" className="underline">Bookings</Link> → Approve</li>

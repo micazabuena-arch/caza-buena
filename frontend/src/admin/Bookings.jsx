@@ -9,6 +9,7 @@ import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 const statuses = [
   'pending',
@@ -42,6 +43,7 @@ function parseIslandHoppingData(detail) {
 export default function AdminBookings() {
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const [bookings, setBookings] = useState([]);
   // Show in-progress bookings until admin confirms or rejects
   const [filter, setFilter] = useState('open');
@@ -106,13 +108,29 @@ export default function AdminBookings() {
         : 0;
 
   const saveStatus = async () => {
+    const statusLabels = {
+      confirmed: 'confirm this booking',
+      rejected: 'reject this booking',
+      cancelled: 'cancel this booking',
+    };
+    const action = statusLabels[statusForm.status] || 'update this booking status';
+    const ok = await confirm({
+      title: 'Save booking status?',
+      message: `Are you sure you want to ${action}? The guest may be notified by email.`,
+      confirmLabel: 'Yes, save',
+      variant: statusForm.status === 'rejected' || statusForm.status === 'cancelled' ? 'danger' : 'primary',
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       const { data } = await api.patch(`/bookings/admin/${selected}/status`, statusForm);
       if (data.email_sent) {
         toast.success('Booking updated. Confirmation email sent to guest.');
       } else if (statusForm.status === 'confirmed') {
-        toast.success('Booking confirmed. Configure SMTP to send confirmation emails.');
+        toast.warning(
+          data.email_hint ||
+            'Booking confirmed, but the email was not sent. Add SMTP_USER and SMTP_PASS in backend/.env and restart the API.'
+        );
       } else {
         toast.success('Booking status saved.');
       }
@@ -126,12 +144,23 @@ export default function AdminBookings() {
   };
 
   const quickApprove = async (id) => {
+    const ok = await confirm({
+      title: 'Approve booking?',
+      message: 'This booking will be confirmed. The guest may receive a confirmation email.',
+      confirmLabel: 'Yes, approve',
+    });
+    if (!ok) return;
     setActionLoading(`${id}-approve`);
     try {
       const { data } = await api.patch(`/bookings/admin/${id}/status`, { status: 'confirmed' });
-      toast.success(
-        data.email_sent ? 'Booking approved. Confirmation email sent.' : 'Booking approved.'
-      );
+      if (data.email_sent) {
+        toast.success('Booking approved. Confirmation email sent.');
+      } else {
+        toast.warning(
+          data.email_hint ||
+            'Booking approved, but the email was not sent. Check SMTP settings in backend/.env.'
+        );
+      }
       load();
       if (selected === id) await openDetail(id, { silent: true });
     } catch (err) {
@@ -142,6 +171,13 @@ export default function AdminBookings() {
   };
 
   const quickReject = async (id) => {
+    const ok = await confirm({
+      title: 'Reject booking?',
+      message: 'This booking will be rejected. You will be asked for a reason to share with the guest.',
+      confirmLabel: 'Yes, reject',
+      variant: 'danger',
+    });
+    if (!ok) return;
     const reason = prompt('Rejection reason for guest:');
     if (reason === null) return;
     setActionLoading(`${id}-reject`);

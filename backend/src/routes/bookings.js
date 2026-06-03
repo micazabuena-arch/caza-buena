@@ -11,7 +11,7 @@ import {
   applyDiscount,
   getDayRateSummary,
 } from '../utils/booking.js';
-import { sendBookingAcknowledgment, sendBookingConfirmation } from '../services/email.js';
+import { sendPaymentProofReceivedEmail, sendBookingConfirmation } from '../services/email.js';
 
 const router = Router();
 
@@ -390,11 +390,8 @@ router.post(
       status: 'awaiting_payment',
     };
 
-    const emailSent = await sendBookingAcknowledgment(booking, room);
-
     res.status(201).json({
       message: 'Booking request submitted',
-      email_sent: emailSent,
       payment_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/booking/confirm/${reference}`,
       booking: { ...booking, room_name: room.name, price_breakdown: breakdown },
     });
@@ -471,9 +468,9 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
     [status, admin_notes || null, rejection_reason || null, confirmedAt, req.params.id]
   );
 
-  let emailSent = false;
+  let emailResult = { sent: false };
   if (status === 'confirmed') {
-    emailSent = await sendBookingConfirmation(rows[0], { name: rows[0].room_name });
+    emailResult = await sendBookingConfirmation(rows[0], { name: rows[0].room_name });
     if (rows[0].discount_code) {
       await pool.query(
         'UPDATE discounts SET used_count = used_count + 1 WHERE code = ?',
@@ -482,7 +479,11 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
     }
   }
 
-  res.json({ message: 'Booking updated', email_sent: emailSent });
+  res.json({
+    message: 'Booking updated',
+    email_sent: emailResult.sent,
+    email_hint: emailResult.hint || null,
+  });
 });
 
 // Admin: single booking detail
@@ -505,7 +506,11 @@ router.post(
   uploadPaymentProof.single('proof'),
   async (req, res) => {
     const code = req.params.reference.toUpperCase();
-    const [rows] = await pool.query('SELECT * FROM bookings WHERE reference_code = ?', [code]);
+    const [rows] = await pool.query(
+      `SELECT b.*, r.name as room_name FROM bookings b
+       JOIN rooms r ON b.room_id = r.id WHERE b.reference_code = ?`,
+      [code]
+    );
     if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
 
     const booking = rows[0];
@@ -522,6 +527,7 @@ router.post(
     });
 
     const { payment_method_id } = req.body;
+    const sendAcknowledgmentEmail = booking.status === 'awaiting_payment';
 
     await pool.query(
       `UPDATE bookings SET
@@ -532,7 +538,19 @@ router.post(
       [proofUrl, publicId, payment_method_id || null, booking.id]
     );
 
-    res.json({ message: 'Payment proof uploaded. Our team will verify shortly.' });
+    let emailResult = { sent: false };
+    if (sendAcknowledgmentEmail) {
+      emailResult = await sendPaymentProofReceivedEmail(
+        { ...booking, status: 'payment_submitted' },
+        { name: booking.room_name }
+      );
+    }
+
+    res.json({
+      message: 'Payment proof uploaded. Our team will verify shortly.',
+      email_sent: emailResult.sent,
+      email_hint: emailResult.hint || null,
+    });
   }
 );
 

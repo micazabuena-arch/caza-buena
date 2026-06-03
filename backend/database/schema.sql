@@ -178,6 +178,21 @@ CREATE TABLE IF NOT EXISTS faqs (
   is_active TINYINT(1) DEFAULT 1
 );
 
+-- Café menu items (Meals page)
+CREATE TABLE IF NOT EXISTS menu_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  description VARCHAR(500),
+  price DECIMAL(10, 2) NOT NULL,
+  image_url VARCHAR(500),
+  cloudinary_public_id VARCHAR(255),
+  sort_order INT DEFAULT 0,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Resort policies
 CREATE TABLE IF NOT EXISTS policies (
   id INT AUTO_INCREMENT PRIMARY KEY,

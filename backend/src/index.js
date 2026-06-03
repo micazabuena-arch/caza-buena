@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { seedAdminUser } from './config/seed.js';
+import { seedAdminUser, seedMenuItems } from './config/seed.js';
 import { UPLOADS_DIR } from './utils/fileUpload.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
 
@@ -17,6 +17,7 @@ import galleryRoutes from './routes/gallery.js';
 import paymentRoutes from './routes/paymentMethods.js';
 import contactRoutes from './routes/contact.js';
 import faqRoutes from './routes/faq.js';
+import menuRoutes from './routes/menu.js';
 import policiesRoutes from './routes/policies.js';
 import settingsRoutes from './routes/settings.js';
 import adminRoutes from './routes/admin.js';
@@ -49,6 +50,7 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/payment-methods', paymentRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/faqs', faqRoutes);
+app.use('/api/menu', menuRoutes);
 app.use('/api/policies', policiesRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/admin', adminRoutes);
@@ -64,6 +66,7 @@ app.use((err, _req, res, _next) => {
 async function start() {
   try {
     await seedAdminUser();
+    await seedMenuItems();
   } catch (e) {
     console.warn('Seed skipped (database may not be ready):', e.message);
   }

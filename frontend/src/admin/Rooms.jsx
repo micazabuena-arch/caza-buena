@@ -7,6 +7,7 @@ import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { ROOM_INVENTORY } from '../data/resortRules';
 
 const emptyForm = () => ({
@@ -51,6 +52,7 @@ export default function AdminRooms() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const toast = useToast();
+  const askConfirm = useConfirm();
   const [error, setError] = useState('');
   const [slugManual, setSlugManual] = useState(false);
   const [holidayRates, setHolidayRates] = useState([]);
@@ -180,6 +182,19 @@ export default function AdminRooms() {
       return;
     }
 
+    const ok = await askConfirm({
+      title: editingId === 'new' ? 'Create room?' : 'Save room?',
+      message:
+        editingId === 'new'
+          ? 'This room will be added to the website and available for booking.'
+          : 'Your changes will be published on the website.',
+      confirmLabel: editingId === 'new' ? 'Yes, create' : 'Yes, save',
+    });
+    if (!ok) {
+      setSaving(false);
+      return;
+    }
+
     try {
       if (editingId === 'new') {
         await api.post('/admin/rooms', payload);
@@ -207,6 +222,15 @@ export default function AdminRooms() {
       if (editingId === 'new') setError('Save the room first, then upload images.');
       return;
     }
+    const ok = await askConfirm({
+      title: 'Upload photo?',
+      message: 'Add this image to the room gallery?',
+      confirmLabel: 'Yes, upload',
+    });
+    if (!ok) {
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     setError('');
     const fd = new FormData();
@@ -227,7 +251,13 @@ export default function AdminRooms() {
   };
 
   const removeImage = async (imageId) => {
-    if (!confirm('Remove this image?')) return;
+    const ok = await askConfirm({
+      title: 'Remove photo?',
+      message: 'This image will be removed from the room gallery.',
+      confirmLabel: 'Yes, remove',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await api.delete(`/admin/rooms/${editingId}/images/${imageId}`);
     setImages((prev) => prev.filter((i) => i.id !== imageId));
   };
@@ -240,6 +270,15 @@ export default function AdminRooms() {
   };
 
   const toggleActiveQuick = async (room) => {
+    const ok = await askConfirm({
+      title: room.is_active ? 'Deactivate room?' : 'Activate room?',
+      message: room.is_active
+        ? `"${room.name}" will be hidden from the website.`
+        : `"${room.name}" will be available for booking again.`,
+      confirmLabel: room.is_active ? 'Yes, deactivate' : 'Yes, activate',
+      variant: room.is_active ? 'danger' : 'primary',
+    });
+    if (!ok) return;
     await api.put(`/admin/rooms/${room.id}`, { is_active: room.is_active ? 0 : 1 });
     loadRooms();
   };
@@ -259,6 +298,12 @@ export default function AdminRooms() {
       setError('Holiday end date must be on or after start date');
       return;
     }
+    const ok = await askConfirm({
+      title: 'Add holiday pricing?',
+      message: `Apply special rates for "${newHoliday.label.trim()}"?`,
+      confirmLabel: 'Yes, add',
+    });
+    if (!ok) return;
     setHolidaySaving(true);
     setError('');
     try {
@@ -291,7 +336,13 @@ export default function AdminRooms() {
   };
 
   const removeHolidayRate = async (holidayId) => {
-    if (!confirm('Remove this holiday pricing period?')) return;
+    const ok = await askConfirm({
+      title: 'Remove holiday pricing?',
+      message: 'This special rate period will be deleted.',
+      confirmLabel: 'Yes, remove',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/rooms/${editingId}/holidays/${holidayId}`);
       setHolidayRates((prev) => prev.filter((h) => h.id !== holidayId));

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import Layout from './components/layout/Layout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
@@ -29,6 +30,7 @@ import AdminPaymentMethods from './admin/PaymentMethods';
 import AdminInquiries from './admin/Inquiries';
 import AdminAvailability from './admin/Availability';
 import AdminFAQ from './admin/FAQAdmin';
+import AdminMenu from './admin/MenuAdmin';
 import AdminPolicies from './admin/PoliciesAdmin';
 import IslandHoppingPrint from './admin/IslandHoppingPrint';
 
@@ -36,6 +38,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+      <ConfirmProvider>
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
@@ -66,11 +69,13 @@ export default function App() {
             <Route path="guests" element={<AdminGuests />} />
             <Route path="inquiries" element={<AdminInquiries />} />
             <Route path="gallery" element={<AdminGallery />} />
+            <Route path="menu" element={<AdminMenu />} />
             <Route path="faq" element={<AdminFAQ />} />
             <Route path="policies" element={<AdminPolicies />} />
           </Route>
         </Routes>
       </BrowserRouter>
+      </ConfirmProvider>
       </ToastProvider>
     </AuthProvider>
   );

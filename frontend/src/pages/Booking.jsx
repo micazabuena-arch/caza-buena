@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
 import { Users } from 'lucide-react';
@@ -11,6 +11,7 @@ import IslandHoppingSection from '../components/booking/IslandHoppingSection';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { pages, images } from '../data/placeholders';
 import { EXTRA_PERSON_RATES, ROOM_INVENTORY } from '../data/resortRules';
 import {
@@ -41,7 +42,9 @@ export default function Booking() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
   const [availability, setAvailability] = useState(null);
+  const [availabilityChecking, setAvailabilityChecking] = useState(false);
   const [error, setError] = useState('');
   const [depositPercent, setDepositPercent] = useState(20);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
@@ -79,7 +82,12 @@ export default function Booking() {
   }, [preselectedRoom]);
 
   useEffect(() => {
-    if (!form.room_id || !form.check_in || !form.check_out) return;
+    if (!form.room_id || !form.check_in || !form.check_out) {
+      setAvailability(null);
+      setAvailabilityChecking(false);
+      return;
+    }
+    setAvailabilityChecking(true);
     api
       .get('/bookings/availability', {
         params: {
@@ -92,7 +100,8 @@ export default function Booking() {
         },
       })
       .then((r) => setAvailability(r.data))
-      .catch(() => setAvailability(null));
+      .catch(() => setAvailability(null))
+      .finally(() => setAvailabilityChecking(false));
   }, [
     form.room_id,
     form.check_in,
@@ -162,6 +171,94 @@ export default function Booking() {
         : Number.isFinite(customPay)
           ? customPay
           : 0;
+
+  const submitBlockedReason = useMemo(() => {
+    if (!form.room_id) {
+      return roomLocked
+        ? 'Room not found. Go back and select a room again.'
+        : 'Select a room before submitting.';
+    }
+    if (availabilityChecking) return 'Checking availability for your dates…';
+    if (!availability) {
+      return 'Could not verify availability. Check that the backend is running and your dates are valid.';
+    }
+    if (availability.occupancy_error) return availability.occupancy_error;
+    if (!availability.available) {
+      return 'These dates are not available for this room. Change check-in or check-out dates.';
+    }
+    if (selectedRoom) {
+      const maxG = selectedRoom.max_guests ?? selectedRoom.capacity ?? 1;
+      const minG = selectedRoom.min_guests ?? 1;
+      if (guestCount > maxG) {
+        return `This room allows up to ${maxG} guests. Lower guest count or choose another room.`;
+      }
+      if (guestCount < minG) {
+        return `This room requires at least ${minG} guest(s).`;
+      }
+    }
+    if (totalAmount <= 0) {
+      return 'Booking total could not be calculated. Check that check-out is after check-in.';
+    }
+    if (paymentMethods.length > 0 && !form.payment_method_id) {
+      return 'Select a preferred payment method (GCash, Maya, etc.).';
+    }
+    if (!form.valid_id?.trim()) {
+      return 'Enter a valid ID type and number for the lead guest.';
+    }
+    if (form.payment_option === 'custom') {
+      if (!Number.isFinite(customPay) || customPay <= 0) {
+        return 'Enter a valid custom payment amount.';
+      }
+      if (customPay > totalAmount) {
+        return 'Custom payment amount cannot exceed the booking total.';
+      }
+    }
+    if (islandHoppingEnabled) {
+      if (islandQuote?.error) return islandQuote.error;
+      if (!islandQuote?.complete) {
+        return 'Complete all island hopping passenger details, or choose No for island hopping.';
+      }
+      if (!islandHopping.passenger_address?.trim()) {
+        return 'Enter the address of passengers for island hopping.';
+      }
+      if (
+        !islandHopping.payor_name?.trim() ||
+        !islandHopping.payor_address?.trim() ||
+        !islandHopping.payor_phone?.trim()
+      ) {
+        return 'Complete payor name, address, and phone for island hopping.';
+      }
+      if (
+        !islandHopping.emergency_contact_name?.trim() ||
+        !islandHopping.emergency_contact_phone?.trim()
+      ) {
+        return 'Complete emergency contact details for island hopping.';
+      }
+      const missingSeniorId = islandHopping.passengers.some(
+        (p) => isSeniorPassenger(p) && !p.senior_id_file
+      );
+      if (missingSeniorId) {
+        return 'Upload a senior citizen ID for each guest aged 60 or older on the tour.';
+      }
+    }
+    return null;
+  }, [
+    form.room_id,
+    form.payment_method_id,
+    form.valid_id,
+    form.payment_option,
+    availabilityChecking,
+    availability,
+    selectedRoom,
+    guestCount,
+    totalAmount,
+    paymentMethods.length,
+    customPay,
+    islandHoppingEnabled,
+    islandQuote,
+    islandHopping,
+    roomLocked,
+  ]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -236,6 +333,12 @@ export default function Booking() {
         return;
       }
     }
+    const ok = await confirm({
+      title: 'Submit booking?',
+      message: 'Please confirm your reservation details. You will receive payment instructions after submitting.',
+      confirmLabel: 'Yes, submit booking',
+    });
+    if (!ok) return;
     setSubmitting(true);
     setError('');
     try {
@@ -276,22 +379,37 @@ export default function Booking() {
             }
           : undefined,
       });
-      const reference = data.booking.reference_code;
+      const reference = data?.booking?.reference_code;
+      if (!reference) {
+        throw new Error('Booking was created but the confirmation link is missing. Check Admin → Bookings.');
+      }
 
       if (islandHoppingEnabled) {
         const seniorUploads = islandHopping.passengers
           .map((p, index) => ({ p, index }))
           .filter(({ p }) => isSeniorPassenger(p) && p.senior_id_file);
 
+        let uploadFailed = false;
         for (const { p, index } of seniorUploads) {
-          const formData = new FormData();
-          formData.append('id', p.senior_id_file);
-          formData.append('passenger_index', String(index));
-          await api.post(`/bookings/${reference}/senior-id`, formData);
+          try {
+            const formData = new FormData();
+            formData.append('id', p.senior_id_file);
+            formData.append('passenger_index', String(index));
+            await api.post(`/bookings/${reference}/senior-id`, formData);
+          } catch {
+            uploadFailed = true;
+          }
+        }
+        if (uploadFailed) {
+          toast.warning(
+            'Booking saved. Some senior ID uploads failed — you can upload them on the confirmation page.'
+          );
         }
       }
 
-      toast.success('Booking request submitted!');
+      toast.success(
+        'Booking request submitted! Complete payment and upload proof on the next page.'
+      );
       navigate(`/booking/confirm/${reference}`);
     } catch (err) {
       const msg = getApiError(err);
@@ -666,12 +784,12 @@ export default function Booking() {
                 />
               )}
 
-              {paymentMethods.length > 0 && (
+              {availability?.available && totalAmount > 0 && paymentMethods.length > 0 && (
                 <PaymentMethodSelect
                   methods={paymentMethods}
                   value={form.payment_method_id}
                   onChange={(id) => setForm((f) => ({ ...f, payment_method_id: id }))}
-                  amountDue={availability?.available && amountToPay > 0 ? amountToPay : null}
+                  amountDue={amountToPay > 0 ? amountToPay : null}
                   required
                 />
               )}
@@ -688,19 +806,17 @@ export default function Booking() {
                 />
               </div>
 
+              {submitBlockedReason && !submitting && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  {submitBlockedReason}
+                </p>
+              )}
+
               <SubmitButton
                 loading={submitting}
                 loadingLabel="Submitting..."
                 className="w-full"
-                disabled={
-                  !form.room_id ||
-                  !availability?.available ||
-                  Boolean(availability?.occupancy_error) ||
-                  (islandHoppingEnabled && !islandQuote?.complete) ||
-                  (selectedRoom &&
-                    (guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 1) ||
-                      guestCount < (selectedRoom.min_guests ?? 1)))
-                }
+                disabled={Boolean(submitBlockedReason) || availabilityChecking}
               >
                 Submit Booking Request
               </SubmitButton>

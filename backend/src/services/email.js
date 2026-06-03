@@ -1,95 +1,143 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import {
+  buildBrandedEmail,
+  bookingDetailsTable,
+  getEmailLogoAttachment,
+} from './emailTemplate.js';
 
 dotenv.config();
 
 let transporter = null;
 
+export function isSmtpConfigured() {
+  return Boolean(process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim());
+}
+
+function smtpPassword() {
+  return String(process.env.SMTP_PASS || '').replace(/\s/g, '');
+}
+
 function getTransporter() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+  if (!isSmtpConfigured()) return null;
   if (!transporter) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: false,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: process.env.SMTP_USER.trim(),
+        pass: smtpPassword(),
       },
     });
   }
   return transporter;
 }
 
-export async function sendBookingAcknowledgment(booking, room) {
+function guestFriendlyEmailHint(err) {
+  const msg = String(err?.message || '');
+  if (msg.includes('Application-specific password') || msg.includes('534-5.7.9')) {
+    return 'Gmail needs an App Password in SMTP_PASS (not your normal Gmail password). Create one at myaccount.google.com/apppasswords';
+  }
+  if (msg.includes('Invalid login') || msg.includes('535')) {
+    return 'SMTP login failed. Check SMTP_USER and SMTP_PASS in backend/.env, then restart the API.';
+  }
+  return msg.slice(0, 200) || 'Email could not be sent.';
+}
+
+async function sendMailResult(sendFn) {
   const transport = getTransporter();
   if (!transport) {
-    console.log('[Email] SMTP not configured — skipping acknowledgment');
-    return false;
+    console.log('[Email] SMTP not configured — skipping');
+    return { sent: false, reason: 'not_configured' };
   }
+  try {
+    await sendFn(transport);
+    return { sent: true };
+  } catch (err) {
+    console.error('[Email] Send failed:', err.message);
+    return { sent: false, reason: 'send_failed', hint: guestFriendlyEmailHint(err) };
+  }
+}
 
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+/** Sent after guest uploads payment proof — booking request received */
+export async function sendPaymentProofReceivedEmail(booking, room) {
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
+      Thank you for choosing <strong>Caza Buena</strong>. We have received your booking request
+      and payment details for reference <strong>${booking.reference_code}</strong>.
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
+      Our reservations team is now reviewing your request. You can expect an update from us within
+      <strong>1–2 business days</strong> once your payment has been verified.
+    </p>
+    <p style="margin:0 0 8px;font-size:15px;line-height:1.65;color:#214566;">
+      Summary of your request:
+    </p>
+    ${bookingDetailsTable(booking, room)}
+    <p style="margin:0;font-size:15px;line-height:1.65;color:#214566;">
+      If you have questions in the meantime, reply to this email or contact us using the details below.
+      We look forward to welcoming you.
+    </p>
+  `;
 
-  await transport.sendMail({
-    from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
-    to: booking.guest_email,
-    subject: `Booking Request Received — ${booking.reference_code}`,
-    html: `
-      <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #0D4F6C;">
-        <h1 style="color: #1E6B8C;">Caza Buena</h1>
-        <p>Hi ${booking.guest_name},</p>
-        <p>Thank you for your booking request. We have received your reservation details.</p>
-        <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-          <tr><td><strong>Reference</strong></td><td>${booking.reference_code}</td></tr>
-          <tr><td><strong>Room</strong></td><td>${room.name}</td></tr>
-          <tr><td><strong>Check-in</strong></td><td>${booking.check_in}</td></tr>
-          <tr><td><strong>Check-out</strong></td><td>${booking.check_out}</td></tr>
-          <tr><td><strong>Booking total</strong></td><td>₱${Number(booking.total_amount).toLocaleString()}</td></tr>
-          <tr><td><strong>Amount to pay now</strong></td><td>₱${Number(booking.amount_to_pay ?? booking.total_amount).toLocaleString()}</td></tr>
-          <tr><td><strong>Status</strong></td><td>Awaiting payment verification</td></tr>
-        </table>
-        <p>Please complete your QR/bank transfer payment and upload proof here:</p>
-        <p><a href="${frontendUrl}/booking/confirm/${booking.reference_code}" style="background:#1E6B8C;color:white;padding:12px 24px;text-decoration:none;border-radius:4px;">Upload Payment Proof</a></p>
-        <p style="color:#666;font-size:14px;">Your home after the sea 🌊</p>
-      </div>
-    `,
+  const html = buildBrandedEmail({
+    headline: "We've Received Your Booking Request",
+    guestName: booking.guest_name,
+    bodyHtml,
   });
-  return true;
+
+  return sendMailResult((transport) =>
+    transport.sendMail({
+      from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
+      to: booking.guest_email,
+      subject: `Booking Request Received — ${booking.reference_code}`,
+      html,
+      attachments: getEmailLogoAttachment(),
+    })
+  );
 }
 
 export async function sendBookingConfirmation(booking, room) {
-  const transport = getTransporter();
-  if (!transport) return false;
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
+      Great news — your stay at <strong>Caza Buena</strong> is <strong>confirmed</strong>.
+      We are excited to welcome you.
+    </p>
+    ${bookingDetailsTable(booking, room)}
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:#214566;">
+      <strong>Check-in:</strong> 1:00 PM &nbsp;·&nbsp; <strong>Check-out:</strong> 11:00 AM
+    </p>
+    <p style="margin:0;font-size:15px;line-height:1.65;color:#214566;">
+      Please bring a valid ID upon arrival. If your plans change, contact us as soon as possible.
+    </p>
+  `;
 
-  await transport.sendMail({
-    from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
-    to: booking.guest_email,
-    subject: `Booking Confirmed — ${booking.reference_code}`,
-    html: `
-      <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #0D4F6C;">
-        <h1 style="color: #1E6B8C;">You're confirmed! ✨</h1>
-        <p>Hi ${booking.guest_name},</p>
-        <p>Your stay at Caza Buena is confirmed. We can't wait to welcome you.</p>
-        <p><strong>${room.name}</strong> · ${booking.check_in} to ${booking.check_out}</p>
-        <p>Check-in: 1:00 PM · Check-out: 11:00 AM</p>
-        <p>📍 Sitio Inansuana, Brgy. Lucap, Alaminos, Pangasinan</p>
-        <p>Questions? Call +63 917 829 0292 or reply to this email.</p>
-      </div>
-    `,
+  const html = buildBrandedEmail({
+    headline: 'Your Booking Is Confirmed',
+    guestName: booking.guest_name,
+    bodyHtml,
   });
-  return true;
+
+  return sendMailResult((transport) =>
+    transport.sendMail({
+      from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
+      to: booking.guest_email,
+      subject: `Booking Confirmed — ${booking.reference_code}`,
+      html,
+      attachments: getEmailLogoAttachment(),
+    })
+  );
 }
 
 export async function sendContactNotification(inquiry) {
-  const transport = getTransporter();
-  if (!transport) return false;
-
-  const adminEmail = process.env.SMTP_USER;
-  await transport.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: adminEmail,
-    subject: `New inquiry from ${inquiry.name}`,
-    text: `${inquiry.message}\n\nFrom: ${inquiry.name} (${inquiry.email})`,
-  });
-  return true;
+  const result = await sendMailResult((transport) =>
+    transport.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: process.env.SMTP_USER.trim(),
+      subject: `New inquiry from ${inquiry.name}`,
+      text: `${inquiry.message}\n\nFrom: ${inquiry.name} (${inquiry.email})`,
+    })
+  );
+  return result.sent;
 }

@@ -6,6 +6,7 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 const statusColors = {
   awaiting_payment: 'bg-amber-100 text-amber-800',
@@ -27,6 +28,7 @@ export default function AdminGuests() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
+  const confirm = useConfirm();
 
   const loadGuests = () => {
     setLoading(true);
@@ -70,6 +72,12 @@ export default function AdminGuests() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    const ok = await confirm({
+      title: 'Save guest details?',
+      message: 'This will update the guest profile across all their bookings.',
+      confirmLabel: 'Yes, save',
+    });
+    if (!ok) return;
     setSaving(true);
     setError('');
     try {
