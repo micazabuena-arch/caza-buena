@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Eye, Pencil, X } from 'lucide-react';
+import { Eye, Pencil, Download } from 'lucide-react';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
-import SubmitButton from '../components/ui/SubmitButton';
+import Pagination from '../components/ui/Pagination';
 import { useToast } from '../context/ToastContext';
-import { useConfirm } from '../context/ConfirmContext';
+import { usePagination } from '../hooks/usePagination';
+import { formatGuestCount } from '../utils/guestCount';
+import BookingStayDetails from '../components/admin/BookingStayDetails';
+import BookingStayEditForm from '../components/admin/BookingStayEditForm';
+import AdminModal from '../components/admin/AdminModal';
+import AdminBookingCard from '../components/admin/AdminBookingCard';
+import AdminTableShell from '../components/ui/AdminTableShell';
+import { exportGuestBookingsExcel } from '../utils/guestExport';
 
 const statusColors = {
   awaiting_payment: 'bg-amber-100 text-amber-800',
@@ -17,289 +23,282 @@ const statusColors = {
   pending: 'bg-aegean-100 text-aegean-700',
 };
 
-export default function AdminGuests() {
-  const [guests, setGuests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedEmail, setSelectedEmail] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ guest_name: '', guest_email: '', guest_phone: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const toast = useToast();
-  const confirm = useConfirm();
+const STATUS_LABELS = {
+  awaiting_payment: 'Awaiting payment',
+  payment_submitted: 'Payment submitted',
+  confirmed: 'Confirmed',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  pending: 'Pending',
+};
 
-  const loadGuests = () => {
+function formatStatus(status) {
+  return STATUS_LABELS[status] || status.replace(/_/g, ' ');
+}
+
+function formatReference(code) {
+  if (!code) return '';
+  const parts = String(code).split('-');
+  if (parts.length >= 3) {
+    return `${parts[0]} - ${parts[1]} - ${parts[2]}`;
+  }
+  return code;
+}
+
+export default function AdminGuests() {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [panelMode, setPanelMode] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [paymentProofUrl, setPaymentProofUrl] = useState(null);
+  const toast = useToast();
+
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(bookings);
+
+  const loadBookings = async () => {
     setLoading(true);
-    api
-      .get('/admin/guests')
-      .then((r) => setGuests(r.data))
-      .finally(() => setLoading(false));
+    try {
+      const { data } = await api.get('/bookings/admin/all');
+      setBookings(data);
+      return data;
+    } catch (err) {
+      toast.error(getApiError(err));
+      return [];
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadGuests();
+    loadBookings();
   }, []);
 
-  const openGuest = async (email, edit = false) => {
-    setSelectedEmail(email);
-    setEditing(edit);
-    setError('');
+  const fetchBookingDetail = async (id) => {
     setDetailLoading(true);
     try {
-      const { data } = await api.get('/admin/guests/detail', { params: { email } });
-      setDetail(data);
-      setForm({
-        guest_name: data.guest_name,
-        guest_email: data.guest_email,
-        guest_phone: data.guest_phone,
-      });
+      const { data } = await api.get(`/bookings/admin/${id}`);
+      setSelected(data);
+      return data;
     } catch (err) {
-      setError(getApiError(err));
-      setDetail(null);
+      toast.error(getApiError(err));
+      return null;
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const closePanel = () => {
-    setSelectedEmail(null);
-    setDetail(null);
-    setEditing(false);
-    setError('');
+  const openView = async (booking) => {
+    setPanelMode('view');
+    setSelected(booking);
+    await fetchBookingDetail(booking.id);
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    const ok = await confirm({
-      title: 'Save guest details?',
-      message: 'This will update the guest profile across all their bookings.',
-      confirmLabel: 'Yes, save',
-    });
-    if (!ok) return;
-    setSaving(true);
-    setError('');
-    try {
-      const { data } = await api.put('/admin/guests', {
-        original_email: selectedEmail,
-        guest_name: form.guest_name,
-        guest_email: form.guest_email,
-        guest_phone: form.guest_phone,
-      });
-      toast.success(`Guest saved — updated ${data.bookings_updated} booking(s).`);
-      loadGuests();
-      const newEmail = form.guest_email.trim();
-      setSelectedEmail(newEmail);
-      await openGuest(newEmail, false);
-      setEditing(false);
-    } catch (err) {
-      const msg = getApiError(err);
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setSaving(false);
+  const openEdit = async (booking) => {
+    setPanelMode('edit');
+    setSelected(booking);
+    await fetchBookingDetail(booking.id);
+  };
+
+  const closePanel = () => {
+    setSelected(null);
+    setPanelMode(null);
+    setDetailLoading(false);
+  };
+
+  const handleSaved = async (updated) => {
+    setSelected(updated);
+    await loadBookings();
+  };
+
+  const handleExport = () => {
+    const result = exportGuestBookingsExcel(bookings);
+    if (result.ok) {
+      toast.success(`Exported ${result.count} guest stay(s) to Excel.`);
+    } else {
+      toast.error(result.reason);
     }
   };
 
   return (
     <div>
-      <h1 className="text-3xl font-serif text-aegean-800 mb-2">Guests</h1>
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-4 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-serif text-aegean-800">Guests</h1>
+        <button
+          type="button"
+          onClick={() => handleExport()}
+          disabled={loading || bookings.length === 0}
+          className="btn-outline text-sm flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto"
+        >
+          <Download size={16} />
+          Export Excel
+        </button>
+      </div>
       <p className="text-sm text-aegean-600 mb-8">
-        Guests appear here only after their payment is <strong>approved</strong> or{' '}
-        <strong>rejected</strong> in Bookings. Pending reviews stay under Bookings.
+        Each row is one stay. Export Excel includes all guests — current and past stays.
       </p>
 
       {loading ? (
         <Loading />
       ) : (
-        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl shadow-sm">
+          {bookings.length === 0 ? (
+            <p className="p-8 text-center text-aegean-500">No guest bookings yet.</p>
+          ) : (
+            <div className="lg:hidden p-4 space-y-3">
+              {pageItems.map((b) => (
+                <AdminBookingCard
+                  key={b.id}
+                  booking={{ ...b, reference_code: formatReference(b.reference_code) }}
+                  selected={selected?.id === b.id}
+                  statusColors={statusColors}
+                  formatStatus={formatStatus}
+                  formatGuestCount={formatGuestCount}
+                  payLabel="Total"
+                  payAmount={Number(b.total_amount)}
+                  actions={
+                    <IconActionGroup>
+                      <IconActionButton icon={Eye} label="View stay" onClick={() => openView(b)} />
+                      <IconActionButton icon={Pencil} label="Edit stay" onClick={() => openEdit(b)} />
+                    </IconActionGroup>
+                  }
+                />
+              ))}
+            </div>
+          )}
+
+          <AdminTableShell>
             <thead className="bg-aegean-50">
               <tr>
-                <th className="text-left p-4">Name</th>
-                <th className="text-left p-4">Email</th>
-                <th className="text-left p-4">Phone</th>
-                <th className="text-left p-4">Bookings</th>
-                <th className="text-left p-4">Last Booking</th>
-                <th className="text-right p-4">Actions</th>
+                <th className="text-left p-4">Reference</th>
+                <th className="text-left p-4">Guest</th>
+                <th className="text-left p-4">Guests</th>
+                <th className="text-left p-4">Room</th>
+                <th className="text-left p-4">Dates</th>
+                <th className="text-left p-4">Total</th>
+                <th className="text-left p-4 whitespace-nowrap">Status</th>
+                <th className="text-left p-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {guests.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-aegean-500">
-                    No guests yet — approve or reject a payment in Bookings first.
-                  </td>
-                </tr>
-              ) : (
-                guests.map((g) => (
-                  <tr key={g.guest_email} className="border-t border-aegean-100 hover:bg-aegean-50/50">
-                    <td className="p-4 font-medium text-aegean-800">{g.guest_name}</td>
-                    <td className="p-4 text-aegean-600">{g.guest_email}</td>
-                    <td className="p-4">{g.guest_phone}</td>
-                    <td className="p-4">{g.total_bookings}</td>
-                    <td className="p-4">{new Date(g.last_booking).toLocaleDateString()}</td>
-                    <td className="p-4 text-right">
-                      <IconActionGroup className="justify-end">
-                        <IconActionButton
-                          icon={Eye}
-                          label="View guest"
-                          onClick={() => openGuest(g.guest_email, false)}
-                        />
-                        <IconActionButton
-                          icon={Pencil}
-                          label="Edit guest"
-                          onClick={() => openGuest(g.guest_email, true)}
-                        />
+              {bookings.length > 0 &&
+                pageItems.map((b) => (
+                  <tr
+                    key={b.id}
+                    className={`border-t ${selected?.id === b.id ? 'bg-aegean-50' : ''}`}
+                  >
+                    <td className="p-4 font-mono text-xs">{formatReference(b.reference_code)}</td>
+                    <td className="p-4">
+                      <p className="font-medium text-aegean-900">{b.guest_name}</p>
+                      <p className="text-xs text-aegean-500">{b.guest_email}</p>
+                    </td>
+                    <td className="p-4 text-aegean-700 whitespace-nowrap">{formatGuestCount(b)}</td>
+                    <td className="p-4">{b.room_name}</td>
+                    <td className="p-4 whitespace-nowrap">
+                      {b.check_in} → {b.check_out}
+                    </td>
+                    <td className="p-4 whitespace-nowrap">
+                      ₱{Number(b.total_amount).toLocaleString()}
+                    </td>
+                    <td className="p-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
+                          statusColors[b.status] || 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {formatStatus(b.status)}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <IconActionGroup>
+                        <IconActionButton icon={Eye} label="View stay" onClick={() => openView(b)} />
+                        <IconActionButton icon={Pencil} label="Edit stay" onClick={() => openEdit(b)} />
                       </IconActionGroup>
                     </td>
                   </tr>
-                ))
-              )}
+                ))}
             </tbody>
-          </table>
+          </AdminTableShell>
+          {bookings.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              from={from}
+              to={to}
+              onPageChange={setPage}
+            />
+          )}
         </div>
       )}
 
-      {selectedEmail && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={closePanel}>
-          <div
-            className="w-full max-w-lg bg-white h-full shadow-2xl overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-white border-b border-aegean-100 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-serif text-aegean-800">
-                {editing ? 'Edit guest' : 'Guest details'}
-              </h2>
-              <button type="button" onClick={closePanel} className="p-2 hover:bg-aegean-50 rounded-lg">
-                <X size={20} />
-              </button>
-            </div>
+      <AdminModal
+        open={Boolean(selected && panelMode)}
+        onClose={closePanel}
+        title={panelMode === 'edit' ? 'Edit stay' : 'Stay details'}
+        description={
+          selected
+            ? `${formatReference(selected.reference_code)} · ${formatStatus(selected.status)} · ${selected.room_name} · ₱${Number(selected.total_amount).toLocaleString()}`
+            : undefined
+        }
+        size="xl"
+      >
+        {selected && panelMode && (
+          <>
+            {detailLoading ? (
+              <Loading />
+            ) : panelMode === 'view' ? (
+              <BookingStayDetails
+                booking={selected}
+                onViewPaymentProof={setPaymentProofUrl}
+                onEdit={() => openEdit(selected)}
+              />
+            ) : (
+              <BookingStayEditForm
+                booking={selected}
+                onSaved={handleSaved}
+                onCancel={closePanel}
+              />
+            )}
+          </>
+        )}
+      </AdminModal>
 
-            <div className="p-6">
-              {detailLoading ? (
-                <Loading />
-              ) : !detail ? (
-                <p className="text-red-600 text-sm">{error || 'Could not load guest.'}</p>
-              ) : editing ? (
-                <form onSubmit={handleSave} className="space-y-4">
-                  {error && <p className="text-red-600 text-sm p-3 bg-red-50 rounded-lg">{error}</p>}
-                  <div>
-                    <label className="block text-sm font-medium text-aegean-700 mb-1">Full name *</label>
-                    <input
-                      required
-                      value={form.guest_name}
-                      onChange={(e) => setForm((f) => ({ ...f, guest_name: e.target.value }))}
-                      className="w-full border border-aegean-200 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-aegean-700 mb-1">Email *</label>
-                    <input
-                      type="email"
-                      required
-                      value={form.guest_email}
-                      onChange={(e) => setForm((f) => ({ ...f, guest_email: e.target.value }))}
-                      className="w-full border border-aegean-200 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-aegean-700 mb-1">Phone *</label>
-                    <input
-                      required
-                      value={form.guest_phone}
-                      onChange={(e) => setForm((f) => ({ ...f, guest_phone: e.target.value }))}
-                      className="w-full border border-aegean-200 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <p className="text-xs text-aegean-500">
-                    Changes apply to all {detail.total_bookings} booking(s) for this guest.
-                  </p>
-                  <div className="flex gap-2 pt-2">
-                    <SubmitButton loading={saving} loadingLabel="Saving..." className="text-sm">
-                      Save changes
-                    </SubmitButton>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(false);
-                        setForm({
-                          guest_name: detail.guest_name,
-                          guest_email: detail.guest_email,
-                          guest_phone: detail.guest_phone,
-                        });
-                        setError('');
-                      }}
-                      className="btn-outline text-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <>
-                  <div className="space-y-3 text-sm mb-6">
-                    <p>
-                      <span className="text-aegean-500">Name:</span>{' '}
-                      <strong className="text-aegean-800">{detail.guest_name}</strong>
-                    </p>
-                    <p>
-                      <span className="text-aegean-500">Email:</span> {detail.guest_email}
-                    </p>
-                    <p>
-                      <span className="text-aegean-500">Phone:</span> {detail.guest_phone}
-                    </p>
-                    <p>
-                      <span className="text-aegean-500">Total bookings:</span> {detail.total_bookings}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="btn-outline text-sm flex items-center gap-2 mb-8"
-                  >
-                    <Pencil size={16} /> Edit guest
-                  </button>
-
-                  <h3 className="font-medium text-aegean-800 mb-3">Booking history</h3>
-                  <ul className="space-y-3">
-                    {detail.bookings.map((b) => (
-                      <li key={b.id} className="border border-aegean-100 rounded-xl p-4">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className="font-mono text-aegean-700 text-xs">{b.reference_code}</span>
-                          <span
-                            className={`text-[10px] uppercase px-2 py-0.5 rounded-full ${
-                              statusColors[b.status] || 'bg-gray-100'
-                            }`}
-                          >
-                            {b.status.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <p className="text-aegean-800 font-medium">{b.room_name}</p>
-                        <p className="text-aegean-600 text-xs mt-1">
-                          {b.check_in} → {b.check_out} · {b.nights} night(s)
-                        </p>
-                        <p className="text-aegean-500 text-xs mt-1">
-                          ₱{Number(b.total_amount).toLocaleString()} · {b.guest_count} guest(s)
-                        </p>
-                        <Link
-                          to="/admin/bookings"
-                          className="inline-block text-xs text-aegean-500 hover:text-aegean-700 mt-2 underline"
-                          onClick={closePanel}
-                        >
-                          Open in Bookings →
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
+      <AdminModal
+        open={Boolean(paymentProofUrl)}
+        onClose={() => setPaymentProofUrl(null)}
+        title="Payment proof"
+        size="md"
+      >
+        {paymentProofUrl && (
+          <div className="space-y-4">
+            {String(paymentProofUrl).toLowerCase().includes('.pdf') ? (
+              <>
+                <p className="text-sm text-aegean-600">PDF document uploaded by the guest.</p>
+                <a
+                  href={paymentProofUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-outline text-sm inline-block"
+                >
+                  Open PDF in new tab
+                </a>
+                <iframe
+                  src={paymentProofUrl}
+                  title="Payment proof"
+                  className="w-full h-[60vh] rounded-lg border border-aegean-100"
+                />
+              </>
+            ) : (
+              <img
+                src={paymentProofUrl}
+                alt="Payment proof"
+                className="w-full max-h-[70vh] object-contain rounded-lg border border-aegean-100"
+              />
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </AdminModal>
     </div>
   );
 }

@@ -39,6 +39,10 @@ export function isSeniorPassenger(passenger) {
   return Boolean(passenger?.is_senior) || (Number.isFinite(age) && age >= 60);
 }
 
+export function isPwdPassenger(passenger) {
+  return Boolean(passenger?.is_pwd);
+}
+
 export function parseIslandHoppingData(raw) {
   if (!raw) return null;
   try {
@@ -73,6 +77,9 @@ export function validateIslandHoppingPayload(data) {
     if (!p.gender) return { valid: false, message: `Gender is required for ${p.full_name}.` };
     if (p.is_first_timer !== true && p.is_first_timer !== false) {
       return { valid: false, message: `Please indicate if ${p.full_name} is a first timer.` };
+    }
+    if (p.is_pwd !== true && p.is_pwd !== false) {
+      return { valid: false, message: `Please indicate if ${p.full_name} is a PWD.` };
     }
   }
 

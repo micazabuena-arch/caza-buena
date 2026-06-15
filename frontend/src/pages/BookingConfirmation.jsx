@@ -6,12 +6,14 @@ import PageHero from '../components/ui/PageHero';
 import PaymentWorkflowSteps, { PAYMENT_METHOD_LABELS } from '../components/booking/PaymentWorkflowSteps';
 import PaymentMethodSelect from '../components/booking/PaymentMethodSelect';
 import SeniorIdUploadPanel from '../components/booking/SeniorIdUploadPanel';
+import PwdIdUploadPanel from '../components/booking/PwdIdUploadPanel';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { images } from '../data/placeholders';
 import { parseIslandHoppingData } from '../data/islandHoppingRates';
+import { getBilaoPackage, getBoodlePackage } from '../data/bookingAddOns';
 
 function workflowStep(status) {
   if (status === 'confirmed') return 5;
@@ -119,6 +121,19 @@ export default function BookingConfirmation() {
       return { ...prev, island_hopping_data: data };
     });
   };
+
+  const handlePwdIdUpdated = (passengerIndex, pwdIdUrl) => {
+    setBooking((prev) => {
+      if (!prev?.island_hopping) return prev;
+      const data = parseIslandHoppingData(prev.island_hopping_data);
+      if (!data?.passengers?.[passengerIndex]) return prev;
+      data.passengers[passengerIndex] = {
+        ...data.passengers[passengerIndex],
+        pwd_id_url: pwdIdUrl,
+      };
+      return { ...prev, island_hopping_data: data };
+    });
+  };
   const step = uploadSuccess ? 4 : workflowStep(booking.status);
   const showPayment = !['confirmed', 'payment_submitted'].includes(booking.status) && !uploadSuccess;
 
@@ -161,6 +176,40 @@ export default function BookingConfirmation() {
               <strong>Status:</strong>{' '}
               <span className="inline-block px-2 py-0.5 rounded-full bg-white">{booking.status.replace(/_/g, ' ')}</span>
             </p>
+            {(booking.bringing_car ||
+              Number(booking.pet_count) > 0 ||
+              booking.bilao_package ||
+              booking.boodle_fight) && (
+              <div className="text-sm pt-2 border-t border-aegean-200/80 space-y-1">
+                <p className="font-medium text-aegean-800">Stay extras</p>
+                {booking.bringing_car ? (
+                  <p>
+                    Car: {booking.car_count || 1} car{(booking.car_count || 1) !== 1 ? 's' : ''}
+                  </p>
+                ) : (
+                  <p>Car: None</p>
+                )}
+                {Number(booking.pet_count) > 0 && (
+                  <p>
+                    Pets: {booking.pet_count} · refundable deposit ₱
+                    {Number(booking.pet_deposit_amount || 0).toLocaleString()} (on arrival)
+                  </p>
+                )}
+                {booking.bilao_package && (
+                  <p>
+                    Bilao: {getBilaoPackage(booking.bilao_package)?.label || booking.bilao_package} — ₱
+                    {Number(booking.bilao_amount || 0).toLocaleString()}
+                  </p>
+                )}
+                {booking.boodle_fight && (
+                  <p>
+                    Boodle fight:{' '}
+                    {getBoodlePackage(booking.boodle_fight_tier)?.label || booking.boodle_fight_tier} — ₱
+                    {Number(booking.boodle_fight_amount || 0).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {booking.status === 'awaiting_payment' && (
@@ -226,11 +275,18 @@ export default function BookingConfirmation() {
           )}
 
           {islandHop && (
-            <SeniorIdUploadPanel
-              reference={booking.reference_code}
-              islandHop={islandHop}
-              onUpdated={handleSeniorIdUpdated}
-            />
+            <>
+              <SeniorIdUploadPanel
+                reference={booking.reference_code}
+                islandHop={islandHop}
+                onUpdated={handleSeniorIdUpdated}
+              />
+              <PwdIdUploadPanel
+                reference={booking.reference_code}
+                islandHop={islandHop}
+                onUpdated={handlePwdIdUpdated}
+              />
+            </>
           )}
         </div>
       </section>

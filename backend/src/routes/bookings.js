@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import pool from '../config/database.js';
 import { authenticateAdmin } from '../middleware/auth.js';
-import { uploadPaymentProof, uploadSeniorId } from '../middleware/upload.js';
+import { uploadPaymentProof, uploadSeniorId, uploadPwdId } from '../middleware/upload.js';
 import { uploadFile } from '../utils/fileUpload.js';
 import {
   generateReferenceCode,
@@ -210,6 +210,13 @@ router.post(
     body('custom_payment_amount').optional().isFloat({ min: 0 }),
     body('island_hopping').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('island_hopping_data').optional().isObject(),
+    body('bringing_car').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('car_count').optional().toInt().isInt({ min: 0, max: 5 }),
+    body('pet_count').optional().toInt().isInt({ min: 0, max: 2 }),
+    body('bilao_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('bilao_package').optional().trim(),
+    body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('boodle_fight_tier').optional().trim(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -236,6 +243,13 @@ router.post(
       custom_payment_amount,
       island_hopping: islandHoppingFlag,
       island_hopping_data: islandHoppingData,
+      bringing_car: bringingCarFlag,
+      car_count: carCountBody,
+      pet_count: petCountBody,
+      bilao_enabled: bilaoEnabledFlag,
+      bilao_package: bilaoPackageBody,
+      boodle_fight_enabled: boodleFightEnabledFlag,
+      boodle_fight_tier: boodleFightTierBody,
     } = req.body;
 
     const adults = adultsBody != null ? parseInt(adultsBody, 10) : parseInt(guestCountBody, 10) || 1;
@@ -314,8 +328,29 @@ router.post(
       }
     }
 
+    const { validateBookingExtras } = await import('../utils/bookingExtras.js');
+    const extrasValidation = validateBookingExtras(
+      {
+        bringing_car: bringingCarFlag,
+        car_count: carCountBody,
+        pet_count: petCountBody,
+        bilao_enabled: bilaoEnabledFlag,
+        bilao_package: bilaoPackageBody,
+        boodle_fight_enabled: boodleFightEnabledFlag,
+        boodle_fight_tier: boodleFightTierBody,
+      },
+      room.room_type
+    );
+    if (!extrasValidation.valid) {
+      return res.status(400).json({ message: extrasValidation.message });
+    }
+
     const roomTotal = Math.max(0, subtotal - discountAmount);
-    const total = roomTotal + islandHoppingAmount;
+    const total =
+      roomTotal +
+      islandHoppingAmount +
+      extrasValidation.bilao_amount +
+      extrasValidation.boodle_fight_amount;
 
     const [settingRows] = await pool.query(
       "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
@@ -342,8 +377,10 @@ router.post(
         special_requests, check_in, check_out, nights,
         room_rate, discount_amount, discount_code, total_amount, extra_person_charges,
         island_hopping, island_hopping_amount, island_hopping_data,
+        bringing_car, car_count, pet_count, pet_deposit_amount,
+        bilao_package, bilao_amount, boodle_fight, boodle_fight_tier, boodle_fight_amount,
         status, payment_method_id, payment_option, amount_to_pay
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
       [
         reference,
         room_id,
@@ -368,6 +405,15 @@ router.post(
         islandHopping ? 1 : 0,
         islandHoppingAmount,
         islandHoppingStored ? JSON.stringify(islandHoppingStored) : null,
+        extrasValidation.bringing_car ? 1 : 0,
+        extrasValidation.car_count,
+        extrasValidation.pet_count,
+        extrasValidation.pet_deposit_amount,
+        extrasValidation.bilao_package,
+        extrasValidation.bilao_amount,
+        extrasValidation.boodle_fight ? 1 : 0,
+        extrasValidation.boodle_fight_tier,
+        extrasValidation.boodle_fight_amount,
         payment_method_id || null,
         payment_option,
         amountToPay,
@@ -398,6 +444,65 @@ router.post(
     } catch (err) {
       console.error('Create booking error:', err);
       res.status(500).json({ message: 'Unable to submit booking. Please try again.' });
+    }
+  }
+);
+
+// Admin: create manual booking (walk-in, phone, etc.) — blocks site availability when confirmed
+router.post(
+  '/admin',
+  authenticateAdmin,
+  [
+    body('room_id').toInt().isInt({ min: 1 }),
+    body('guest_name').trim().notEmpty(),
+    body('guest_email').isEmail(),
+    body('guest_phone').trim().notEmpty(),
+    body('check_in').matches(/^\d{4}-\d{2}-\d{2}$/),
+    body('check_out').matches(/^\d{4}-\d{2}-\d{2}$/),
+    body('adults').optional().toInt().isInt({ min: 1 }),
+    body('children_under6').optional().toInt().isInt({ min: 0 }),
+    body('children_7_12').optional().toInt().isInt({ min: 0 }),
+    body('valid_id').optional().trim(),
+    body('estimated_arrival').optional().trim(),
+    body('status')
+      .optional()
+      .isIn(['pending', 'awaiting_payment', 'payment_submitted', 'confirmed']),
+    body('special_requests').optional().trim(),
+    body('send_confirmation_email').optional().isBoolean(),
+    body('payment_method_id').optional({ nullable: true }).toInt().isInt({ min: 1 }),
+    body('payment_option').optional().isIn(['deposit', 'full', 'custom']),
+    body('custom_payment_amount').optional().isFloat({ min: 0 }),
+    body('island_hopping').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('island_hopping_data').optional().isObject(),
+    body('bringing_car').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('car_count').optional().toInt().isInt({ min: 0, max: 5 }),
+    body('pet_count').optional().toInt().isInt({ min: 0, max: 2 }),
+    body('bilao_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('bilao_package').optional().trim(),
+    body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
+    body('boodle_fight_tier').optional().trim(),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    try {
+      const { createManualBooking } = await import('../utils/manualBookingCreate.js');
+      const result = await createManualBooking(req.body);
+      if (result.error) {
+        const status = result.error.includes('not available') ? 409 : 400;
+        return res.status(status).json({ message: result.error });
+      }
+
+      res.status(201).json({
+        message: 'Manual booking created',
+        booking: result.booking,
+        email_sent: result.emailResult.sent,
+        email_hint: result.emailResult.hint || null,
+      });
+    } catch (err) {
+      console.error('Admin create booking error:', err);
+      res.status(500).json({ message: 'Unable to create booking. Please try again.' });
     }
   }
 );
@@ -440,6 +545,7 @@ router.get('/admin/calendar', authenticateAdmin, async (req, res) => {
             b.status, b.total_amount, r.name as room_name, r.id as room_id
      FROM bookings b JOIN rooms r ON b.room_id = r.id
      WHERE b.status NOT IN ('cancelled', 'rejected')
+       AND b.check_out >= CURDATE()
        AND (
          (YEAR(b.check_in) = ? AND MONTH(b.check_in) = ?)
          OR (YEAR(b.check_out) = ? AND MONTH(b.check_out) = ?)
@@ -447,6 +553,215 @@ router.get('/admin/calendar', authenticateAdmin, async (req, res) => {
     [y, m, y, m]
   );
   res.json(bookings);
+});
+
+router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT b.*, r.name AS room_name, r.room_type FROM bookings b
+       JOIN rooms r ON b.room_id = r.id WHERE b.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+    const { computeAdminBookingUpdate } = await import('../utils/adminBookingUpdate.js');
+    const result = await computeAdminBookingUpdate(pool, rows[0], req.body);
+    if (result.error) return res.status(400).json({ message: result.error });
+
+    const v = result.values;
+    await pool.query(
+      `UPDATE bookings SET
+        room_id = ?, guest_name = ?, guest_email = ?, guest_phone = ?,
+        valid_id = ?, estimated_arrival = ?, guest_count = ?, adults = ?,
+        children_under6 = ?, children_7_12 = ?, special_requests = ?, admin_notes = ?,
+        check_in = ?, check_out = ?, nights = ?, room_rate = ?, discount_amount = ?,
+        total_amount = ?, extra_person_charges = ?,
+        island_hopping = ?, island_hopping_amount = ?, island_hopping_data = ?,
+        bringing_car = ?, car_count = ?, pet_count = ?, pet_deposit_amount = ?,
+        bilao_package = ?, bilao_amount = ?, boodle_fight = ?, boodle_fight_tier = ?,
+        boodle_fight_amount = ?, payment_method_id = ?, payment_option = ?, amount_to_pay = ?
+       WHERE id = ?`,
+      [
+        v.room_id,
+        v.guest_name,
+        v.guest_email,
+        v.guest_phone,
+        v.valid_id,
+        v.estimated_arrival,
+        v.guest_count,
+        v.adults,
+        v.children_under6,
+        v.children_7_12,
+        v.special_requests,
+        v.admin_notes,
+        v.check_in,
+        v.check_out,
+        v.nights,
+        v.room_rate,
+        v.discount_amount,
+        v.total_amount,
+        v.extra_person_charges,
+        v.island_hopping,
+        v.island_hopping_amount,
+        v.island_hopping_data,
+        v.bringing_car,
+        v.car_count,
+        v.pet_count,
+        v.pet_deposit_amount,
+        v.bilao_package,
+        v.bilao_amount,
+        v.boodle_fight,
+        v.boodle_fight_tier,
+        v.boodle_fight_amount,
+        v.payment_method_id,
+        v.payment_option,
+        v.amount_to_pay,
+        req.params.id,
+      ]
+    );
+
+    const [updated] = await pool.query(
+      `SELECT b.*, r.name AS room_name, pm.name AS payment_method_name, pm.type AS payment_method_type
+       FROM bookings b
+       JOIN rooms r ON b.room_id = r.id
+       LEFT JOIN payment_methods pm ON b.payment_method_id = pm.id
+       WHERE b.id = ?`,
+      [req.params.id]
+    );
+
+    res.json({ message: 'Booking updated', booking: updated[0] });
+  } catch (err) {
+    console.error('Admin update booking error:', err);
+    res.status(500).json({ message: 'Unable to update booking' });
+  }
+});
+
+router.get('/admin/:id/rebook-quote', authenticateAdmin, async (req, res) => {
+  const { check_in, check_out, room_id } = req.query;
+  if (!check_in || !check_out) {
+    return res.status(400).json({ message: 'check_in and check_out are required' });
+  }
+
+  const [rows] = await pool.query(
+    `SELECT b.*, r.name AS room_name FROM bookings b
+     JOIN rooms r ON b.room_id = r.id WHERE b.id = ?`,
+    [req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+  const booking = rows[0];
+  const { computeRebookPricing } = await import('../utils/rebookPricing.js');
+  const quote = await computeRebookPricing(pool, booking, {
+    checkIn: check_in,
+    checkOut: check_out,
+    roomId: room_id || booking.room_id,
+  });
+  if (quote.error) return res.status(400).json({ message: quote.error });
+
+  res.json(quote);
+});
+
+router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
+  const { check_in, check_out } = req.body;
+  if (!check_in || !check_out || !/^\d{4}-\d{2}-\d{2}$/.test(check_in) || !/^\d{4}-\d{2}-\d{2}$/.test(check_out)) {
+    return res.status(400).json({ message: 'check_in and check_out are required (YYYY-MM-DD)' });
+  }
+
+  const checkIn = String(check_in).slice(0, 10);
+  const checkOut = String(check_out).slice(0, 10);
+  const nights = calculateNights(checkIn, checkOut);
+  if (nights < 1) {
+    return res.status(400).json({ message: 'Check-out must be after check-in' });
+  }
+
+  const [rows] = await pool.query(
+    `SELECT b.*, r.name AS room_name FROM bookings b
+     JOIN rooms r ON b.room_id = r.id WHERE b.id = ?`,
+    [req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+  const booking = rows[0];
+  const blocksAvailability = ['pending', 'awaiting_payment', 'payment_submitted', 'confirmed'].includes(
+    booking.status
+  );
+  if (blocksAvailability) {
+    const available = await isRoomAvailable(pool, booking.room_id, checkIn, checkOut, booking.id);
+    if (!available) {
+      return res.status(409).json({ message: 'Room is not available for the selected dates' });
+    }
+  }
+
+  const occupancy = {
+    adults: booking.adults ?? booking.guest_count ?? 1,
+    childrenUnder6: booking.children_under6 || 0,
+    children7_12: booking.children_7_12 || 0,
+  };
+
+  const { calculateStayTotal } = await import('../utils/pricing.js');
+  const stay = await calculateStayTotal(pool, booking.room_id, checkIn, checkOut, occupancy);
+  const { amount: discountAmount } = await applyDiscount(
+    pool,
+    booking.discount_code,
+    nights,
+    stay.subtotal
+  );
+  const roomTotal = Math.max(0, stay.subtotal - (discountAmount || 0));
+  const islandAmount = booking.island_hopping ? Number(booking.island_hopping_amount) || 0 : 0;
+  const bilaoAmount = Number(booking.bilao_amount) || 0;
+  const boodleAmount = Number(booking.boodle_fight_amount) || 0;
+  const total = roomTotal + islandAmount + bilaoAmount + boodleAmount;
+  const avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(booking.room_rate);
+
+  const [settingRows] = await pool.query(
+    "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
+  );
+  const { resolveAmountToPay, getDepositPercent } = await import('../utils/paymentAmount.js');
+  const depositPercent = getDepositPercent(settingRows[0]?.setting_value);
+  const customAmount =
+    booking.payment_option === 'custom' ? booking.amount_to_pay : undefined;
+  const payResolved = resolveAmountToPay(total, booking.payment_option, customAmount, depositPercent);
+  if (payResolved.error) {
+    return res.status(400).json({ message: payResolved.error });
+  }
+
+  await pool.query(
+    `UPDATE bookings SET
+       check_in = ?, check_out = ?, nights = ?,
+       room_rate = ?, discount_amount = ?, total_amount = ?,
+       extra_person_charges = ?, amount_to_pay = ?
+     WHERE id = ?`,
+    [
+      checkIn,
+      checkOut,
+      nights,
+      avgNightlyRate,
+      discountAmount || 0,
+      total,
+      stay.extraPersonCharges || 0,
+      payResolved.amount,
+      booking.id,
+    ]
+  );
+
+  const [updated] = await pool.query(
+    `SELECT b.*, r.name AS room_name FROM bookings b
+     JOIN rooms r ON b.room_id = r.id WHERE b.id = ?`,
+    [booking.id]
+  );
+
+  const { computeRebookPricing } = await import('../utils/rebookPricing.js');
+  const pricingAdjustment = await computeRebookPricing(pool, booking, {
+    checkIn,
+    checkOut,
+  });
+
+  res.json({
+    message: 'Stay dates updated',
+    booking: updated[0],
+    price_breakdown: stay.breakdown,
+    pricing_adjustment: pricingAdjustment.error ? null : pricingAdjustment,
+  });
 });
 
 router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
@@ -610,6 +925,66 @@ router.post(
       message: 'Senior citizen ID uploaded.',
       passenger_index: passengerIndex,
       senior_id_url: idUrl,
+    });
+  }
+);
+
+// Public: upload PWD ID for island hopping passenger
+router.post(
+  '/:reference/pwd-id',
+  uploadPwdId.single('id'),
+  async (req, res) => {
+    const code = req.params.reference.toUpperCase();
+    const passengerIndex = parseInt(req.body.passenger_index, 10);
+
+    if (!Number.isFinite(passengerIndex) || passengerIndex < 0) {
+      return res.status(400).json({ message: 'Valid passenger_index is required' });
+    }
+    if (!req.file) return res.status(400).json({ message: 'PWD ID file required' });
+
+    const [rows] = await pool.query('SELECT * FROM bookings WHERE reference_code = ?', [code]);
+    if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+    const booking = rows[0];
+    if (!booking.island_hopping) {
+      return res.status(400).json({ message: 'This booking does not include island hopping' });
+    }
+
+    const { parseIslandHoppingData, isPwdPassenger } = await import('../utils/islandHopping.js');
+    const islandData = parseIslandHoppingData(booking.island_hopping_data);
+    if (!islandData?.passengers?.length) {
+      return res.status(400).json({ message: 'Island hopping passenger list not found' });
+    }
+    if (passengerIndex >= islandData.passengers.length) {
+      return res.status(400).json({ message: 'Invalid passenger index' });
+    }
+
+    const passenger = islandData.passengers[passengerIndex];
+    if (!isPwdPassenger(passenger)) {
+      return res.status(400).json({ message: 'PWD ID is only required for guests marked as PWD' });
+    }
+
+    const isPdf = req.file.mimetype === 'application/pdf';
+    const { url: idUrl, publicId } = await uploadFile(req.file.buffer, 'pwd-ids', {
+      originalName: req.file.originalname,
+      resourceType: isPdf ? 'raw' : 'image',
+    });
+
+    islandData.passengers[passengerIndex] = {
+      ...passenger,
+      pwd_id_url: idUrl,
+      pwd_id_public_id: publicId,
+    };
+
+    await pool.query('UPDATE bookings SET island_hopping_data = ? WHERE id = ?', [
+      JSON.stringify(islandData),
+      booking.id,
+    ]);
+
+    res.json({
+      message: 'PWD ID uploaded.',
+      passenger_index: passengerIndex,
+      pwd_id_url: idUrl,
     });
   }
 );

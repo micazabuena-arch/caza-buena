@@ -17,6 +17,7 @@ import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import Policies from './pages/Policies';
 import Meals from './pages/Meals';
+import WhatsNew from './pages/WhatsNew';
 
 import AdminLayout from './admin/AdminLayout';
 import AdminLogin from './admin/Login';
@@ -32,6 +33,7 @@ import AdminAvailability from './admin/Availability';
 import AdminFAQ from './admin/FAQAdmin';
 import AdminMenu from './admin/MenuAdmin';
 import AdminPolicies from './admin/PoliciesAdmin';
+import WhatsNewAdmin from './admin/WhatsNewAdmin';
 import IslandHoppingPrint from './admin/IslandHoppingPrint';
 
 export default function App() {
@@ -50,6 +52,7 @@ export default function App() {
             <Route path="amenities" element={<Amenities />} />
             <Route path="gallery" element={<Gallery />} />
             <Route path="meals" element={<Meals />} />
+            <Route path="whats-new" element={<WhatsNew />} />
             <Route path="booking" element={<Booking />} />
             <Route path="booking/confirm/:reference" element={<BookingConfirmation />} />
             <Route path="contact" element={<Contact />} />
@@ -72,6 +75,7 @@ export default function App() {
             <Route path="menu" element={<AdminMenu />} />
             <Route path="faq" element={<AdminFAQ />} />
             <Route path="policies" element={<AdminPolicies />} />
+            <Route path="whats-new" element={<WhatsNewAdmin />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -4,6 +4,8 @@ import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export default function AdminAvailability() {
   const [rooms, setRooms] = useState([]);
@@ -15,6 +17,7 @@ export default function AdminAvailability() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(blocks);
 
   useEffect(() => {
     api.get('/rooms/admin/all').then((r) => {
@@ -25,8 +28,9 @@ export default function AdminAvailability() {
 
   useEffect(() => {
     if (!roomId) return;
+    setPage(1);
     api.get(`/admin/availability/${roomId}`).then((r) => setBlocks(r.data));
-  }, [roomId]);
+  }, [roomId, setPage]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -101,12 +105,22 @@ export default function AdminAvailability() {
         {blocks.length === 0 ? (
           <p className="text-aegean-600">No blocked dates for this room.</p>
         ) : (
-          blocks.map((b) => (
+          pageItems.map((b) => (
             <div key={b.id} className="bg-white p-4 rounded-xl flex justify-between items-center">
               <span>{b.start_date} → {b.end_date} {b.reason && `· ${b.reason}`}</span>
               <button type="button" onClick={() => remove(b.id)} className="text-red-600 text-sm">Remove</button>
             </div>
           ))
+        )}
+        {blocks.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            from={from}
+            to={to}
+            onPageChange={setPage}
+          />
         )}
       </div>
     </div>

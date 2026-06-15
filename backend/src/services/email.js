@@ -68,8 +68,8 @@ export async function sendPaymentProofReceivedEmail(booking, room) {
       and payment details for reference <strong>${booking.reference_code}</strong>.
     </p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
-      Our reservations team is now reviewing your request. You can expect an update from us within
-      <strong>1–2 business days</strong> once your payment has been verified.
+      Our reservations team is now reviewing your request. You can expect an update from us
+      <strong>within 24 hours</strong> once your payment has been verified.
     </p>
     <p style="margin:0 0 8px;font-size:15px;line-height:1.65;color:#214566;">
       Summary of your request:

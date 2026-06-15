@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+frontend/.vite/
 backend/uploads/*
 !backend/uploads/.gitkeep
 backend/test-*.json

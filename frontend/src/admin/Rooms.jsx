@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Upload, Star, Trash2, CalendarRange, Power, PowerOff } from 'lucide-react';
+import { Plus, Pencil, Upload, Star, Trash2, CalendarRange } from 'lucide-react';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
@@ -9,6 +9,9 @@ import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { ROOM_INVENTORY } from '../data/resortRules';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
+import AdminModal from '../components/admin/AdminModal';
 
 const emptyForm = () => ({
   name: '',
@@ -58,6 +61,7 @@ export default function AdminRooms() {
   const [holidayRates, setHolidayRates] = useState([]);
   const [newHoliday, setNewHoliday] = useState(emptyHolidayForm());
   const [holidaySaving, setHolidaySaving] = useState(false);
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(rooms);
 
   const loadRooms = () => {
     setLoading(true);
@@ -269,20 +273,6 @@ export default function AdminRooms() {
     );
   };
 
-  const toggleActiveQuick = async (room) => {
-    const ok = await askConfirm({
-      title: room.is_active ? 'Deactivate room?' : 'Activate room?',
-      message: room.is_active
-        ? `"${room.name}" will be hidden from the website.`
-        : `"${room.name}" will be available for booking again.`,
-      confirmLabel: room.is_active ? 'Yes, deactivate' : 'Yes, activate',
-      variant: room.is_active ? 'danger' : 'primary',
-    });
-    if (!ok) return;
-    await api.put(`/admin/rooms/${room.id}`, { is_active: room.is_active ? 0 : 1 });
-    loadRooms();
-  };
-
   const addHolidayRate = async (e) => {
     e.preventDefault();
     if (editingId === 'new') {
@@ -335,6 +325,25 @@ export default function AdminRooms() {
     }
   };
 
+  const deleteRoom = async (room) => {
+    const ok = await askConfirm({
+      title: 'Delete room permanently?',
+      message: `"${room.name}" will be removed. This only works if the room has no bookings — otherwise set it to Inactive.`,
+      confirmLabel: 'Yes, delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/admin/rooms/${room.id}`);
+      toast.success('Room deleted.');
+      if (editingId === room.id) closeForm();
+      loadRooms();
+    } catch (err) {
+      const msg = getApiError(err);
+      toast.error(msg);
+    }
+  };
+
   const removeHolidayRate = async (holidayId) => {
     const ok = await askConfirm({
       title: 'Remove holiday pricing?',
@@ -361,17 +370,14 @@ export default function AdminRooms() {
         </button>
       </div>
 
-      {editingId && (
-        <div className="bg-white rounded-2xl shadow-md border border-aegean-100 p-6 md:p-8 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-serif text-aegean-800">
-              {editingId === 'new' ? 'Add New Room' : 'Edit Room'}
-            </h2>
-            <button type="button" onClick={closeForm} className="p-2 text-aegean-600 hover:bg-aegean-50 rounded-lg">
-              <X size={20} />
-            </button>
-          </div>
-
+      <AdminModal
+        open={Boolean(editingId)}
+        onClose={closeForm}
+        title={editingId === 'new' ? 'Add new room' : 'Edit room'}
+        size="xl"
+        padding={false}
+        bodyClassName="p-6 md:p-8"
+      >
           {error && <p className="text-red-600 text-sm mb-4 p-3 bg-red-50 rounded-lg">{error}</p>}
 
           <form id="room-edit-form" onSubmit={handleSave} className="space-y-5">
@@ -707,9 +713,20 @@ export default function AdminRooms() {
             <button type="button" onClick={closeForm} className="btn-outline text-sm">
               Cancel
             </button>
+            {editingId !== 'new' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const room = rooms.find((r) => r.id === editingId);
+                  if (room) deleteRoom(room);
+                }}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm text-red-600 border-2 border-red-300 rounded-full font-medium transition-all hover:bg-red-50 ml-auto"
+              >
+                Delete room
+              </button>
+            )}
           </div>
-        </div>
-      )}
+      </AdminModal>
 
       {loading ? (
         <Loading />
@@ -718,7 +735,7 @@ export default function AdminRooms() {
           {rooms.length === 0 ? (
             <p className="text-aegean-600 text-center py-12 bg-white rounded-xl">No rooms yet. Click Add Room to create one.</p>
           ) : (
-            rooms.map((room) => (
+            pageItems.map((room) => (
               <div
                 key={room.id}
                 className="bg-white p-5 rounded-xl shadow-sm flex flex-wrap items-center justify-between gap-4"
@@ -767,14 +784,25 @@ export default function AdminRooms() {
                       onClick={() => openEdit(room)}
                     />
                     <IconActionButton
-                      icon={room.is_active ? PowerOff : Power}
-                      label={room.is_active ? 'Deactivate room' : 'Activate room'}
-                      onClick={() => toggleActiveQuick(room)}
+                      icon={Trash2}
+                      label="Delete room"
+                      onClick={() => deleteRoom(room)}
+                      className="hover:border-red-200 hover:text-red-600 hover:bg-red-50"
                     />
                   </IconActionGroup>
                 </div>
               </div>
             ))
+          )}
+          {rooms.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              from={from}
+              to={to}
+              onPageChange={setPage}
+            />
           )}
         </div>
       )}

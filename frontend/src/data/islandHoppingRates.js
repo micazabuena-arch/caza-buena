@@ -38,6 +38,10 @@ export function isSeniorPassenger(passenger) {
   return Boolean(passenger?.is_senior) || (Number.isFinite(age) && age >= 60);
 }
 
+export function isPwdPassenger(passenger) {
+  return Boolean(passenger?.is_pwd);
+}
+
 export function parseIslandHoppingData(raw) {
   if (!raw) return null;
   try {
@@ -107,7 +111,8 @@ export function calculateIslandHopping(passengers) {
         Number.isFinite(age) &&
         age >= 0 &&
         p.gender &&
-        (p.is_first_timer === true || p.is_first_timer === false)
+        (p.is_first_timer === true || p.is_first_timer === false) &&
+        (p.is_pwd === true || p.is_pwd === false)
       );
     }),
   };
@@ -121,6 +126,8 @@ export function emptyPassenger() {
     is_first_timer: '',
     is_senior: false,
     senior_id_file: null,
+    is_pwd: '',
+    pwd_id_file: null,
   };
 }
 

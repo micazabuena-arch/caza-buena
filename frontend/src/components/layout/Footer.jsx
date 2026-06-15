@@ -1,5 +1,13 @@
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, ExternalLink } from 'lucide-react';
+import { MapPin, Phone, Mail } from 'lucide-react';
+import { resort } from '../../data/placeholders';
+import { FacebookIcon, InstagramIcon, TikTokIcon } from '../ui/SocialIcon';
+
+const socialLinks = [
+  { href: resort.facebook, label: 'Facebook', Icon: FacebookIcon },
+  { href: resort.instagram, label: 'Instagram', Icon: InstagramIcon },
+  { href: resort.tiktok, label: 'TikTok', Icon: TikTokIcon },
+].filter((item) => item.href);
 
 export default function Footer() {
   return (
@@ -7,9 +15,29 @@ export default function Footer() {
       <div className="section-padding pb-8">
         <div className="container-narrow grid md:grid-cols-3 gap-12">
           <div>
-            <h3 className="font-serif text-3xl mb-3">Caza Buena</h3>
+            <img
+              src="/logowhite.png"
+              alt="Caza Buena"
+              className="h-32 md:h-36 w-auto max-w-[280px] object-contain mb-4"
+            />
             <p className="text-aegean-200 italic">Your home after the sea</p>
             <p className="mt-4 text-sm text-aegean-200">DOT Accredited · Hostel · Café</p>
+            {socialLinks.length > 0 && (
+              <div className="flex items-center gap-3 mt-5">
+                {socialLinks.map(({ href, label, Icon }) => (
+                  <a
+                    key={label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Caza Buena on ${label}`}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white hover:bg-white hover:text-aegean-600 transition-colors"
+                  >
+                    <Icon />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -18,6 +46,7 @@ export default function Footer() {
               <li><Link to="/rooms" className="hover:text-white">Rooms</Link></li>
               <li><Link to="/amenities" className="hover:text-white">Amenities</Link></li>
               <li><Link to="/meals" className="hover:text-white">Meals</Link></li>
+              <li><Link to="/whats-new" className="hover:text-white">What&apos;s New</Link></li>
               <li><Link to="/booking" className="hover:text-white">Book a Stay</Link></li>
               <li><Link to="/policies" className="hover:text-white">Policies</Link></li>
             </ul>
@@ -30,20 +59,12 @@ export default function Footer() {
             </p>
             <p className="flex items-center gap-2">
               <Phone size={16} />
-              <a href="tel:+639178290292" className="hover:text-white">+63 917 829 0292</a>
+              <a href={`tel:${resort.phoneTel}`} className="hover:text-white">{resort.phone}</a>
             </p>
             <p className="flex items-center gap-2">
               <Mail size={16} />
-              <a href="mailto:mi.caza.buena@gmail.com" className="hover:text-white">mi.caza.buena@gmail.com</a>
+              <a href={`mailto:${resort.email}`} className="hover:text-white">{resort.email}</a>
             </p>
-            <a
-              href="https://www.instagram.com/cazabuena_"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 hover:text-white"
-            >
-              <ExternalLink size={16} /> @cazabuena_
-            </a>
           </div>
         </div>
 

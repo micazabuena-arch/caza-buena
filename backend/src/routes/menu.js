@@ -6,14 +6,14 @@ const router = Router();
 
 router.get('/', async (_req, res) => {
   const [rows] = await pool.query(
-    'SELECT id, name, category, description, price, sort_order FROM menu_items WHERE is_active = 1 ORDER BY sort_order, category, name'
+    'SELECT id, name, category, description, price, sort_order FROM menu_items WHERE is_active = 1 ORDER BY category, sort_order, name'
   );
   res.json(rows);
 });
 
 router.get('/admin/all', authenticateAdmin, async (_req, res) => {
   const [rows] = await pool.query(
-    'SELECT id, name, category, description, price, sort_order, is_active FROM menu_items ORDER BY sort_order, category, name'
+    'SELECT id, name, category, description, price, sort_order, is_active FROM menu_items ORDER BY category, sort_order, name'
   );
   res.json(rows);
 });

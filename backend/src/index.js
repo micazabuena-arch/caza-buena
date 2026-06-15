@@ -20,6 +20,7 @@ import faqRoutes from './routes/faq.js';
 import menuRoutes from './routes/menu.js';
 import policiesRoutes from './routes/policies.js';
 import settingsRoutes from './routes/settings.js';
+import whatsNewRoutes from './routes/whatsNew.js';
 import adminRoutes from './routes/admin.js';
 
 dotenv.config();
@@ -53,6 +54,7 @@ app.use('/api/faqs', faqRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/policies', policiesRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/whats-new', whatsNewRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use((err, _req, res, _next) => {

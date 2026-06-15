@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Printer, X } from 'lucide-react';
 import api, { getApiError } from '../api/client';
@@ -6,28 +6,48 @@ import { useAuth } from '../context/AuthContext';
 import IslandHoppingManifest from '../components/admin/IslandHoppingManifest';
 import Loading from '../components/ui/Loading';
 import { parseIslandHoppingData } from '../data/islandHoppingRates';
+import { getAdminToken } from '../utils/adminAuth';
+import {
+  clearIslandHoppingPrintCache,
+  clearMirroredAdminToken,
+  readIslandHoppingPrintCache,
+} from '../utils/islandHoppingPrintCache';
 
 /**
- * Standalone print page (no admin sidebar). Opened in a new tab from Bookings → Print manifest.
+ * Standalone print page (no admin sidebar). Opened in a new tab from admin → Print manifest.
  */
 export default function IslandHoppingPrint() {
   const { bookingId } = useParams();
   const { user, loading: authLoading } = useAuth();
-  const [booking, setBooking] = useState(null);
+  const prefetched = useMemo(() => readIslandHoppingPrintCache(bookingId), [bookingId]);
+  const [booking, setBooking] = useState(prefetched?.booking ?? null);
+  const [islandHop, setIslandHop] = useState(prefetched?.islandHop ?? null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!prefetched);
 
   useEffect(() => {
+    if (prefetched) {
+      setBooking(prefetched.booking);
+      setIslandHop(prefetched.islandHop);
+      setLoading(false);
+      return;
+    }
+
     if (!bookingId || !user) return;
+
     setLoading(true);
     api
       .get(`/bookings/admin/${bookingId}`)
-      .then((r) => setBooking(r.data))
+      .then((r) => {
+        const data = r.data;
+        setBooking(data);
+        setIslandHop(
+          data?.island_hopping ? parseIslandHoppingData(data.island_hopping_data) : null
+        );
+      })
       .catch((err) => setError(getApiError(err)))
       .finally(() => setLoading(false));
-  }, [bookingId, user]);
-
-  const islandHop = booking?.island_hopping ? parseIslandHoppingData(booking.island_hopping_data) : null;
+  }, [bookingId, user, prefetched]);
 
   useEffect(() => {
     if (!booking || !islandHop) return;
@@ -35,8 +55,22 @@ export default function IslandHoppingPrint() {
     return () => clearTimeout(timer);
   }, [booking, islandHop]);
 
-  if (authLoading) return <Loading />;
-  if (!user) return <Navigate to="/admin/login" replace />;
+  useEffect(() => {
+    const onPageHide = () => {
+      clearMirroredAdminToken();
+      clearIslandHoppingPrintCache();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, []);
+
+  const token = getAdminToken();
+  const usingPrefetch = Boolean(prefetched);
+
+  if (!usingPrefetch) {
+    if (authLoading || (token && !user)) return <Loading />;
+    if (!user) return <Navigate to="/admin/login" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-white text-aegean-800 p-6 md:p-10">
@@ -64,9 +98,7 @@ export default function IslandHoppingPrint() {
       </div>
 
       {loading && <Loading />}
-      {error && (
-        <p className="text-red-600 max-w-3xl mx-auto">{error}</p>
-      )}
+      {error && <p className="text-red-600 max-w-3xl mx-auto">{error}</p>}
       {!loading && !error && booking && !islandHop && (
         <p className="max-w-3xl mx-auto text-aegean-600">
           This booking does not include island hopping.

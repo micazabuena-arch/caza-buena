@@ -47,7 +47,7 @@ export default function Contact() {
             <div className="space-y-4">
               {[
                 { icon: MapPin, text: resort.location, href: resort.mapsUrl },
-                { icon: Phone, text: resort.phone, href: 'tel:+639178290292' },
+                { icon: Phone, text: resort.phone, href: `tel:${resort.phoneTel}` },
                 { icon: Mail, text: resort.email, href: `mailto:${resort.email}` },
               ].map(({ icon: Icon, text, href }) => (
                 <p key={text} className="flex items-start gap-3 text-aegean-700">

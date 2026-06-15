@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { Users, Check, BedDouble } from 'lucide-react';
 import { bedroomCountLabel, roomShortDescription } from '../data/resortRules';
 import api from '../api/client';
@@ -10,6 +10,10 @@ import { images, placeholderRooms } from '../data/placeholders';
 
 export default function RoomDetail() {
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
+  const checkIn = searchParams.get('check_in');
+  const checkOut = searchParams.get('check_out');
+  const guests = searchParams.get('guests');
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -58,6 +62,14 @@ export default function RoomDetail() {
   const gallery = room.images?.length > 0
     ? room.images
     : [{ image_url: images.room }];
+
+  const bookUrl = (() => {
+    const params = new URLSearchParams({ room: String(room.id) });
+    if (checkIn) params.set('check_in', checkIn);
+    if (checkOut) params.set('check_out', checkOut);
+    if (guests) params.set('guests', guests);
+    return `/booking?${params.toString()}`;
+  })();
 
   return (
     <>
@@ -109,7 +121,7 @@ export default function RoomDetail() {
               {String(room.id).startsWith('ph-') ? (
                 <p className="text-sm text-aegean-500 mb-4">Placeholder room — booking available when connected to live rooms.</p>
               ) : (
-                <Link to={`/booking?room=${room.id}`} className="btn-primary">
+                <Link to={bookUrl} className="btn-primary">
                   Book This Room
                 </Link>
               )}

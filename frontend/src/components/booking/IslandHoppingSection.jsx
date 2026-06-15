@@ -1,11 +1,19 @@
 import { Plus, Trash2, Upload } from 'lucide-react';
+import { getAssetUrl } from '../../utils/assetUrl';
 import {
   calculateIslandHopping,
   emptyPassenger,
   ISLAND_HOPPING_RATES,
 } from '../../data/islandHoppingRates';
+import { YesNoChoice } from './FormSection';
 
-export default function IslandHoppingSection({ enabled, onEnabledChange, data, onChange }) {
+export default function IslandHoppingSection({
+  enabled,
+  onEnabledChange,
+  data,
+  onChange,
+  embedded = false,
+}) {
   const update = (patch) => onChange({ ...data, ...patch });
 
   const updatePassenger = (index, field, value) => {
@@ -18,8 +26,39 @@ export default function IslandHoppingSection({ enabled, onEnabledChange, data, o
         passengers[index].senior_id_file = null;
       }
     }
+    if (field === 'is_pwd' && value !== true) {
+      passengers[index].pwd_id_file = null;
+    }
     update({ passengers });
   };
+
+  const renderIdUpload = (index, passenger, { label, fileField, file }) => (
+    <div className="rounded-lg border border-dashed border-aegean-200 bg-aegean-50/50 p-3 space-y-2">
+      <p className="text-xs text-aegean-700">{label}</p>
+      <label className="flex items-center gap-2 text-sm text-aegean-600 cursor-pointer hover:text-aegean-800">
+        <Upload size={14} />
+        {file ? file.name : 'Choose ID file (JPG, PNG, WebP, or PDF)'}
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const chosen = e.target.files?.[0] || null;
+            updatePassenger(index, fileField, chosen);
+          }}
+        />
+      </label>
+      {file && (
+        <button
+          type="button"
+          onClick={() => updatePassenger(index, fileField, null)}
+          className="text-xs text-red-600 hover:text-red-800"
+        >
+          Remove file
+        </button>
+      )}
+    </div>
+  );
 
   const addPassenger = () => {
     if (data.passengers.length >= ISLAND_HOPPING_RATES.maxPassengers) return;
@@ -42,41 +81,38 @@ export default function IslandHoppingSection({ enabled, onEnabledChange, data, o
     data.emergency_contact_phone?.trim() &&
     quote?.complete;
 
-  return (
-    <div className="rounded-xl border border-aegean-200 bg-aegean-50/40 p-5 space-y-5">
-      <div>
-        <p className="font-medium text-aegean-800">Island hopping (Hundred Islands)</p>
-        <p className="text-xs text-aegean-600 mt-1">
-          Optional add-on. Rates follow the official Hundred Islands hopping fee schedule.
-        </p>
-      </div>
+  const wrapperClass = embedded
+    ? 'border-t border-aegean-100 pt-6 space-y-5'
+    : 'rounded-xl border border-aegean-200 bg-aegean-50/40 p-5 space-y-5';
 
-      <div className="flex gap-4">
-        <label className="flex items-center gap-2 cursor-pointer text-sm text-aegean-800">
-          <input
-            type="radio"
-            name="island_hopping"
-            checked={!enabled}
-            onChange={() => onEnabledChange(false)}
-          />
-          No
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer text-sm text-aegean-800">
-          <input
-            type="radio"
-            name="island_hopping"
-            checked={enabled}
-            onChange={() => onEnabledChange(true)}
-          />
-          Yes, add island hopping
-        </label>
+  return (
+    <div className={wrapperClass}>
+      <div
+        className={
+          embedded
+            ? 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'
+            : 'space-y-3'
+        }
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-aegean-800">Island hopping (Hundred Islands)</p>
+          <p className="text-xs text-aegean-500 mt-0.5">
+            Optional tour add-on · official Hundred Islands fee schedule
+          </p>
+        </div>
+        <YesNoChoice
+          name="island_hopping"
+          value={enabled}
+          yesLabel="Add"
+          onChange={onEnabledChange}
+        />
       </div>
 
       {enabled && (
         <div className="space-y-6 pt-2 border-t border-aegean-200">
           <div>
             <p className="text-sm font-medium text-aegean-800 mb-3">
-              1. Full names of guests with age, gender, and first-timer status *
+              1. Guest details — name, age, gender, first-timer & PWD status *
             </p>
             <div className="space-y-4">
               {data.passengers.map((p, index) => (
@@ -105,7 +141,7 @@ export default function IslandHoppingSection({ enabled, onEnabledChange, data, o
                     required
                     className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm"
                   />
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <input
                       type="number"
                       min={0}
@@ -143,36 +179,64 @@ export default function IslandHoppingSection({ enabled, onEnabledChange, data, o
                       <option value="yes">Yes</option>
                       <option value="no">No</option>
                     </select>
+                    <select
+                      value={p.is_pwd === '' ? '' : p.is_pwd ? 'yes' : 'no'}
+                      onChange={(e) =>
+                        updatePassenger(
+                          index,
+                          'is_pwd',
+                          e.target.value === '' ? '' : e.target.value === 'yes'
+                        )
+                      }
+                      required
+                      className="border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="">PWD? *</option>
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
                   </div>
-                  {(parseInt(p.age, 10) >= 60 || p.is_senior) && (
-                    <div className="rounded-lg border border-dashed border-aegean-200 bg-aegean-50/50 p-3 space-y-2">
-                      <p className="text-xs text-aegean-700">
-                        Senior citizen entrance rate (₱108) applies. Upload a valid senior citizen ID *
-                      </p>
-                      <label className="flex items-center gap-2 text-sm text-aegean-600 cursor-pointer hover:text-aegean-800">
-                        <Upload size={14} />
-                        {p.senior_id_file ? p.senior_id_file.name : 'Choose ID file (JPG, PNG, WebP, or PDF)'}
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] || null;
-                            updatePassenger(index, 'senior_id_file', file);
-                          }}
-                        />
-                      </label>
-                      {p.senior_id_file && (
-                        <button
-                          type="button"
-                          onClick={() => updatePassenger(index, 'senior_id_file', null)}
-                          className="text-xs text-red-600 hover:text-red-800"
+                  {(parseInt(p.age, 10) >= 60 || p.is_senior) &&
+                    (p.senior_id_url ? (
+                      <p className="text-xs text-aegean-600 rounded-lg bg-aegean-50 px-3 py-2">
+                        Senior ID on file —{' '}
+                        <a
+                          href={getAssetUrl(p.senior_id_url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
                         >
-                          Remove file
-                        </button>
-                      )}
-                    </div>
-                  )}
+                          View uploaded ID
+                        </a>
+                      </p>
+                    ) : (
+                      renderIdUpload(index, p, {
+                        label:
+                          'Senior citizen entrance rate (₱108) applies. Upload a valid senior citizen ID *',
+                        fileField: 'senior_id_file',
+                        file: p.senior_id_file,
+                      })
+                    ))}
+                  {p.is_pwd === true &&
+                    (p.pwd_id_url ? (
+                      <p className="text-xs text-aegean-600 rounded-lg bg-aegean-50 px-3 py-2">
+                        PWD ID on file —{' '}
+                        <a
+                          href={getAssetUrl(p.pwd_id_url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          View uploaded ID
+                        </a>
+                      </p>
+                    ) : (
+                      renderIdUpload(index, p, {
+                        label: 'PWD guest — upload a valid PWD ID *',
+                        fileField: 'pwd_id_file',
+                        file: p.pwd_id_file,
+                      })
+                    ))}
                 </div>
               ))}
             </div>

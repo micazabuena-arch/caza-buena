@@ -8,6 +8,8 @@ import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
 import PaymentMethodSelect from '../components/booking/PaymentMethodSelect';
 import PaymentAmountSelect from '../components/booking/PaymentAmountSelect';
 import IslandHoppingSection from '../components/booking/IslandHoppingSection';
+import BookingExtrasSection from '../components/booking/BookingExtrasSection';
+import FormSection from '../components/booking/FormSection';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
@@ -19,7 +21,14 @@ import {
   emptyIslandHoppingForm,
   emptyPassenger,
   isSeniorPassenger,
+  isPwdPassenger,
 } from '../data/islandHoppingRates';
+import {
+  emptyBookingExtras,
+  getBilaoPackage,
+  getBoodlePackage,
+  validateBookingExtras,
+} from '../data/bookingAddOns';
 
 function capacityNoteForRoom(room) {
   if (!room) return null;
@@ -49,6 +58,7 @@ export default function Booking() {
   const [depositPercent, setDepositPercent] = useState(20);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
+  const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
   const [form, setForm] = useState({
     room_id: preselectedRoom || '',
     guest_name: '',
@@ -159,7 +169,14 @@ export default function Booking() {
     islandHoppingEnabled && islandQuote && !islandQuote.error && islandQuote.complete
       ? islandQuote.total
       : 0;
-  const totalAmount = roomTotal + islandHoppingTotal;
+  const extrasQuote = selectedRoom
+    ? validateBookingExtras(bookingExtras, selectedRoom.room_type)
+    : null;
+  const bilaoTotal = extrasQuote?.valid ? extrasQuote.bilao_amount : 0;
+  const boodleTotal = extrasQuote?.valid ? extrasQuote.boodle_fight_amount : 0;
+  const petDeposit = extrasQuote?.valid ? extrasQuote.pet_deposit_amount : 0;
+  const addOnsTotal = bilaoTotal + boodleTotal;
+  const totalAmount = roomTotal + islandHoppingTotal + addOnsTotal;
 
   const depositAmount = Math.round(((totalAmount * depositPercent) / 100) * 100) / 100;
   const customPay = parseFloat(form.custom_payment_amount);
@@ -240,7 +257,14 @@ export default function Booking() {
       if (missingSeniorId) {
         return 'Upload a senior citizen ID for each guest aged 60 or older on the tour.';
       }
+      const missingPwdId = islandHopping.passengers.some(
+        (p) => isPwdPassenger(p) && !p.pwd_id_file
+      );
+      if (missingPwdId) {
+        return 'Upload a PWD ID for each guest marked as PWD on the tour.';
+      }
     }
+    if (extrasQuote && !extrasQuote.valid) return extrasQuote.message;
     return null;
   }, [
     form.room_id,
@@ -258,6 +282,7 @@ export default function Booking() {
     islandQuote,
     islandHopping,
     roomLocked,
+    extrasQuote,
   ]);
 
   const handleChange = (e) => {
@@ -332,6 +357,17 @@ export default function Booking() {
         setError('Please upload a senior citizen ID for each guest aged 60 or older.');
         return;
       }
+      const missingPwdId = islandHopping.passengers.some(
+        (p) => isPwdPassenger(p) && !p.pwd_id_file
+      );
+      if (missingPwdId) {
+        setError('Please upload a PWD ID for each guest marked as PWD.');
+        return;
+      }
+    }
+    if (extrasQuote && !extrasQuote.valid) {
+      setError(extrasQuote.message);
+      return;
     }
     const ok = await confirm({
       title: 'Submit booking?',
@@ -369,6 +405,7 @@ export default function Booking() {
                 gender: p.gender,
                 is_first_timer: p.is_first_timer,
                 is_senior: Boolean(p.is_senior),
+                is_pwd: Boolean(p.is_pwd),
               })),
               passenger_address: islandHopping.passenger_address,
               payor_name: islandHopping.payor_name,
@@ -377,6 +414,15 @@ export default function Booking() {
               emergency_contact_name: islandHopping.emergency_contact_name,
               emergency_contact_phone: islandHopping.emergency_contact_phone,
             }
+          : undefined,
+        bringing_car: bookingExtras.bringing_car,
+        car_count: bookingExtras.bringing_car ? parseInt(bookingExtras.car_count, 10) || 1 : 0,
+        pet_count: parseInt(bookingExtras.pet_count, 10) || 0,
+        bilao_enabled: bookingExtras.bilao_enabled,
+        bilao_package: bookingExtras.bilao_enabled ? bookingExtras.bilao_package : undefined,
+        boodle_fight_enabled: bookingExtras.boodle_fight_enabled,
+        boodle_fight_tier: bookingExtras.boodle_fight_enabled
+          ? bookingExtras.boodle_fight_tier
           : undefined,
       });
       const reference = data?.booking?.reference_code;
@@ -388,6 +434,9 @@ export default function Booking() {
         const seniorUploads = islandHopping.passengers
           .map((p, index) => ({ p, index }))
           .filter(({ p }) => isSeniorPassenger(p) && p.senior_id_file);
+        const pwdUploads = islandHopping.passengers
+          .map((p, index) => ({ p, index }))
+          .filter(({ p }) => isPwdPassenger(p) && p.pwd_id_file);
 
         let uploadFailed = false;
         for (const { p, index } of seniorUploads) {
@@ -400,9 +449,19 @@ export default function Booking() {
             uploadFailed = true;
           }
         }
+        for (const { p, index } of pwdUploads) {
+          try {
+            const formData = new FormData();
+            formData.append('id', p.pwd_id_file);
+            formData.append('passenger_index', String(index));
+            await api.post(`/bookings/${reference}/pwd-id`, formData);
+          } catch {
+            uploadFailed = true;
+          }
+        }
         if (uploadFailed) {
           toast.warning(
-            'Booking saved. Some senior ID uploads failed — you can upload them on the confirmation page.'
+            'Booking saved. Some ID uploads failed — you can upload them on the confirmation page.'
           );
         }
       }
@@ -432,20 +491,26 @@ export default function Booking() {
           {loading ? (
             <CardSkeleton count={1} />
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-2xl shadow-md border border-aegean-100">
-              <h2 className="text-xl font-serif text-aegean-800 border-b border-aegean-100 pb-4">
-                Step 1: Reservation request
-              </h2>
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-md border border-aegean-100">
+                <h2 className="text-xl font-serif text-aegean-800">Reservation request</h2>
+                <p className="text-sm text-aegean-600 mt-1">
+                  Complete each section below. Your total updates as you add optional items.
+                </p>
+              </div>
+
               {error && (
-                <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+                <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
+                  {error}
+                </div>
               )}
               {rooms.length === 0 && (
-                <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm">
+                <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-100">
                   No rooms available from API. Start the backend and ensure rooms are active in Admin.
                 </div>
               )}
               {!roomLocked && (
-                <div className="p-4 bg-aegean-50 text-aegean-800 rounded-lg text-sm text-center">
+                <div className="p-4 bg-aegean-50 text-aegean-800 rounded-lg text-sm text-center border border-aegean-100">
                   <p className="mb-3">Choose an available room for your dates before completing this form.</p>
                   <Link to={roomsSearchUrl()} className="btn-primary text-sm inline-block">
                     View available rooms
@@ -453,6 +518,11 @@ export default function Booking() {
                 </div>
               )}
 
+              <FormSection
+                step={1}
+                title="Your stay"
+                description="Room, dates, and number of guests"
+              >
               {roomLocked && selectedRoom && (
                 <div className="rounded-xl border border-aegean-200 bg-aegean-50/60 overflow-hidden">
                   <div className="flex flex-col sm:flex-row">
@@ -503,8 +573,9 @@ export default function Booking() {
                 </div>
               )}
 
-              <p className="text-sm font-medium text-aegean-600">Stay dates</p>
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium text-aegean-700 mb-3">Check-in & check-out</p>
+                <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-aegean-700 mb-1">Check-in *</label>
                   <input
@@ -527,13 +598,15 @@ export default function Booking() {
                     className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
                   />
                 </div>
+                </div>
               </div>
 
               {availability && !availability.available && !availability.occupancy_error && (
                 <p className="text-sm text-red-600">Not available for selected dates</p>
               )}
 
-              <p className="text-sm font-medium text-aegean-600 pt-2">Number of guests</p>
+              <div>
+                <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               {capacityNoteForRoom(selectedRoom) && (
                 <p className="text-xs text-aegean-600 mb-2">
                   <span className="font-medium">Maximum: </span>
@@ -582,15 +655,126 @@ export default function Booking() {
                   <p className="text-xs text-aegean-500 mt-1">₱{EXTRA_PERSON_RATES.child_7_12}/night each</p>
                 </div>
               </div>
-              <p className="text-xs text-aegean-500">
-                {availability?.extra_breakdown?.packageLabel ? (
-                  <>Package: {availability.extra_breakdown.packageLabel}. </>
-                ) : null}
-                Extra adult ₱{EXTRA_PERSON_RATES.adult}/night above included adults · child 7–12
-                ₱{EXTRA_PERSON_RATES.child_7_12}/night · child 6 & below free.
-              </p>
+                <p className="text-xs text-aegean-500 mt-3">
+                  {availability?.extra_breakdown?.packageLabel ? (
+                    <>Package: {availability.extra_breakdown.packageLabel}. </>
+                  ) : null}
+                  Extra adult ₱{EXTRA_PERSON_RATES.adult}/night above included adults · child 7–12
+                  ₱{EXTRA_PERSON_RATES.child_7_12}/night · child 6 & below free.
+                </p>
+              </div>
 
-              {availability && availability.available && (
+              {availability?.occupancy_error && (
+                <p className="text-sm text-red-600">{availability.occupancy_error}</p>
+              )}
+              </FormSection>
+
+              <FormSection
+                step={2}
+                title="Guest details"
+                description="Lead guest contact information"
+              >
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-aegean-700 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    name="guest_name"
+                    value={form.guest_name}
+                    onChange={handleChange}
+                    required
+                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-aegean-700 mb-1">Phone *</label>
+                  <input
+                    type="tel"
+                    name="guest_phone"
+                    value={form.guest_phone}
+                    onChange={handleChange}
+                    required
+                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-aegean-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  name="guest_email"
+                  value={form.guest_email}
+                  onChange={handleChange}
+                  required
+                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-aegean-700 mb-1">
+                  Valid ID (type & number) *
+                </label>
+                <input
+                  type="text"
+                  name="valid_id"
+                  value={form.valid_id}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. Driver's License — N01-12-345678"
+                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-aegean-700 mb-1">
+                  Estimated time of arrival
+                </label>
+                <input
+                  type="text"
+                  name="estimated_arrival"
+                  value={form.estimated_arrival}
+                  onChange={handleChange}
+                  placeholder="e.g. 2:00 PM, after Hundred Islands tour"
+                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                />
+              </div>
+              </FormSection>
+
+              <FormSection
+                step={3}
+                title="Add-ons"
+                description="Parking, pets, food packages, and island hopping — all optional"
+              >
+                <BookingExtrasSection
+                  data={bookingExtras}
+                  onChange={setBookingExtras}
+                  roomType={selectedRoom?.room_type === 'suite' ? 'suite' : 'queen'}
+                />
+                <IslandHoppingSection
+                  embedded
+                  enabled={islandHoppingEnabled}
+                  onEnabledChange={(yes) => {
+                    setIslandHoppingEnabled(yes);
+                    if (yes && islandHopping.passengers.length < guestCount) {
+                      const passengers = [...islandHopping.passengers];
+                      while (passengers.length < Math.min(guestCount, 20)) {
+                        passengers.push(emptyPassenger());
+                      }
+                      setIslandHopping((d) => ({ ...d, passengers }));
+                    }
+                  }}
+                  data={islandHopping}
+                  onChange={setIslandHopping}
+                />
+              </FormSection>
+
+              {availability?.available && totalAmount > 0 && (
+              <FormSection
+                step={4}
+                title="Review & payment"
+                description="Check your total, then choose how much to pay now"
+              >
                 <div className="rounded-xl border border-aegean-200 bg-aegean-50/40 p-4 text-sm space-y-3">
                   <p className="font-serif text-aegean-800 font-medium">Price summary</p>
 
@@ -665,10 +849,39 @@ export default function Booking() {
                     )}
                   </div>
 
-                  {islandHoppingEnabled && islandHoppingTotal > 0 && (
-                    <div className="flex justify-between text-aegean-700 border-t border-aegean-200 pt-2">
-                      <span>Island hopping</span>
-                      <span>₱{islandHoppingTotal.toLocaleString()}</span>
+                  {(islandHoppingTotal > 0 || bilaoTotal > 0 || boodleTotal > 0) && (
+                    <div className="border-t border-aegean-200 pt-3 space-y-1">
+                      <p className="font-medium text-aegean-800">Add-ons</p>
+                      {islandHoppingTotal > 0 && (
+                        <div className="flex justify-between text-aegean-700">
+                          <span>Island hopping</span>
+                          <span>₱{islandHoppingTotal.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {bilaoTotal > 0 && (
+                        <div className="flex justify-between text-aegean-700">
+                          <span>
+                            Bilao ({getBilaoPackage(bookingExtras.bilao_package)?.label || 'selected'})
+                          </span>
+                          <span>₱{bilaoTotal.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {boodleTotal > 0 && (
+                        <div className="flex justify-between text-aegean-700">
+                          <span>
+                            Boodle fight (
+                            {getBoodlePackage(bookingExtras.boodle_fight_tier)?.label || 'selected'})
+                          </span>
+                          <span>₱{boodleTotal.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {petDeposit > 0 && (
+                    <div className="flex justify-between text-aegean-600 text-xs border-t border-aegean-200 pt-2">
+                      <span>Pet deposit (refundable, payable on arrival)</span>
+                      <span>₱{petDeposit.toLocaleString()}</span>
                     </div>
                   )}
 
@@ -677,101 +890,22 @@ export default function Booking() {
                     <span>₱{totalAmount.toLocaleString()}</span>
                   </div>
                   {islandHoppingEnabled && !islandHoppingTotal && (
-                    <p className="text-xs text-aegean-500">
-                      Complete island hopping details below to include tour fees in your total.
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      Complete island hopping details in section 3 to include tour fees in your total.
+                    </p>
+                  )}
+                  {bookingExtras.bilao_enabled && !bilaoTotal && (
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      Select a Bilao package size in section 3 to include it in your total.
+                    </p>
+                  )}
+                  {bookingExtras.boodle_fight_enabled && !boodleTotal && (
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      Select a Boodle fight group size in section 3 to include it in your total.
                     </p>
                   )}
                 </div>
-              )}
 
-              {availability?.occupancy_error && (
-                <p className="text-sm text-red-600">{availability.occupancy_error}</p>
-              )}
-
-              <p className="text-sm font-medium text-aegean-600 pt-2">Guest information</p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-aegean-700 mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    name="guest_name"
-                    value={form.guest_name}
-                    onChange={handleChange}
-                    required
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-aegean-700 mb-1">Phone *</label>
-                  <input
-                    type="tel"
-                    name="guest_phone"
-                    value={form.guest_phone}
-                    onChange={handleChange}
-                    required
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-aegean-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  name="guest_email"
-                  value={form.guest_email}
-                  onChange={handleChange}
-                  required
-                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-aegean-700 mb-1">
-                  Valid ID (type & number) *
-                </label>
-                <input
-                  type="text"
-                  name="valid_id"
-                  value={form.valid_id}
-                  onChange={handleChange}
-                  required
-                  placeholder="e.g. Driver's License — N01-12-345678"
-                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-aegean-700 mb-1">
-                  Estimated time of arrival
-                </label>
-                <input
-                  type="text"
-                  name="estimated_arrival"
-                  value={form.estimated_arrival}
-                  onChange={handleChange}
-                  placeholder="e.g. 2:00 PM, after Hundred Islands tour"
-                  className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                />
-              </div>
-
-              <IslandHoppingSection
-                enabled={islandHoppingEnabled}
-                onEnabledChange={(yes) => {
-                  setIslandHoppingEnabled(yes);
-                  if (yes && islandHopping.passengers.length < guestCount) {
-                    const passengers = [...islandHopping.passengers];
-                    while (passengers.length < Math.min(guestCount, 20)) {
-                      passengers.push(emptyPassenger());
-                    }
-                    setIslandHopping((d) => ({ ...d, passengers }));
-                  }
-                }}
-                data={islandHopping}
-                onChange={setIslandHopping}
-              />
-
-              {availability?.available && totalAmount > 0 && (
                 <PaymentAmountSelect
                   totalAmount={totalAmount}
                   depositPercent={depositPercent}
@@ -782,9 +916,8 @@ export default function Booking() {
                     setForm((f) => ({ ...f, custom_payment_amount: val }))
                   }
                 />
-              )}
 
-              {availability?.available && totalAmount > 0 && paymentMethods.length > 0 && (
+              {paymentMethods.length > 0 && (
                 <PaymentMethodSelect
                   methods={paymentMethods}
                   value={form.payment_method_id}
@@ -795,7 +928,9 @@ export default function Booking() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-aegean-700 mb-1">Special Requests</label>
+                <label className="block text-sm font-medium text-aegean-700 mb-1">
+                  Special requests
+                </label>
                 <textarea
                   name="special_requests"
                   value={form.special_requests}
@@ -820,6 +955,8 @@ export default function Booking() {
               >
                 Submit Booking Request
               </SubmitButton>
+              </FormSection>
+              )}
             </form>
           )}
         </div>

@@ -9,6 +9,7 @@ const navLinks = [
   { to: '/amenities', label: 'Amenities' },
   { to: '/meals', label: 'Meals' },
   { to: '/gallery', label: 'Gallery' },
+  { to: '/whats-new', label: "What's New" },
   { to: '/faq', label: 'FAQ' },
   { to: '/contact', label: 'Contact' },
 ];

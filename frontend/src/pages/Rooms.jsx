@@ -99,6 +99,17 @@ export default function Rooms() {
     return `/booking?${params.toString()}`;
   };
 
+  const buildRoomDetailUrl = (slug) => {
+    const path = `/rooms/${slug}`;
+    if (!checkIn || !checkOut) return path;
+    const params = new URLSearchParams({
+      check_in: checkIn,
+      check_out: checkOut,
+      guests: guests || '2',
+    });
+    return `${path}?${params.toString()}`;
+  };
+
   return (
     <StaticPageLayout hero={{ ...hero, image: images.rooms }}>
       {isAvailabilitySearch && !loading && !searchError && (
@@ -133,13 +144,7 @@ export default function Rooms() {
               Placeholder rooms — activate rooms in Admin or check database connection
             </p>
           )}
-          <div
-            className={
-              isAvailabilitySearch
-                ? 'flex flex-col gap-6 max-w-4xl mx-auto'
-                : 'grid md:grid-cols-2 lg:grid-cols-3 gap-8'
-            }
-          >
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {display.map((room) => {
               const roomImages = room.images?.length ? room.images : [];
 
@@ -152,16 +157,17 @@ export default function Rooms() {
                     label={`${room.name} — add photo`}
                   />
                 ) : roomImages.length > 0 ? (
-                  <ImageDotSlider
-                    images={roomImages}
-                    alt={room.name}
-                    aspect={
-                      isAvailabilitySearch
-                        ? 'aspect-[4/3] sm:aspect-auto sm:h-full sm:min-h-[240px]'
-                        : 'aspect-[4/3]'
-                    }
-                    className={isAvailabilitySearch ? 'sm:h-full' : ''}
-                  />
+                  <div className="relative w-full">
+                    <ImageDotSlider
+                      key={`${room.id}-gallery`}
+                      images={roomImages}
+                      alt={room.name}
+                      aspect="aspect-[4/3]"
+                      className="w-full"
+                      showArrows={false}
+                      showCounter={false}
+                    />
+                  </div>
                 ) : (
                   <PlaceholderImage
                     alt={room.name}
@@ -179,8 +185,8 @@ export default function Rooms() {
                   key={room.id}
                   className="rounded-2xl overflow-hidden bg-white shadow-md border border-aegean-100 flex flex-col h-full"
                 >
-                  {!usingPlaceholder && !isAvailabilitySearch ? (
-                    <Link to={`/rooms/${room.slug}`} className="block">
+                  {!usingPlaceholder ? (
+                    <Link to={buildRoomDetailUrl(room.slug)} className="block">
                       {media}
                     </Link>
                   ) : (
@@ -192,7 +198,7 @@ export default function Rooms() {
                       {usingPlaceholder && !isAvailabilitySearch ? (
                         room.name
                       ) : (
-                        <Link to={`/rooms/${room.slug}`} className="hover:text-aegean-600">
+                        <Link to={buildRoomDetailUrl(room.slug)} className="hover:text-aegean-600">
                           {room.name}
                         </Link>
                       )}
@@ -216,6 +222,15 @@ export default function Rooms() {
                     </div>
 
                     <p className="text-aegean-600/70 text-sm mt-1">{roomShortDescription(room)}</p>
+
+                    {!usingPlaceholder && (
+                      <Link
+                        to={buildRoomDetailUrl(room.slug)}
+                        className="inline-block text-sm text-aegean-600 hover:text-aegean-800 mt-2 underline"
+                      >
+                        View amenities & details
+                      </Link>
+                    )}
 
                     <div className="mt-4">
                       {isAvailabilitySearch && room.subtotal != null ? (

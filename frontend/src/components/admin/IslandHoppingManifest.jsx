@@ -1,5 +1,5 @@
 import { getAssetUrl } from '../../utils/assetUrl';
-import { isSeniorPassenger } from '../../data/islandHoppingRates';
+import { isSeniorPassenger, isPwdPassenger } from '../../data/islandHoppingRates';
 
 /** Printable island hopping manifest (booking + parsed island_hopping_data) */
 export default function IslandHoppingManifest({ booking, islandHop }) {
@@ -48,11 +48,14 @@ export default function IslandHoppingManifest({ booking, islandHop }) {
               <th className="border border-gray-300 p-2 text-left">First timer</th>
               <th className="border border-gray-300 p-2 text-left">Senior</th>
               <th className="border border-gray-300 p-2 text-left">Senior ID</th>
+              <th className="border border-gray-300 p-2 text-left">PWD</th>
+              <th className="border border-gray-300 p-2 text-left">PWD ID</th>
             </tr>
           </thead>
           <tbody>
             {passengers.map((p, i) => {
               const senior = isSeniorPassenger(p);
+              const pwd = isPwdPassenger(p);
               return (
                 <tr key={i}>
                   <td className="border border-gray-300 p-2">{i + 1}</td>
@@ -75,6 +78,24 @@ export default function IslandHoppingManifest({ booking, islandHop }) {
                         />
                       )
                     ) : senior ? (
+                      <em>Not uploaded</em>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className="border border-gray-300 p-2">{pwd ? 'Yes' : 'No'}</td>
+                  <td className="border border-gray-300 p-2">
+                    {pwd && p.pwd_id_url ? (
+                      String(p.pwd_id_url).toLowerCase().includes('.pdf') ? (
+                        <span>PDF on file — {getAssetUrl(p.pwd_id_url)}</span>
+                      ) : (
+                        <img
+                          src={getAssetUrl(p.pwd_id_url)}
+                          alt={`PWD ID — ${p.full_name}`}
+                          className="max-w-[140px] max-h-[100px] object-contain"
+                        />
+                      )
+                    ) : pwd ? (
                       <em>Not uploaded</em>
                     ) : (
                       '—'

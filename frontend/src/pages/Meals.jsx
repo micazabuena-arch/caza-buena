@@ -1,24 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Coffee, Download, UtensilsCrossed } from 'lucide-react';
+import { Coffee, ExternalLink, UtensilsCrossed } from 'lucide-react';
 import StaticPageLayout from '../components/layout/StaticPageLayout';
 import Loading from '../components/ui/Loading';
 import api from '../api/client';
 import { pages, images } from '../data/placeholders';
+import { groupMenuByCategory } from '../utils/menuGrouping';
 
 const formatPrice = (price) =>
   price != null && !Number.isNaN(Number(price))
     ? `₱${Number(price).toLocaleString()}`
     : null;
-
-function groupByCategory(items) {
-  const groups = new Map();
-  for (const item of items) {
-    const cat = item.category || 'Menu';
-    if (!groups.has(cat)) groups.set(cat, []);
-    groups.get(cat).push(item);
-  }
-  return [...groups.entries()];
-}
 
 function MenuItemRow({ item }) {
   const price = formatPrice(item.price);
@@ -43,7 +34,7 @@ export default function Meals() {
       .finally(() => setLoading(false));
   }, [meals.items]);
 
-  const categories = useMemo(() => groupByCategory(items), [items]);
+  const categories = useMemo(() => groupMenuByCategory(items), [items]);
 
   return (
     <StaticPageLayout hero={{ ...meals, image: images.meals }} className="bg-aegean-50">
@@ -57,13 +48,13 @@ export default function Meals() {
 
         <a
           href={meals.pdfUrl}
-          download="Caza-Buena-Menu.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
           className="btn-primary inline-flex items-center gap-2 mt-8 text-sm"
         >
-          <Download size={18} />
-          Download Menu
+          <ExternalLink size={18} />
+          View Full Menu
         </a>
-        <p className="text-xs text-aegean-500 mt-3">{meals.pdfNote}</p>
       </div>
 
       {loading ? (

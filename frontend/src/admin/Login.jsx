@@ -35,8 +35,10 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-aegean-500 px-4">
       <form onSubmit={handleSubmit} className="bg-white w-full max-w-md p-8 rounded-2xl shadow-xl">
-        <h1 className="font-serif text-3xl text-aegean-800 text-center mb-2">Admin Login</h1>
-        <p className="text-center text-aegean-600 text-sm mb-8">Caza Buena Management</p>
+        <div className="flex justify-center mb-6">
+          <img src="/logo.png" alt="Caza Buena" className="h-16 w-auto object-contain" />
+        </div>
+        <h1 className="font-serif text-2xl text-aegean-800 text-center mb-8">Admin Login</h1>
         {error && <p className="text-red-600 text-sm mb-4 text-center">{error}</p>}
         <input
           type="email"

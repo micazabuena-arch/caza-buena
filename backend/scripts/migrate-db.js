@@ -107,6 +107,37 @@ async function run() {
     'JSON NULL AFTER `island_hopping_amount`'
   );
 
+  console.log('\nbookings table (extras):');
+  await addColumn(
+    'bookings',
+    'bringing_car',
+    'TINYINT(1) NOT NULL DEFAULT 0 AFTER `island_hopping_data`'
+  );
+  await addColumn('bookings', 'car_count', 'INT NOT NULL DEFAULT 0 AFTER `bringing_car`');
+  await addColumn('bookings', 'pet_count', 'INT NOT NULL DEFAULT 0 AFTER `car_count`');
+  await addColumn(
+    'bookings',
+    'pet_deposit_amount',
+    'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `pet_count`'
+  );
+  await addColumn('bookings', 'bilao_package', 'VARCHAR(20) NULL AFTER `pet_deposit_amount`');
+  await addColumn(
+    'bookings',
+    'bilao_amount',
+    'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `bilao_package`'
+  );
+  await addColumn(
+    'bookings',
+    'boodle_fight',
+    'TINYINT(1) NOT NULL DEFAULT 0 AFTER `bilao_amount`'
+  );
+  await addColumn('bookings', 'boodle_fight_tier', 'VARCHAR(20) NULL AFTER `boodle_fight`');
+  await addColumn(
+    'bookings',
+    'boodle_fight_amount',
+    'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `boodle_fight_tier`'
+  );
+
   const [holidayTable] = await pool.query(
     `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'room_holiday_rates'`
@@ -175,6 +206,19 @@ async function run() {
   `);
   if (imgFix.affectedRows > 0) {
     console.log(`  fixed ${imgFix.affectedRows} broken room image URL(s)`);
+  }
+
+  console.log('\nsite contact phone:');
+  await pool.query(
+    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('phone', '(0915) 711 8212') ON DUPLICATE KEY UPDATE setting_value = '(0915) 711 8212'"
+  );
+  console.log('  updated site_settings.phone → (0915) 711 8212');
+
+  const [payUpdate] = await pool.query(
+    "UPDATE payment_methods SET account_number = '09157118212' WHERE account_number IN ('09178290292', '+639178290292', '+63 917 829 0292')"
+  );
+  if (payUpdate.affectedRows > 0) {
+    console.log(`  updated ${payUpdate.affectedRows} payment method account number(s)`);
   }
 
   console.log('\nDone. Restart the API (npm run dev) and try saving the room again.');

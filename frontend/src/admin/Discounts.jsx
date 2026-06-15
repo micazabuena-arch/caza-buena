@@ -4,6 +4,8 @@ import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export default function AdminDiscounts() {
   const [discounts, setDiscounts] = useState([]);
@@ -11,6 +13,7 @@ export default function AdminDiscounts() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(discounts);
   const [form, setForm] = useState({
     code: '', description: '', type: 'percentage', value: 10, min_nights: 1,
   });
@@ -81,7 +84,7 @@ export default function AdminDiscounts() {
         <Loading />
       ) : (
         <div className="space-y-3">
-          {discounts.map((d) => (
+          {pageItems.map((d) => (
             <div key={d.id} className="bg-white p-4 rounded-xl flex justify-between items-center">
               <div>
                 <span className="font-mono font-medium">{d.code}</span>
@@ -94,6 +97,16 @@ export default function AdminDiscounts() {
               </button>
             </div>
           ))}
+          {discounts.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              from={from}
+              to={to}
+              onPageChange={setPage}
+            />
+          )}
         </div>
       )}
     </div>

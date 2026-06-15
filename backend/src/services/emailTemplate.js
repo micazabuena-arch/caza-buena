@@ -8,7 +8,7 @@ export const EMAIL_LOGO_CID = 'cazaBuenaLogo@email';
 
 const RESORT_ADDRESS =
   process.env.RESORT_ADDRESS || 'Sitio Inansuana, Brgy. Lucap, Alaminos, Pangasinan';
-const RESORT_PHONE = process.env.RESORT_PHONE || '+63 917 829 0292';
+const RESORT_PHONE = process.env.RESORT_PHONE || '(0915) 711 8212';
 
 const BRAND = {
   primary: '#498bc3',

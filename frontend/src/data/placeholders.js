@@ -13,10 +13,12 @@ export const resort = {
   // Lucap, Alaminos — zoom 17 so the embed shows Caza Buena area, not a world map
   mapsEmbedUrl:
     'https://maps.google.com/maps?q=Caza+Buena,+Sitio+Inansuana,+Lucap,+Alaminos,+Pangasinan&hl=en&z=17&output=embed',
-  phone: '+63 917 829 0292',
+  phone: '(0915) 711 8212',
+  phoneTel: '+639157118212',
   email: 'mi.caza.buena@gmail.com',
   instagram: 'https://www.instagram.com/cazabuena_',
   facebook: 'https://www.facebook.com/profile.php?id=61557575977651',
+  tiktok: 'https://www.tiktok.com/@caza.buena',
   checkIn: '1:00 PM',
   checkOut: '11:00 AM',
   dotAccredited: 'DEPARTMENT OF TOURISM (DOT) Accredited',
@@ -270,7 +272,7 @@ Schedule Flexibility: The tour schedule is highly flexible. You can head out any
       'Start the day with Filipino breakfast favorites, grab a rice meal after island hopping, or unwind with pasta, fries, and café drinks.',
     hoursNote: 'Café hours: 7:00 AM – 8:00 PM daily. Menu items and prices may change seasonally.',
     pdfUrl: '/menu.pdf',
-    pdfNote: 'Download a copy of the full café menu anytime.',
+    pdfNote: 'Opens the full café menu PDF in a new tab.',
     disclaimer:
       'Menu is for reference only. Dine-in at the café; online meal ordering is not available on this website.',
     items: [

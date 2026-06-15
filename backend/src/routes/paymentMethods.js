@@ -19,6 +19,40 @@ router.get('/admin/all', authenticateAdmin, async (_req, res) => {
   res.json(rows);
 });
 
+router.post('/admin', authenticateAdmin, uploadImage.single('qr'), async (req, res) => {
+  const { name, type, account_name, account_number, instructions, is_active, sort_order } = req.body;
+  if (!name?.trim()) return res.status(400).json({ message: 'Name is required' });
+
+  const allowedTypes = ['gcash', 'maya', 'bdo', 'bpi', 'other'];
+  const methodType = allowedTypes.includes(type) ? type : 'other';
+
+  let qrUrl = null;
+  if (req.file) {
+    const { url } = await uploadFile(req.file.buffer, 'qr-codes', {
+      originalName: req.file.originalname,
+    });
+    qrUrl = url;
+  }
+
+  const [result] = await pool.query(
+    `INSERT INTO payment_methods (name, type, account_name, account_number, qr_image_url, instructions, is_active, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      name.trim(),
+      methodType,
+      account_name?.trim() || null,
+      account_number?.trim() || null,
+      qrUrl,
+      instructions?.trim() || null,
+      is_active === 'false' || is_active === false || is_active === '0' ? 0 : 1,
+      parseInt(sort_order, 10) || 0,
+    ]
+  );
+
+  const [rows] = await pool.query('SELECT * FROM payment_methods WHERE id = ?', [result.insertId]);
+  res.status(201).json(rows[0]);
+});
+
 router.put('/admin/:id', authenticateAdmin, uploadImage.single('qr'), async (req, res) => {
   const { name, account_name, account_number, instructions, is_active } = req.body;
   const updates = [];
@@ -43,6 +77,14 @@ router.put('/admin/:id', authenticateAdmin, uploadImage.single('qr'), async (req
   await pool.query(`UPDATE payment_methods SET ${updates.join(', ')} WHERE id = ?`, params);
   const [rows] = await pool.query('SELECT * FROM payment_methods WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
+});
+
+router.delete('/admin/:id', authenticateAdmin, async (req, res) => {
+  const [rows] = await pool.query('SELECT id, name FROM payment_methods WHERE id = ?', [req.params.id]);
+  if (rows.length === 0) return res.status(404).json({ message: 'Payment method not found' });
+
+  await pool.query('DELETE FROM payment_methods WHERE id = ?', [req.params.id]);
+  res.json({ message: 'Payment method removed', id: Number(req.params.id) });
 });
 
 export default router;

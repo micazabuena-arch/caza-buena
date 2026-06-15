@@ -23,9 +23,11 @@ export const uploadPaymentProof = multer({
   fileFilter: idDocumentFilter,
 });
 
-/** Senior citizen ID uploads (same formats as payment proof) */
+/** ID document uploads (senior citizen, PWD, etc.) */
 export const uploadSeniorId = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: idDocumentFilter,
 });
+
+export const uploadPwdId = uploadSeniorId;

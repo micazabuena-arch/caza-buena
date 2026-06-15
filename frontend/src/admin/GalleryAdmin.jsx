@@ -5,6 +5,8 @@ import Loading from '../components/ui/Loading';
 import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import Pagination from '../components/ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export default function AdminGallery() {
   const [images, setImages] = useState([]);
@@ -12,6 +14,7 @@ export default function AdminGallery() {
   const [uploading, setUploading] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(images);
 
   const load = () =>
     api
@@ -82,7 +85,7 @@ export default function AdminGallery() {
         <Loading />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {images.map((img) => (
+          {pageItems.map((img) => (
             <div key={img.id} className="relative group rounded-xl overflow-hidden">
                 <img src={getAssetUrl(img.image_url)} alt={img.title} className="w-full aspect-square object-cover" />
               <button
@@ -95,6 +98,16 @@ export default function AdminGallery() {
             </div>
           ))}
         </div>
+      )}
+      {!loading && images.length > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          from={from}
+          to={to}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

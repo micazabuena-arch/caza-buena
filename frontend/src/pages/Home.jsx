@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Waves, Star, MapPin } from 'lucide-react';
+import { ArrowRight, Waves, Star, MapPin, X } from 'lucide-react';
 import api from '../api/client';
 import PlaceholderImage from '../components/ui/PlaceholderImage';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import BookingSearchBar from '../components/booking/BookingSearchBar';
 import { pages, images, placeholderRooms, resort } from '../data/placeholders';
 import { roomShortDescription } from '../data/resortRules';
+import { getAssetUrl } from '../utils/assetUrl';
+import ImageDotSlider from '../components/ui/ImageDotSlider';
 
 export default function Home() {
   const { home } = pages;
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [popupSlide, setPopupSlide] = useState(null);
+  const [popupOpen, setPopupOpen] = useState(false);
 
   useEffect(() => {
     api
@@ -19,6 +23,42 @@ export default function Home() {
       .then((r) => setRooms(r.data.slice(0, 3)))
       .catch(() => setRooms([]))
       .finally(() => setLoading(false));
+  }, []);
+
+  const dismissPopup = () => {
+    setPopupOpen(false);
+    if (popupSlide?.image_url) {
+      sessionStorage.setItem(`home_whats_new_dismissed_${popupSlide.image_url}`, '1');
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api
+      .get('/whats-new')
+      .then((r) => {
+        if (cancelled) return;
+        const data = r.data || {};
+        const fromSlides = Array.isArray(data.slides) ? data.slides[0] : null;
+        const fromImages = Array.isArray(data.images) ? data.images[0] : '';
+        const slide1 = {
+          image_url: fromSlides?.image_url || fromImages || '',
+          heading: fromSlides?.heading || data.heading || "What's New at Caza Buena",
+          text: fromSlides?.text || data.text || '',
+        };
+        if (!slide1.image_url) return;
+
+        setPopupSlide(slide1);
+        const dismissed =
+          sessionStorage.getItem(`home_whats_new_dismissed_${slide1.image_url}`) === '1';
+        if (!dismissed) setPopupOpen(true);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const featured = rooms.length > 0 ? rooms : placeholderRooms.slice(0, 3);
@@ -29,12 +69,71 @@ export default function Home() {
 
   return (
     <>
+      {popupOpen && popupSlide && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/55 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={dismissPopup}
+          role="presentation"
+        >
+          <div
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border border-aegean-100 max-h-[86vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={popupSlide.heading || "What's New announcement"}
+          >
+            <button
+              type="button"
+              onClick={dismissPopup}
+              className="absolute top-3 right-3 z-20 rounded-full bg-black/55 text-white p-1.5 hover:bg-black/70"
+              aria-label="Close announcement"
+            >
+              <X size={16} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const url = getAssetUrl(popupSlide.image_url);
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+              }}
+              className="block w-full text-left"
+              aria-label="Open announcement image"
+            >
+              <img
+                src={getAssetUrl(popupSlide.image_url)}
+                alt={popupSlide.heading || "What's New announcement"}
+                className="w-full h-auto max-h-[55vh] object-contain bg-aegean-50"
+              />
+            </button>
+
+            <div className="p-4 space-y-2 border-t border-aegean-100">
+              {popupSlide.heading && (
+                <h3 className="text-lg font-serif text-aegean-800">{popupSlide.heading}</h3>
+              )}
+              {popupSlide.text && (
+                <p className="text-sm text-aegean-700 leading-relaxed">{popupSlide.text}</p>
+              )}
+              <div className="pt-1">
+                <Link
+                  to="/whats-new"
+                  onClick={dismissPopup}
+                  className="text-sm text-aegean-600 underline hover:text-aegean-800"
+                >
+                  View all announcements
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="relative min-h-[90vh] flex flex-col justify-center overflow-visible pb-32 md:pb-40">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              'linear-gradient(to bottom, rgba(15,48,77,0.40), rgba(18,63,97,0.52)), url(/home_hero.jpg)',
+              'linear-gradient(to bottom, rgba(15,48,77,0.40), rgba(18,63,97,0.52)), url(/bg_home.jpg)',
           }}
         />
         <div
@@ -80,29 +179,50 @@ export default function Home() {
           {loading ? (
             <CardSkeleton count={3} />
           ) : (
-            <div className="grid md:grid-cols-3 gap-8">
-              {featured.map((room) => (
-                <Link
-                  key={room.id}
-                  to={rooms.length > 0 ? `/rooms/${room.slug}` : '/rooms'}
-                  className="group rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl transition-shadow"
-                >
-                  <PlaceholderImage
-                    src={room.images?.[0]?.image_url}
-                    alt={room.name}
-                    aspect="aspect-[4/3]"
-                    label={`${room.name} photo`}
-                    className="group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="p-6">
-                    <h3 className="text-xl text-aegean-800">{room.name}</h3>
-                    <p className="text-aegean-600/70 text-sm mt-1 line-clamp-2">{roomShortDescription(room)}</p>
-                    <p className="mt-4 text-aegean-600 font-medium">
-                      From ₱{Number(room.price_per_night).toLocaleString()} / night
-                    </p>
-                  </div>
-                </Link>
-              ))}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {featured.map((room) => {
+                const roomImages = room.images?.length ? room.images : [];
+                const roomLink = rooms.length > 0 ? `/rooms/${room.slug}` : '/rooms';
+
+                return (
+                  <article
+                    key={room.id}
+                    className="group rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl transition-shadow flex flex-col"
+                  >
+                    <Link to={roomLink} className="block">
+                      {roomImages.length > 0 ? (
+                        <ImageDotSlider
+                          images={roomImages}
+                          alt={room.name}
+                          aspect="aspect-[4/3]"
+                          className="w-full"
+                          showArrows={false}
+                          showCounter={false}
+                        />
+                      ) : (
+                        <PlaceholderImage
+                          src={room.images?.[0]?.image_url}
+                          alt={room.name}
+                          aspect="aspect-[4/3]"
+                          label={`${room.name} photo`}
+                          className="group-hover:scale-105 transition-transform duration-500"
+                        />
+                      )}
+                    </Link>
+                    <div className="p-6 flex-1">
+                      <Link to={roomLink}>
+                        <h3 className="text-xl text-aegean-800">{room.name}</h3>
+                        <p className="text-aegean-600/70 text-sm mt-1 line-clamp-2">
+                          {roomShortDescription(room)}
+                        </p>
+                        <p className="mt-4 text-aegean-600 font-medium">
+                          From ₱{Number(room.price_per_night).toLocaleString()} / night
+                        </p>
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
           <div className="text-center mt-10">

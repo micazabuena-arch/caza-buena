@@ -216,6 +216,22 @@ router.put('/rooms/:id', authenticateAdmin, async (req, res) => {
   res.json({ message: 'Updated', room: rows[0] });
 });
 
+router.delete('/rooms/:id', authenticateAdmin, async (req, res) => {
+  const roomId = req.params.id;
+  const [room] = await pool.query('SELECT id, name FROM rooms WHERE id = ?', [roomId]);
+  if (room.length === 0) return res.status(404).json({ message: 'Room not found' });
+
+  const [bookings] = await pool.query('SELECT COUNT(*) AS n FROM bookings WHERE room_id = ?', [roomId]);
+  if (bookings[0].n > 0) {
+    return res.status(409).json({
+      message: `Cannot delete "${room[0].name}" — ${bookings[0].n} booking(s) use this room. Set it to Inactive instead.`,
+    });
+  }
+
+  await pool.query('DELETE FROM rooms WHERE id = ?', [roomId]);
+  res.json({ message: 'Room deleted' });
+});
+
 // Holiday / peak pricing per room
 router.get('/rooms/:roomId/holidays', authenticateAdmin, async (req, res) => {
   const [rows] = await pool.query(
@@ -316,22 +332,20 @@ router.put('/settings', authenticateAdmin, async (req, res) => {
   res.json({ message: 'Settings saved' });
 });
 
-// Guest list — only after payment is approved (confirmed) or rejected
+// Guest list — one row per email (any booking history)
 router.get('/guests', authenticateAdmin, async (_req, res) => {
   const [rows] = await pool.query(
     `SELECT b.guest_email,
             (SELECT guest_name FROM bookings b2
              WHERE b2.guest_email = b.guest_email
-               AND b2.status IN ('confirmed', 'rejected')
-             ORDER BY created_at DESC LIMIT 1) AS guest_name,
+             ORDER BY b2.created_at DESC LIMIT 1) AS guest_name,
             (SELECT guest_phone FROM bookings b2
              WHERE b2.guest_email = b.guest_email
-               AND b2.status IN ('confirmed', 'rejected')
-             ORDER BY created_at DESC LIMIT 1) AS guest_phone,
+             ORDER BY b2.created_at DESC LIMIT 1) AS guest_phone,
             COUNT(*) AS total_bookings,
+            SUM(b.status = 'confirmed') AS confirmed_count,
             MAX(b.created_at) AS last_booking
      FROM bookings b
-     WHERE b.status IN ('confirmed', 'rejected')
      GROUP BY b.guest_email
      ORDER BY last_booking DESC`
   );
@@ -344,15 +358,11 @@ router.get('/guests/detail', authenticateAdmin, async (req, res) => {
   if (!email) return res.status(400).json({ message: 'email query parameter required' });
 
   const [resolved] = await pool.query(
-    `SELECT id FROM bookings
-     WHERE guest_email = ? AND status IN ('confirmed', 'rejected')
-     LIMIT 1`,
+    `SELECT id FROM bookings WHERE guest_email = ? LIMIT 1`,
     [email]
   );
   if (resolved.length === 0) {
-    return res.status(404).json({
-      message: 'Guest not found. Guests appear here after a booking is approved or rejected.',
-    });
+    return res.status(404).json({ message: 'Guest not found.' });
   }
 
   const [bookings] = await pool.query(
@@ -365,11 +375,18 @@ router.get('/guests/detail', authenticateAdmin, async (req, res) => {
   );
 
   const latest = bookings[0];
+  const statusCounts = bookings.reduce((acc, row) => {
+    acc[row.status] = (acc[row.status] || 0) + 1;
+    return acc;
+  }, {});
+
   res.json({
     guest_name: latest.guest_name,
     guest_email: latest.guest_email,
     guest_phone: latest.guest_phone,
     total_bookings: bookings.length,
+    confirmed_count: statusCounts.confirmed || 0,
+    status_counts: statusCounts,
     last_booking: latest.created_at,
     bookings,
   });
@@ -383,15 +400,11 @@ router.put('/guests', authenticateAdmin, async (req, res) => {
   }
 
   const [existing] = await pool.query(
-    `SELECT id FROM bookings
-     WHERE guest_email = ? AND status IN ('confirmed', 'rejected')
-     LIMIT 1`,
+    `SELECT id FROM bookings WHERE guest_email = ? LIMIT 1`,
     [original_email.trim()]
   );
   if (existing.length === 0) {
-    return res.status(404).json({
-      message: 'Guest not found. Guests can only be edited after a booking is approved or rejected.',
-    });
+    return res.status(404).json({ message: 'Guest not found.' });
   }
 
   if (guest_email.trim().toLowerCase() !== original_email.trim().toLowerCase()) {

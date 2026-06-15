@@ -1,4 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#498bc3"/>
-  <text x="16" y="22" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="13" font-weight="600">CB</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Caza Buena">
+  <rect width="32" height="32" rx="7" fill="#498bc3"/>
+  <g fill="#ffffff">
+    <path d="M16 5.8c-3.6 0-6.4 2.5-7 5.9h14c-.6-3.4-3.4-5.9-7-5.9z"/>
+    <rect x="10" y="12.2" width="12" height="4.8" rx=".6"/>
+    <rect x="8.5" y="17" width="15" height="10" rx=".6"/>
+    <ellipse cx="12" cy="14.2" rx="1.1" ry="1.35" fill="#498bc3"/>
+    <ellipse cx="16" cy="14.2" rx="1.1" ry="1.35" fill="#498bc3"/>
+    <ellipse cx="20" cy="14.2" rx="1.1" ry="1.35" fill="#498bc3"/>
+    <path d="M16 19.2a3.4 2.9 0 0 0-3.4 2.6h6.8a3.4 2.9 0 0 0-3.4-2.6z" fill="#498bc3"/>
+    <path d="M7.2 13.6l.35 1.05 1.05.35-1.05.35-.35 1.05-.35-1.05-1.05-.35 1.05-.35.35-1.05z"/>
+    <path d="M24.8 13.6l.35 1.05 1.05.35-1.05.35-.35 1.05-.35-1.05-1.05-.35 1.05-.35.35-1.05z"/>
+  </g>
 </svg>
