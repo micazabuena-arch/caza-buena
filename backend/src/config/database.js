@@ -1,11 +1,7 @@
 import mysql from 'mysql2/promise';
-import dns from 'dns';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-// Render and other cloud hosts often fail on Hostinger IPv6 (ENETUNREACH); prefer IPv4
-dns.setDefaultResultOrder('ipv4first');
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',

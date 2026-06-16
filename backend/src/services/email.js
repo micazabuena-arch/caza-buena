@@ -21,10 +21,17 @@ function smtpPassword() {
 function getTransporter() {
   if (!isSmtpConfigured()) return null;
   if (!transporter) {
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
     transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      host: smtpHost,
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: false,
+      // Force IPv4 — Render fails on Gmail IPv6 (ENETUNREACH 2607:f8b0:...)
+      family: 4,
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 30000,
+      tls: { servername: smtpHost },
       auth: {
         user: process.env.SMTP_USER.trim(),
         pass: smtpPassword(),
@@ -41,6 +48,9 @@ function guestFriendlyEmailHint(err) {
   }
   if (msg.includes('Invalid login') || msg.includes('535')) {
     return 'SMTP login failed. Check SMTP_USER and SMTP_PASS in backend/.env, then restart the API.';
+  }
+  if (msg.includes('ENETUNREACH') || msg.includes('ETIMEDOUT') || msg.includes('Connection timeout')) {
+    return 'SMTP connection failed from the server. Redeploy the latest API build (IPv4 fix) or check SMTP_HOST/SMTP_PORT on Render.';
   }
   return msg.slice(0, 200) || 'Email could not be sent.';
 }
@@ -131,13 +141,23 @@ export async function sendBookingConfirmation(booking, room) {
 }
 
 export async function sendContactNotification(inquiry) {
-  const result = await sendMailResult((transport) =>
+  const notifyTo = process.env.CONTACT_NOTIFY_EMAIL?.trim() || process.env.SMTP_USER?.trim();
+  if (!notifyTo) {
+    console.log('[Email] CONTACT_NOTIFY_EMAIL / SMTP_USER not set — skipping contact notification');
+    return { sent: false, reason: 'not_configured' };
+  }
+
+  const from =
+    process.env.EMAIL_FROM?.trim() ||
+    (process.env.SMTP_USER?.trim() ? `Caza Buena <${process.env.SMTP_USER.trim()}>` : 'Caza Buena');
+
+  return sendMailResult((transport) =>
     transport.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: process.env.SMTP_USER.trim(),
+      from,
+      to: notifyTo,
+      replyTo: inquiry.email,
       subject: `New inquiry from ${inquiry.name}`,
       text: `${inquiry.message}\n\nFrom: ${inquiry.name} (${inquiry.email})`,
     })
   );
-  return result.sent;
 }

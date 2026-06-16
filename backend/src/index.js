@@ -1,3 +1,4 @@
+import './config/network.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { seedAdminUser, seedMenuItems } from './config/seed.js';
 import { UPLOADS_DIR } from './utils/fileUpload.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
+import { isSmtpConfigured } from './services/email.js';
 import pool from './config/database.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +52,7 @@ app.get('/api/health', async (_req, res) => {
     name: 'Caza Buena API',
     database,
     cloudinary: isCloudinaryConfigured() ? 'connected' : 'local uploads only',
+    smtp: isSmtpConfigured() ? 'configured' : 'missing',
   });
 });
 

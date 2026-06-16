@@ -24,9 +24,15 @@ router.post(
     );
 
     const inquiry = { id: result.insertId, name, email, message };
-    await sendContactNotification(inquiry);
+    const emailResult = await sendContactNotification(inquiry);
+    if (!emailResult.sent) {
+      console.warn('[Contact] Notification email not sent:', emailResult.reason, emailResult.hint || '');
+    }
 
-    res.status(201).json({ message: 'Thank you! We will get back to you soon.' });
+    res.status(201).json({
+      message: 'Thank you! We will get back to you soon.',
+      email_sent: emailResult.sent,
+    });
   }
 );
 
