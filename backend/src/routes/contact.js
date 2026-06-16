@@ -24,15 +24,17 @@ router.post(
     );
 
     const inquiry = { id: result.insertId, name, email, message };
-    const emailResult = await sendContactNotification(inquiry);
-    if (!emailResult.sent) {
-      console.warn('[Contact] Notification email not sent:', emailResult.reason, emailResult.hint || '');
-    }
 
-    res.status(201).json({
-      message: 'Thank you! We will get back to you soon.',
-      email_sent: emailResult.sent,
-    });
+    // Reply immediately — SMTP can be slow or fail on Render without blocking the guest
+    res.status(201).json({ message: 'Thank you! We will get back to you soon.' });
+
+    sendContactNotification(inquiry)
+      .then((emailResult) => {
+        if (!emailResult.sent) {
+          console.warn('[Contact] Notification email not sent:', emailResult.reason, emailResult.hint || '');
+        }
+      })
+      .catch((err) => console.error('[Contact] Notification email error:', err.message));
   }
 );
 

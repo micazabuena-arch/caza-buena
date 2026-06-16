@@ -845,19 +845,24 @@ router.post(
       [proofUrl, publicId, payment_method_id || null, booking.id]
     );
 
-    let emailResult = { sent: false };
-    if (sendAcknowledgmentEmail) {
-      emailResult = await sendPaymentProofReceivedEmail(
-        { ...booking, status: 'payment_submitted' },
-        { name: booking.room_name }
-      );
-    }
-
     res.json({
       message: 'Payment proof uploaded. Our team will verify shortly.',
-      email_sent: emailResult.sent,
-      email_hint: emailResult.hint || null,
+      email_sent: false,
+      email_pending: sendAcknowledgmentEmail,
     });
+
+    if (sendAcknowledgmentEmail) {
+      sendPaymentProofReceivedEmail(
+        { ...booking, status: 'payment_submitted' },
+        { name: booking.room_name }
+      )
+        .then((emailResult) => {
+          if (!emailResult.sent) {
+            console.warn('[Payment proof] Guest email not sent:', emailResult.reason, emailResult.hint || '');
+          }
+        })
+        .catch((err) => console.error('[Payment proof] Guest email error:', err.message));
+    }
   }
 );
 
