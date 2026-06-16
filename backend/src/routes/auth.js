@@ -41,7 +41,7 @@ router.post(
       });
     } catch (err) {
       console.error('Login error:', err);
-      res.status(500).end();
+      res.status(500).json({ message: 'Server error during sign in. Check API database connection.' });
     }
   }
 );

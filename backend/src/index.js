@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { seedAdminUser, seedMenuItems } from './config/seed.js';
 import { UPLOADS_DIR } from './utils/fileUpload.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
+import pool from './config/database.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,10 +36,19 @@ app.use(express.urlencoded({ extended: true }));
 // Locally stored uploads (payment proofs, gallery, QR codes)
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  let database = 'connected';
+  try {
+    await pool.query('SELECT 1');
+  } catch (e) {
+    database = 'error';
+    console.error('Database health check failed:', e.message);
+  }
+
   res.json({
     status: 'ok',
     name: 'Caza Buena API',
+    database,
     cloudinary: isCloudinaryConfigured() ? 'connected' : 'local uploads only',
   });
 });

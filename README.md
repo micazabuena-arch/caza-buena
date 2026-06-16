@@ -120,6 +120,20 @@ See `backend/.env.example` and `frontend/.env.example`.
 - Run API with PM2: `cd backend && npm start`
 - Point `FRONTEND_URL` and `VITE_API_URL` to production domains
 
+### Admin password on Render / production
+
+`ADMIN_PASSWORD` in environment variables **only applies when the admin account is first created**. If the account already exists (e.g. from an earlier deploy with `Admin@12345`), changing `ADMIN_PASSWORD` on Render does **not** update the database.
+
+**Fix (Render):**
+
+1. In Render → your API service → **Environment**, confirm `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set to what you want.
+2. Add temporarily: `ADMIN_SYNC_PASSWORD` = `1`
+3. **Manual Deploy** or restart the service (check logs for `Admin password synced for ...`).
+4. Sign in with that email and password.
+5. **Remove** `ADMIN_SYNC_PASSWORD` after a successful login (so the password is not re-applied on every restart).
+
+If login still fails with a server error, verify MySQL env vars on Render (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) and set `FRONTEND_URL` to your live site URL (e.g. `https://yoursite.com`) for CORS.
+
 ## Branding
 
 - **Tagline:** Your home after the sea

@@ -24,7 +24,10 @@ export default function AdminLogin() {
       toast.success('Welcome back!');
       navigate('/admin');
     } catch (err) {
-      const msg = err.response?.status === 401 ? 'Invalid email or password' : 'Sign in failed. Please try again.';
+      const msg =
+        err.response?.status === 401
+          ? 'Invalid email or password'
+          : err.response?.data?.message || 'Sign in failed. Please try again.';
       setError(msg);
       toast.error(msg);
     } finally {

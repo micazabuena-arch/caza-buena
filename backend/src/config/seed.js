@@ -1,15 +1,33 @@
 import bcrypt from 'bcryptjs';
 import pool from './database.js';
 
-/** Creates default admin user if none exists */
+function adminCredentials() {
+  return {
+    email: process.env.ADMIN_EMAIL || 'admin@cazabuena.com',
+    password: process.env.ADMIN_PASSWORD || 'Admin@12345',
+  };
+}
+
+function syncPasswordEnabled() {
+  const v = process.env.ADMIN_SYNC_PASSWORD;
+  return v === '1' || v === 'true';
+}
+
+/** Creates default admin user if none exists; optionally syncs password from env */
 export async function seedAdminUser() {
-  const email = process.env.ADMIN_EMAIL || 'admin@cazabuena.com';
-  const password = process.env.ADMIN_PASSWORD || 'Admin@12345';
+  const { email, password } = adminCredentials();
+  const hash = await bcrypt.hash(password, 12);
 
   const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
-  if (existing.length > 0) return;
 
-  const hash = await bcrypt.hash(password, 12);
+  if (existing.length > 0) {
+    if (syncPasswordEnabled()) {
+      await pool.query('UPDATE users SET password_hash = ? WHERE email = ?', [hash, email]);
+      console.log(`Admin password synced for ${email} (ADMIN_SYNC_PASSWORD)`);
+    }
+    return;
+  }
+
   await pool.query(
     'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
     ['Caza Buena Admin', email, hash, 'admin']

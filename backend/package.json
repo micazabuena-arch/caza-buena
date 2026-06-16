@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "migrate": "node scripts/migrate-db.js",
+    "reset-admin": "node scripts/reset-admin-password.js",
     "email-logo": "node scripts/optimize-email-logo.js"
   },
   "keywords": [
