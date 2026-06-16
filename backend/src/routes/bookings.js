@@ -9,7 +9,7 @@ import {
   calculateNights,
   isRoomAvailable,
   applyDiscount,
-  getDayRateSummary,
+  getRateCalendarDays,
 } from '../utils/booking.js';
 import { sendPaymentProofReceivedEmail, sendBookingConfirmation } from '../services/email.js';
 
@@ -33,15 +33,7 @@ router.get('/rate-calendar', async (req, res) => {
     return res.status(400).json({ message: `Maximum ${maxDays} days per request` });
   }
 
-  const days = {};
-  // Use noon UTC to avoid timezone shifting calendar keys (YYYY-MM-DD)
-  const cursor = new Date(`${from}T12:00:00`);
-  const endDate = new Date(`${to}T12:00:00`);
-  while (cursor <= endDate) {
-    const key = cursor.toISOString().slice(0, 10);
-    days[key] = await getDayRateSummary(pool, key, guestCount);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
+  const days = await getRateCalendarDays(pool, from, to, guestCount);
   res.json({ days });
 });
 

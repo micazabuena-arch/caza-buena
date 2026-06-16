@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getRateTypeLabel, resolveNightlyPrice } from './pricing.js';
 
 /** Generates human-readable booking reference e.g. CB-20260525-A1B2 */
 export function generateReferenceCode() {
@@ -76,6 +77,104 @@ export async function getDayRateSummary(pool, dateStr, guestCount = 1) {
     }
   }
   return { available: true, min_price: Math.min(...prices), rate_type: rateType };
+}
+
+function nextCalendarDay(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function nightOverlapsRange(startDate, endDate, rangeStart, rangeEndExclusive) {
+  return startDate < rangeEndExclusive && endDate > rangeStart;
+}
+
+/** Batch-fetch calendar rates (avoids hundreds of DB round-trips on remote MySQL) */
+export async function getRateCalendarDays(pool, from, to, guestCount = 1) {
+  const guests = Math.max(1, parseInt(guestCount, 10) || 1);
+  const rangeEndExclusive = nextCalendarDay(to);
+
+  const [rooms] = await pool.query(
+    `SELECT id, price_per_night, price_weekend FROM rooms WHERE is_active = 1
+     AND COALESCE(min_guests, 1) <= ? AND COALESCE(max_guests, capacity) >= ?`,
+    [guests, guests]
+  );
+
+  const unavailableDay = { available: false, min_price: null, rate_type: null };
+  const days = {};
+  const cursor = new Date(`${from}T12:00:00`);
+  const endDate = new Date(`${to}T12:00:00`);
+  while (cursor <= endDate) {
+    days[cursor.toISOString().slice(0, 10)] = { ...unavailableDay };
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  if (rooms.length === 0) return days;
+
+  const roomIds = rooms.map((r) => r.id);
+  const placeholders = roomIds.map(() => '?').join(',');
+
+  const [blocks, bookings, holidays] = await Promise.all([
+    pool.query(
+      `SELECT room_id, start_date, end_date FROM room_unavailability
+       WHERE room_id IN (${placeholders}) AND start_date < ? AND end_date > ?`,
+      [...roomIds, rangeEndExclusive, from]
+    ),
+    pool.query(
+      `SELECT room_id, check_in, check_out FROM bookings
+       WHERE room_id IN (${placeholders})
+         AND status IN ('pending', 'awaiting_payment', 'payment_submitted', 'confirmed')
+         AND check_in < ? AND check_out > ?`,
+      [...roomIds, rangeEndExclusive, from]
+    ),
+    pool.query(
+      `SELECT room_id, start_date, end_date, price_per_night FROM room_holiday_rates
+       WHERE room_id IN (${placeholders}) AND start_date <= ? AND end_date >= ?`,
+      [...roomIds, to, from]
+    ),
+  ]);
+
+  const blockRows = blocks[0];
+  const bookingRows = bookings[0];
+  const holidayRows = holidays[0];
+
+  for (const dateStr of Object.keys(days)) {
+    const checkOut = nextCalendarDay(dateStr);
+    const prices = [];
+    let hasHoliday = false;
+
+    for (const room of rooms) {
+      const blocked = blockRows.some(
+        (b) =>
+          b.room_id === room.id &&
+          nightOverlapsRange(b.start_date, b.end_date, dateStr, checkOut)
+      );
+      if (blocked) continue;
+
+      const booked = bookingRows.some(
+        (b) =>
+          b.room_id === room.id &&
+          nightOverlapsRange(b.check_in, b.check_out, dateStr, checkOut)
+      );
+      if (booked) continue;
+
+      const holiday = holidayRows.find(
+        (h) => h.room_id === room.id && dateStr >= h.start_date && dateStr <= h.end_date
+      );
+      if (holiday) hasHoliday = true;
+      prices.push(resolveNightlyPrice(room, dateStr, holiday));
+    }
+
+    if (prices.length > 0) {
+      days[dateStr] = {
+        available: true,
+        min_price: Math.min(...prices),
+        rate_type: hasHoliday ? 'holiday' : getRateTypeLabel(dateStr),
+      };
+    }
+  }
+
+  return days;
 }
 
 export async function applyDiscount(pool, code, nights, subtotal) {

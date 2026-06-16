@@ -156,7 +156,7 @@ export default function BookingSearchBar({ className = '' }) {
           if (cancelled) return;
           setRatesError(
             err.response?.data?.message ||
-              'Could not load rates. Make sure the backend is running on port 5000.'
+              'Could not load rates. Please try again in a moment.'
           );
         })
         .finally(() => {
