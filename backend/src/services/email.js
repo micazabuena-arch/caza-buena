@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+import { promisify } from 'util';
 import dotenv from 'dotenv';
 import {
   buildBrandedEmail,
@@ -8,7 +10,10 @@ import {
 
 dotenv.config();
 
+const dnsLookup = promisify(dns.lookup);
+
 let transporter = null;
+let transporterInit = null;
 
 export function isSmtpConfigured() {
   return Boolean(process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim());
@@ -18,27 +23,65 @@ function smtpPassword() {
   return String(process.env.SMTP_PASS || '').replace(/\s/g, '');
 }
 
-function getTransporter() {
+function smtpHostName() {
+  return process.env.SMTP_HOST || 'smtp.gmail.com';
+}
+
+/** Nodemailer custom lookup — always use IPv4 (Render cannot reach Gmail over IPv6). */
+function ipv4Lookup(hostname, _options, callback) {
+  dns.lookup(hostname, { family: 4 }, callback);
+}
+
+async function resolveSmtpIpv4Host() {
+  const explicit = process.env.SMTP_HOST_IPV4?.trim();
+  if (explicit) return explicit;
+
+  const hostname = smtpHostName();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return hostname;
+
+  const { address } = await dnsLookup(hostname, { family: 4 });
+  return address;
+}
+
+async function buildTransporter() {
+  const hostname = smtpHostName();
+  const host = await resolveSmtpIpv4Host();
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const secure = port === 465;
+
+  console.log(`[Email] SMTP connect ${host}:${port} (TLS servername ${hostname})`);
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    requireTLS: !secure,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 25000,
+    tls: { servername: hostname },
+    lookup: ipv4Lookup,
+    auth: {
+      user: process.env.SMTP_USER.trim(),
+      pass: smtpPassword(),
+    },
+  });
+}
+
+async function getTransporter() {
   if (!isSmtpConfigured()) return null;
-  if (!transporter) {
-    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: false,
-      // Force IPv4 — Render fails on Gmail IPv6 (ENETUNREACH 2607:f8b0:...)
-      family: 4,
-      connectionTimeout: 20000,
-      greetingTimeout: 20000,
-      socketTimeout: 30000,
-      tls: { servername: smtpHost },
-      auth: {
-        user: process.env.SMTP_USER.trim(),
-        pass: smtpPassword(),
-      },
-    });
+  if (!transporterInit) {
+    transporterInit = buildTransporter()
+      .then((t) => {
+        transporter = t;
+        return t;
+      })
+      .catch((err) => {
+        transporterInit = null;
+        throw err;
+      });
   }
-  return transporter;
+  return transporterInit;
 }
 
 function guestFriendlyEmailHint(err) {
@@ -47,25 +90,35 @@ function guestFriendlyEmailHint(err) {
     return 'Gmail needs an App Password in SMTP_PASS (not your normal Gmail password). Create one at myaccount.google.com/apppasswords';
   }
   if (msg.includes('Invalid login') || msg.includes('535')) {
-    return 'SMTP login failed. Check SMTP_USER and SMTP_PASS in backend/.env, then restart the API.';
+    return 'SMTP login failed. Check SMTP_USER and SMTP_PASS on Render, then redeploy.';
   }
   if (msg.includes('ENETUNREACH') || msg.includes('ETIMEDOUT') || msg.includes('Connection timeout')) {
-    return 'SMTP connection failed from the server. Redeploy the latest API build (IPv4 fix) or check SMTP_HOST/SMTP_PORT on Render.';
+    return 'SMTP connection failed. On Render set SMTP_HOST=smtp.gmail.com and redeploy, or set SMTP_HOST_IPV4 to Gmail’s IPv4 address.';
   }
   return msg.slice(0, 200) || 'Email could not be sent.';
 }
 
 async function sendMailResult(sendFn) {
-  const transport = getTransporter();
+  let transport;
+  try {
+    transport = await getTransporter();
+  } catch (err) {
+    console.error('[Email] SMTP setup failed:', err.message);
+    return { sent: false, reason: 'setup_failed', hint: guestFriendlyEmailHint(err) };
+  }
+
   if (!transport) {
     console.log('[Email] SMTP not configured — skipping');
     return { sent: false, reason: 'not_configured' };
   }
+
   try {
     await sendFn(transport);
     return { sent: true };
   } catch (err) {
     console.error('[Email] Send failed:', err.message);
+    transporter = null;
+    transporterInit = null;
     return { sent: false, reason: 'send_failed', hint: guestFriendlyEmailHint(err) };
   }
 }

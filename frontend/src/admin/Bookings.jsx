@@ -175,10 +175,12 @@ export default function AdminBookings() {
       const { data } = await api.patch(`/bookings/admin/${selected}/status`, statusForm);
       if (data.email_sent) {
         toast.success('Booking updated. Confirmation email sent to guest.');
+      } else if (data.email_pending) {
+        toast.success('Booking confirmed. Confirmation email is being sent to the guest.');
       } else if (statusForm.status === 'confirmed') {
         toast.warning(
           data.email_hint ||
-            'Booking confirmed, but the email was not sent. Add SMTP_USER and SMTP_PASS in backend/.env and restart the API.'
+            'Booking confirmed, but the email was not sent. Check SMTP settings on Render.'
         );
       } else {
         toast.success('Booking status saved.');
@@ -204,10 +206,12 @@ export default function AdminBookings() {
       const { data } = await api.patch(`/bookings/admin/${id}/status`, { status: 'confirmed' });
       if (data.email_sent) {
         toast.success('Booking approved. Confirmation email sent.');
+      } else if (data.email_pending) {
+        toast.success('Booking approved. Confirmation email is being sent.');
       } else {
         toast.warning(
           data.email_hint ||
-            'Booking approved, but the email was not sent. Check SMTP settings in backend/.env.'
+            'Booking approved, but the email was not sent. Check SMTP settings on Render.'
         );
       }
       load();

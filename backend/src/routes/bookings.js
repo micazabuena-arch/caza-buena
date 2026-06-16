@@ -775,22 +775,31 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
     [status, admin_notes || null, rejection_reason || null, confirmedAt, req.params.id]
   );
 
-  let emailResult = { sent: false };
-  if (status === 'confirmed') {
-    emailResult = await sendBookingConfirmation(rows[0], { name: rows[0].room_name });
-    if (rows[0].discount_code) {
-      await pool.query(
-        'UPDATE discounts SET used_count = used_count + 1 WHERE code = ?',
-        [rows[0].discount_code]
-      );
-    }
+  if (status === 'confirmed' && rows[0].discount_code) {
+    await pool.query(
+      'UPDATE discounts SET used_count = used_count + 1 WHERE code = ?',
+      [rows[0].discount_code]
+    );
   }
 
   res.json({
     message: 'Booking updated',
-    email_sent: emailResult.sent,
-    email_hint: emailResult.hint || null,
+    email_sent: false,
+    email_pending: status === 'confirmed',
   });
+
+  if (status === 'confirmed') {
+    sendBookingConfirmation(
+      { ...rows[0], status: 'confirmed' },
+      { name: rows[0].room_name }
+    )
+      .then((emailResult) => {
+        if (!emailResult.sent) {
+          console.warn('[Booking confirm] Guest email not sent:', emailResult.reason, emailResult.hint || '');
+        }
+      })
+      .catch((err) => console.error('[Booking confirm] Guest email error:', err.message));
+  }
 });
 
 // Admin: single booking detail
