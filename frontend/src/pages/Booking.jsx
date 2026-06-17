@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { format, addDays, parseISO, startOfMonth } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import api, { getApiError } from '../api/client';
 import PageHero from '../components/ui/PageHero';
 import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
@@ -28,12 +28,7 @@ import {
   getBoodlePackage,
   validateBookingExtras,
 } from '../data/bookingAddOns';
-import { getStayDateError, minCheckOutDate, minCheckInDate, isPastStayDate } from '../utils/stayDates';
-import StayDateRangeCalendar from '../components/booking/StayDateRangeCalendar';
-import useRoomCalendar, {
-  isCheckInNightAvailable,
-  isStayRangeAvailable,
-} from '../hooks/useRoomCalendar';
+import { getStayDateError, minCheckOutDate, minCheckInDate } from '../utils/stayDates';
 
 function capacityNoteForRoom(room) {
   if (!room) return null;
@@ -137,14 +132,6 @@ export default function Booking() {
     (parseInt(form.children_under6, 10) || 0) +
     (parseInt(form.children_7_12, 10) || 0);
   const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
-
-  const calendarViewMonth = useMemo(() => {
-    const base = form.check_in
-      ? parseISO(form.check_in)
-      : addDays(parseISO(minCheckInDate()), 1);
-    return startOfMonth(base);
-  }, [form.check_in]);
-  const { dayRates } = useRoomCalendar(form.room_id, calendarViewMonth);
 
   useEffect(() => {
     if (!form.room_id) return;
@@ -315,36 +302,13 @@ export default function Booking() {
     };
 
     if (name === 'check_in' && value) {
-      if (isPastStayDate(value)) {
-        setError('Check-in cannot be in the past.');
-        return;
-      }
-      if (form.room_id && !isCheckInNightAvailable(value, dayRates)) {
-        setError('This night is not available for the selected room.');
-        return;
-      }
       const earliestOut = minCheckOutDate(value);
       if (earliestOut && next.check_out && next.check_out <= value) {
         next.check_out = earliestOut;
       }
     }
 
-    if (name === 'check_out' && value && next.check_in) {
-      if (
-        form.room_id &&
-        !isStayRangeAvailable(next.check_in, value, dayRates)
-      ) {
-        setError('Some nights in this range are already booked or blocked.');
-        return;
-      }
-    }
-
     setForm(next);
-    setError('');
-  };
-
-  const handleStayDatesFromCalendar = ({ check_in, check_out }) => {
-    setForm((f) => ({ ...f, check_in, check_out }));
     setError('');
   };
 
@@ -666,17 +630,6 @@ export default function Booking() {
                   <p className="text-sm text-red-600 mt-2" role="alert">
                     {dateError}
                   </p>
-                )}
-                {form.room_id && (
-                  <div className="mt-4">
-                    <StayDateRangeCalendar
-                      roomId={form.room_id}
-                      checkIn={form.check_in}
-                      checkOut={form.check_out}
-                      onChange={handleStayDatesFromCalendar}
-                      compact
-                    />
-                  </div>
                 )}
               </div>
 

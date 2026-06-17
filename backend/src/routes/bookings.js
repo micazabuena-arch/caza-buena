@@ -10,7 +10,6 @@ import {
   isRoomAvailable,
   applyDiscount,
   getRateCalendarDays,
-  getRoomCalendarDays,
 } from '../utils/booking.js';
 import { sendPaymentProofReceivedEmail, sendBookingConfirmation, sendBookingRejectedEmail } from '../services/email.js';
 
@@ -35,29 +34,6 @@ router.get('/rate-calendar', async (req, res) => {
   }
 
   const days = await getRateCalendarDays(pool, from, to, guestCount);
-  res.json({ days });
-});
-
-// Public: per-night availability for one room (manual booking / room detail calendars)
-router.get('/room-calendar', async (req, res) => {
-  const { room_id, from, to } = req.query;
-  if (!room_id || !from || !to) {
-    return res.status(400).json({ message: 'room_id, from, and to dates required' });
-  }
-
-  const start = new Date(from);
-  const end = new Date(to);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return res.status(400).json({ message: 'Invalid date range' });
-  }
-
-  const maxDays = 62;
-  const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-  if (diffDays > maxDays) {
-    return res.status(400).json({ message: `Maximum ${maxDays} days per request` });
-  }
-
-  const days = await getRoomCalendarDays(pool, room_id, from, to);
   res.json({ days });
 });
 
