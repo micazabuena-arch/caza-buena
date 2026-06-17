@@ -10,6 +10,7 @@ import { UPLOADS_DIR } from './utils/fileUpload.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
 import { isSmtpConfigured } from './services/email.js';
 import pool from './config/database.js';
+import { mountFrontend } from './config/serveFrontend.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -70,6 +71,8 @@ app.use('/api/policies', policiesRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/whats-new', whatsNewRoutes);
 app.use('/api/admin', adminRoutes);
+
+mountFrontend(app);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
