@@ -11,7 +11,7 @@ import {
   applyDiscount,
   getRateCalendarDays,
 } from '../utils/booking.js';
-import { sendPaymentProofReceivedEmail, sendBookingConfirmation } from '../services/email.js';
+import { sendPaymentProofReceivedEmail, sendBookingConfirmation, sendBookingRejectedEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -768,6 +768,11 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
   );
   if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
 
+  const booking = rows[0];
+  const hadPaymentProof =
+    Boolean(booking.payment_proof_url) || booking.status === 'payment_submitted';
+  const shouldEmailRejection = status === 'rejected' && hadPaymentProof;
+
   const confirmedAt = status === 'confirmed' ? new Date() : null;
   await pool.query(
     `UPDATE bookings SET status = ?, admin_notes = ?, rejection_reason = ?,
@@ -785,13 +790,13 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
   res.json({
     message: 'Booking updated',
     email_sent: false,
-    email_pending: status === 'confirmed',
+    email_pending: status === 'confirmed' || shouldEmailRejection,
   });
 
   if (status === 'confirmed') {
     sendBookingConfirmation(
-      { ...rows[0], status: 'confirmed' },
-      { name: rows[0].room_name }
+      { ...booking, status: 'confirmed' },
+      { name: booking.room_name }
     )
       .then((emailResult) => {
         if (!emailResult.sent) {
@@ -799,6 +804,20 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
         }
       })
       .catch((err) => console.error('[Booking confirm] Guest email error:', err.message));
+  }
+
+  if (shouldEmailRejection) {
+    sendBookingRejectedEmail(
+      { ...booking, status: 'rejected', rejection_reason: rejection_reason || null },
+      { name: booking.room_name },
+      rejection_reason
+    )
+      .then((emailResult) => {
+        if (!emailResult.sent) {
+          console.warn('[Booking reject] Guest email not sent:', emailResult.reason, emailResult.hint || '');
+        }
+      })
+      .catch((err) => console.error('[Booking reject] Guest email error:', err.message));
   }
 });
 

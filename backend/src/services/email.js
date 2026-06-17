@@ -6,6 +6,7 @@ import {
   buildBrandedEmail,
   bookingDetailsTable,
   getEmailLogoAttachment,
+  escapeHtml,
 } from './emailTemplate.js';
 
 dotenv.config();
@@ -155,6 +156,45 @@ export async function sendPaymentProofReceivedEmail(booking, room) {
       from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
       to: booking.guest_email,
       subject: `Booking Request Received — ${booking.reference_code}`,
+      html,
+      attachments: getEmailLogoAttachment(),
+    })
+  );
+}
+
+/** Sent when admin rejects a booking that included payment proof */
+export async function sendBookingRejectedEmail(booking, room, rejectionReason) {
+  const reasonBlock = rejectionReason?.trim()
+    ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
+        <strong>Reason:</strong> ${escapeHtml(rejectionReason.trim())}
+      </p>`
+    : '';
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#214566;">
+      Thank you for your interest in staying at <strong>Caza Buena</strong>. After reviewing your
+      booking request <strong>${escapeHtml(booking.reference_code)}</strong> and the payment proof
+      you submitted, we are unable to confirm this reservation at this time.
+    </p>
+    ${reasonBlock}
+    ${bookingDetailsTable(booking, room)}
+    <p style="margin:0;font-size:15px;line-height:1.65;color:#214566;">
+      If you believe this was a mistake or you would like to book different dates, please reply to
+      this email or contact us. For payment concerns, our team will assist you with next steps.
+    </p>
+  `;
+
+  const html = buildBrandedEmail({
+    headline: 'Update on Your Booking Request',
+    guestName: booking.guest_name,
+    bodyHtml,
+  });
+
+  return sendMailResult((transport) =>
+    transport.sendMail({
+      from: process.env.EMAIL_FROM || 'Caza Buena <noreply@cazabuena.com>',
+      to: booking.guest_email,
+      subject: `Booking Not Confirmed — ${booking.reference_code}`,
       html,
       attachments: getEmailLogoAttachment(),
     })

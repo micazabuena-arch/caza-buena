@@ -14,6 +14,10 @@ import {
   isSeniorPassenger,
   isPwdPassenger,
 } from '../../data/islandHoppingRates';
+import {
+  validateManualBookingFields,
+  minCheckOutDate,
+} from '../../utils/manualBookingValidation';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -25,7 +29,7 @@ const TABS = [
   { id: 'payment', label: '4. Payment' },
 ];
 
-function Field({ label, required, children, className = '' }) {
+function Field({ label, required, children, className = '', error }) {
   return (
     <label className={`block ${className}`.trim()}>
       <span className="block text-sm font-medium text-aegean-700 mb-1.5">
@@ -33,8 +37,17 @@ function Field({ label, required, children, className = '' }) {
         {required && <span className="text-red-500"> *</span>}
       </span>
       {children}
+      {error && (
+        <p className="text-xs text-red-600 mt-1" role="alert">
+          {error}
+        </p>
+      )}
     </label>
   );
+}
+
+function fieldInputClass(hasError) {
+  return `${inputClass} ${hasError ? 'border-red-400 focus:ring-red-300' : ''}`.trim();
 }
 
 function Panel({ title, hint, children }) {
@@ -84,6 +97,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
   const [activeTab, setActiveTab] = useState('stay');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [availability, setAvailability] = useState(null);
   const [availabilityChecking, setAvailabilityChecking] = useState(false);
 
@@ -165,49 +179,61 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
           ? customPay
           : 0;
 
-  const update = (patch) => setForm((f) => ({ ...f, ...patch }));
-
-  const validate = () => {
-    if (!form.room_id) return 'Select a room (tab 1).';
-    if (!form.check_in || !form.check_out) return 'Check-in and check-out are required (tab 1).';
-    if (availabilityChecking) return 'Checking availability…';
-    if (!availability?.available) {
-      return availability?.occupancy_error || 'Room not available for these dates (tab 1).';
-    }
-    if (!form.guest_name.trim()) return 'Guest name is required (tab 2).';
-    if (!form.guest_email.trim()) return 'Email is required (tab 2).';
-    if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
-    if (!form.valid_id?.trim()) return 'Valid ID is required (tab 2).';
-    if (extrasQuote && !extrasQuote.valid) return extrasQuote.message;
-    if (islandHoppingEnabled) {
-      if (islandQuote?.error) return islandQuote.error;
-      if (!islandQuote?.complete) {
-        return 'Complete island hopping details (tab 3) or turn it off.';
-      }
-      if (!islandHopping.passenger_address?.trim()) return 'Passenger address is required (tab 3).';
-      if (
-        !islandHopping.payor_name?.trim() ||
-        !islandHopping.payor_address?.trim() ||
-        !islandHopping.payor_phone?.trim()
-      ) {
-        return 'Complete payor details (tab 3).';
-      }
-      if (
-        !islandHopping.emergency_contact_name?.trim() ||
-        !islandHopping.emergency_contact_phone?.trim()
-      ) {
-        return 'Complete emergency contact (tab 3).';
-      }
-    }
-    if (paymentMethods.length > 0 && !form.payment_method_id) {
-      return 'Select a payment method (tab 4).';
-    }
-    if (form.payment_option === 'custom') {
-      if (!Number.isFinite(customPay) || customPay <= 0) return 'Enter a valid custom amount (tab 4).';
-      if (customPay > totalAmount) return 'Custom amount cannot exceed the booking total (tab 4).';
-    }
-    return null;
+  const update = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(patch).forEach((key) => delete next[key]);
+      return next;
+    });
+    setError('');
   };
+
+  const validationContext = useMemo(
+    () => ({
+      availability,
+      availabilityChecking,
+      selectedRoom,
+      guestCount,
+      paymentMethods,
+      extrasQuote,
+      islandHoppingEnabled,
+      islandQuote,
+      islandHopping,
+      totalAmount,
+      customPay,
+    }),
+    [
+      availability,
+      availabilityChecking,
+      selectedRoom,
+      guestCount,
+      paymentMethods,
+      extrasQuote,
+      islandHoppingEnabled,
+      islandQuote,
+      islandHopping,
+      totalAmount,
+      customPay,
+    ]
+  );
+
+  const runValidation = (tab) =>
+    validateManualBookingFields(form, { ...validationContext, tab });
+
+  const applyValidationResult = (result) => {
+    setFieldErrors(result.fieldErrors);
+    setError(result.bannerError || '');
+    if (result.firstTabWithError) setActiveTab(result.firstTabWithError);
+    return (
+      Object.keys(result.fieldErrors).length === 0 &&
+      !result.bannerError
+    );
+  };
+
+  const validateTab = (tab) => applyValidationResult(runValidation(tab));
+
+  const validateAll = () => applyValidationResult(runValidation('all'));
 
   const buildPayload = () => ({
     room_id: parseInt(form.room_id, 10),
@@ -292,11 +318,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    if (!validateAll()) return;
 
     const ok = await confirm({
       title: 'Create manual booking?',
@@ -353,8 +375,14 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     };
   }, [form.room_id, availability, roomSubtotal, islandTotal, addOnsTotal, totalAmount, amountToPay]);
 
+  const goNext = () => {
+    if (!validateTab(activeTab)) return;
+    const idx = TABS.findIndex((t) => t.id === activeTab);
+    if (idx < TABS.length - 1) setActiveTab(TABS[idx + 1].id);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col">
       <div className="flex gap-1 p-1 bg-aegean-50 rounded-xl mb-5">
         {TABS.map((tab) => (
           <button
@@ -381,12 +409,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       <div className="min-h-[200px]">
         {activeTab === 'stay' && (
           <Panel title="Room & dates" hint="Confirmed status blocks these dates on the public site.">
-            <Field label="Room" required>
+            <Field label="Room" required error={fieldErrors.room_id}>
               <select
-                required
                 value={form.room_id}
                 onChange={(e) => update({ room_id: e.target.value })}
-                className={inputClass}
+                className={fieldInputClass(fieldErrors.room_id)}
               >
                 <option value="">Select room</option>
                 {rooms.map((r) => (
@@ -397,37 +424,42 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               </select>
             </Field>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Check-in" required>
+              <Field label="Check-in" required error={fieldErrors.check_in}>
                 <input
                   type="date"
-                  required
                   value={form.check_in}
-                  onChange={(e) => update({ check_in: e.target.value })}
-                  className={inputClass}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const patch = { check_in: value };
+                    const earliest = minCheckOutDate(value);
+                    if (earliest && form.check_out && form.check_out <= value) {
+                      patch.check_out = earliest;
+                    }
+                    update(patch);
+                  }}
+                  className={fieldInputClass(fieldErrors.check_in)}
                 />
               </Field>
-              <Field label="Check-out" required>
+              <Field label="Check-out" required error={fieldErrors.check_out}>
                 <input
                   type="date"
-                  required
-                  min={form.check_in || undefined}
+                  min={minCheckOutDate(form.check_in)}
                   value={form.check_out}
                   onChange={(e) => update({ check_out: e.target.value })}
-                  className={inputClass}
+                  className={fieldInputClass(fieldErrors.check_out)}
                 />
               </Field>
             </div>
             <div>
               <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               <div className="grid grid-cols-3 gap-3">
-                <Field label="Adults" required>
+                <Field label="Adults" required error={fieldErrors.adults}>
                   <input
                     type="number"
                     min={1}
-                    required
                     value={form.adults}
                     onChange={(e) => update({ adults: e.target.value })}
-                    className={inputClass}
+                    className={fieldInputClass(fieldErrors.adults)}
                   />
                 </Field>
                 <Field label="Under 6">
@@ -500,40 +532,39 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
         {activeTab === 'guest' && (
           <Panel title="Lead guest" hint="Same contact fields as the public booking form.">
-            <Field label="Full name" required>
+            <Field label="Full name" required error={fieldErrors.guest_name}>
               <input
-                required
                 value={form.guest_name}
                 onChange={(e) => update({ guest_name: e.target.value })}
-                className={inputClass}
+                className={fieldInputClass(fieldErrors.guest_name)}
               />
             </Field>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Phone" required>
+              <Field label="Phone" required error={fieldErrors.guest_phone}>
                 <input
-                  required
+                  type="tel"
                   value={form.guest_phone}
                   onChange={(e) => update({ guest_phone: e.target.value })}
-                  className={inputClass}
+                  className={fieldInputClass(fieldErrors.guest_phone)}
+                  placeholder="e.g. 09171234567"
                 />
               </Field>
-              <Field label="Email" required>
+              <Field label="Email" required error={fieldErrors.guest_email}>
                 <input
                   type="email"
-                  required
                   value={form.guest_email}
                   onChange={(e) => update({ guest_email: e.target.value })}
-                  className={inputClass}
+                  className={fieldInputClass(fieldErrors.guest_email)}
+                  placeholder="name@email.com"
                 />
               </Field>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Valid ID" required>
+              <Field label="Valid ID" required error={fieldErrors.valid_id}>
                 <input
-                  required
                   value={form.valid_id}
                   onChange={(e) => update({ valid_id: e.target.value })}
-                  className={inputClass}
+                  className={fieldInputClass(fieldErrors.valid_id)}
                   placeholder="e.g. Driver's License — N01-12-345678"
                 />
               </Field>
@@ -571,12 +602,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
         {activeTab === 'payment' && (
           <Panel title="Payment & notes">
             {paymentMethods.length > 0 && (
-              <Field label="Payment method" required>
+              <Field label="Payment method" required error={fieldErrors.payment_method_id}>
                 <select
-                  required
                   value={form.payment_method_id}
                   onChange={(e) => update({ payment_method_id: e.target.value })}
-                  className={inputClass}
+                  className={fieldInputClass(fieldErrors.payment_method_id)}
                 >
                   <option value="">Select payment method</option>
                   {paymentMethods.map((m) => (
@@ -595,6 +625,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               onOptionChange={(id) => update({ payment_option: id })}
               onCustomAmountChange={(val) => update({ custom_payment_amount: val })}
             />
+            {fieldErrors.custom_payment_amount && (
+              <p className="text-xs text-red-600" role="alert">
+                {fieldErrors.custom_payment_amount}
+              </p>
+            )}
             <p className="text-xs text-aegean-500 -mt-2">
               Amount due now: ₱{amountToPay.toLocaleString()}
               {totalAmount > 0 ? ` · Total booking: ₱${totalAmount.toLocaleString()}` : ''}
@@ -640,14 +675,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
             </button>
           )}
           {activeTab !== 'payment' ? (
-            <button
-              type="button"
-              onClick={() => {
-                const idx = TABS.findIndex((t) => t.id === activeTab);
-                if (idx < TABS.length - 1) setActiveTab(TABS[idx + 1].id);
-              }}
-              className="btn-primary text-sm"
-            >
+            <button type="button" onClick={goNext} className="btn-primary text-sm">
               Next
             </button>
           ) : (

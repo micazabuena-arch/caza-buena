@@ -175,13 +175,17 @@ export default function AdminBookings() {
       const { data } = await api.patch(`/bookings/admin/${selected}/status`, statusForm);
       if (data.email_sent) {
         toast.success('Booking updated. Confirmation email sent to guest.');
-      } else if (data.email_pending) {
+      } else if (data.email_pending && statusForm.status === 'rejected') {
+        toast.success('Booking rejected. Rejection email is being sent to the guest.');
+      } else if (data.email_pending && statusForm.status === 'confirmed') {
         toast.success('Booking confirmed. Confirmation email is being sent to the guest.');
       } else if (statusForm.status === 'confirmed') {
         toast.warning(
           data.email_hint ||
-            'Booking confirmed, but the email was not sent. Check SMTP settings on Render.'
+            'Booking confirmed, but the email was not sent. Check SMTP settings on the server.'
         );
+      } else if (statusForm.status === 'rejected') {
+        toast.success('Booking rejected.');
       } else {
         toast.success('Booking status saved.');
       }
@@ -235,11 +239,15 @@ export default function AdminBookings() {
     if (reason === null) return;
     setActionLoading(`${id}-reject`);
     try {
-      await api.patch(`/bookings/admin/${id}/status`, {
+      const { data } = await api.patch(`/bookings/admin/${id}/status`, {
         status: 'rejected',
         rejection_reason: reason,
       });
-      toast.success('Booking rejected.');
+      if (data.email_pending) {
+        toast.success('Booking rejected. Rejection email is being sent to the guest.');
+      } else {
+        toast.success('Booking rejected.');
+      }
       load();
       if (selected === id) await openDetail(id, { silent: true });
     } catch (err) {

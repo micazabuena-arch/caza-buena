@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
-import { Users } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import PageHero from '../components/ui/PageHero';
 import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
@@ -29,6 +28,7 @@ import {
   getBoodlePackage,
   validateBookingExtras,
 } from '../data/bookingAddOns';
+import { getStayDateError, minCheckOutDate } from '../utils/stayDates';
 
 function capacityNoteForRoom(room) {
   if (!room) return null;
@@ -92,7 +92,7 @@ export default function Booking() {
   }, [preselectedRoom]);
 
   useEffect(() => {
-    if (!form.room_id || !form.check_in || !form.check_out) {
+    if (!form.room_id || !form.check_in || !form.check_out || dateError) {
       setAvailability(null);
       setAvailabilityChecking(false);
       return;
@@ -119,6 +119,7 @@ export default function Booking() {
     form.adults,
     form.children_under6,
     form.children_7_12,
+    dateError,
   ]);
 
   const guestCount =
@@ -126,6 +127,11 @@ export default function Booking() {
     (parseInt(form.children_under6, 10) || 0) +
     (parseInt(form.children_7_12, 10) || 0);
   const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
+
+  const dateError = useMemo(
+    () => getStayDateError(form.check_in, form.check_out),
+    [form.check_in, form.check_out]
+  );
 
   useEffect(() => {
     if (!form.room_id) return;
@@ -190,6 +196,7 @@ export default function Booking() {
           : 0;
 
   const submitBlockedReason = useMemo(() => {
+    if (dateError) return dateError;
     if (!form.room_id) {
       return roomLocked
         ? 'Room not found. Go back and select a room again.'
@@ -268,6 +275,7 @@ export default function Booking() {
     return null;
   }, [
     form.room_id,
+    dateError,
     form.payment_method_id,
     form.valid_id,
     form.payment_option,
@@ -288,15 +296,28 @@ export default function Booking() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     const numeric = ['adults', 'children_under6', 'children_7_12'];
-    setForm({
+    const next = {
       ...form,
       [name]: numeric.includes(name) ? (value === '' ? '' : parseInt(value, 10)) : value,
-    });
+    };
+
+    if (name === 'check_in' && value) {
+      const earliestOut = minCheckOutDate(value);
+      if (earliestOut && next.check_out && next.check_out <= value) {
+        next.check_out = earliestOut;
+      }
+    }
+
+    setForm(next);
     setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (dateError) {
+      setError(dateError);
+      return;
+    }
     if (!form.room_id) {
       setError('Please select a room from the available rooms list first.');
       return;
@@ -584,7 +605,9 @@ export default function Booking() {
                     value={form.check_in}
                     onChange={handleChange}
                     required
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                    className={`w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none ${
+                      dateError ? 'border-red-400' : 'border-aegean-200'
+                    }`}
                   />
                 </div>
                 <div>
@@ -594,11 +617,19 @@ export default function Booking() {
                     name="check_out"
                     value={form.check_out}
                     onChange={handleChange}
+                    min={minCheckOutDate(form.check_in)}
                     required
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
+                    className={`w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none ${
+                      dateError ? 'border-red-400' : 'border-aegean-200'
+                    }`}
                   />
                 </div>
                 </div>
+                {dateError && (
+                  <p className="text-sm text-red-600 mt-2" role="alert">
+                    {dateError}
+                  </p>
+                )}
               </div>
 
               {availability && !availability.available && !availability.occupancy_error && (

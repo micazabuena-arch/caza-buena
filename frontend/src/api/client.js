@@ -50,8 +50,29 @@ api.interceptors.response.use(
 export function getApiError(err) {
   const data = err.response?.data;
   if (data?.message) return data.message;
-  if (data?.errors?.[0]?.msg) return data.errors[0].msg;
+  if (data?.errors?.length) {
+    const e = data.errors[0];
+    return formatValidatorError(e.param || e.path, e.msg);
+  }
   return err.message || 'Something went wrong';
+}
+
+function formatValidatorError(field, msg) {
+  const friendly = {
+    guest_email: 'Please enter a valid email address.',
+    guest_phone: 'Please enter a valid phone number.',
+    guest_name: 'Guest name is required.',
+    room_id: 'Please select a room.',
+    check_in: 'Check-in date is required (YYYY-MM-DD).',
+    check_out: 'Check-out date is required (YYYY-MM-DD).',
+    valid_id: 'Valid ID is required.',
+    payment_method_id: 'Please select a payment method.',
+    custom_payment_amount: 'Please enter a valid custom payment amount.',
+  };
+  if (field && friendly[field]) return friendly[field];
+  if (msg && msg !== 'Invalid value') return msg;
+  if (field) return `Please check the ${String(field).replace(/_/g, ' ')} field.`;
+  return 'Please check your input and try again.';
 }
 
 export default api;
