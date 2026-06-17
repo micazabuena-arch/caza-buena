@@ -16,6 +16,7 @@ import {
   Sparkles,
   Menu,
   X,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/ui/Loading';
@@ -34,6 +35,7 @@ const nav = [
   { to: '/admin/whats-new', icon: Sparkles, label: "What's New" },
   { to: '/admin/faq', icon: HelpCircle, label: 'FAQ' },
   { to: '/admin/policies', icon: FileText, label: 'Policies' },
+  { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
 function SidebarContent({ onNavigate }) {

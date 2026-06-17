@@ -34,6 +34,7 @@ import AdminFAQ from './admin/FAQAdmin';
 import AdminMenu from './admin/MenuAdmin';
 import AdminPolicies from './admin/PoliciesAdmin';
 import WhatsNewAdmin from './admin/WhatsNewAdmin';
+import AdminSettings from './admin/Settings';
 import IslandHoppingPrint from './admin/IslandHoppingPrint';
 
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="faq" element={<AdminFAQ />} />
             <Route path="policies" element={<AdminPolicies />} />
             <Route path="whats-new" element={<WhatsNewAdmin />} />
+            <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Routes>
       </BrowserRouter>

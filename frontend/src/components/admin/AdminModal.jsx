@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 const WIDTH_CLASS = {
@@ -23,20 +24,25 @@ export default function AdminModal({
 }) {
   useEffect(() => {
     if (!open) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const onKeyDown = (e) => {
       if (e.key === 'Escape') onClose?.();
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
 
   const widthClass = WIDTH_CLASS[size] || WIDTH_CLASS.sm;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
       onClick={onClose}
       role="presentation"
     >
@@ -67,6 +73,7 @@ export default function AdminModal({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
