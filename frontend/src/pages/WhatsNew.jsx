@@ -10,35 +10,29 @@ const FALLBACK = {
   text: 'Fresh updates, new highlights, and the latest moments from our resort.',
 };
 
-const FALLBACK_SLIDES = [
-  { image_url: images.about, heading: '', text: '' },
-  { image_url: images.gallery, heading: '', text: '' },
-  { image_url: images.hero, heading: '', text: '' },
-];
-
 /** A4 portrait ratio (210 × 297 mm) */
 const A4_ASPECT = 'aspect-[210/297]';
 
 function normalizeSlides(data) {
+  let raw = [];
   if (Array.isArray(data?.slides) && data.slides.length) {
-    return data.slides.slice(0, 3).map((slide, i) => ({
-      id: `whats-new-${i + 1}`,
-      image_url: slide.image_url || '',
-      heading: slide.heading || '',
-      text: slide.text || '',
-    }));
+    raw = data.slides.slice(0, 3);
+  } else if (Array.isArray(data?.images)) {
+    raw = data.images.slice(0, 3).map((url) => ({ image_url: url, heading: '', text: '' }));
   }
-  const urls = Array.isArray(data?.images) ? data.images : [];
-  return [0, 1, 2].map((i) => ({
-    id: `whats-new-${i + 1}`,
-    image_url: urls[i] || FALLBACK_SLIDES[i]?.image_url || '',
-    heading: '',
-    text: '',
-  }));
+
+  return raw
+    .map((slide, i) => ({
+      id: `whats-new-${i + 1}`,
+      image_url: String(slide?.image_url || slide || '').trim(),
+      heading: slide?.heading || '',
+      text: slide?.text || '',
+    }))
+    .filter((slide) => slide.image_url);
 }
 
 export default function WhatsNew() {
-  const [content, setContent] = useState({ ...FALLBACK, slides: FALLBACK_SLIDES });
+  const [content, setContent] = useState({ ...FALLBACK, slides: [] });
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -54,16 +48,12 @@ export default function WhatsNew() {
         });
         setActiveIndex(0);
       })
-      .catch(() => setContent({ ...FALLBACK, slides: FALLBACK_SLIDES }))
+      .catch(() => setContent({ ...FALLBACK, slides: [] }))
       .finally(() => setLoading(false));
   }, []);
 
   const sliderImages = useMemo(
-    () =>
-      content.slides.map((s, i) => ({
-        id: s.id,
-        image_url: s.image_url || FALLBACK_SLIDES[i]?.image_url || images.about,
-      })),
+    () => content.slides.map((s) => ({ id: s.id, image_url: s.image_url })),
     [content.slides]
   );
 
@@ -92,29 +82,37 @@ export default function WhatsNew() {
           </div>
 
           <div className="w-full max-w-[min(100%,210mm)] mx-auto">
-            <div className="rounded-2xl overflow-hidden border border-aegean-100 shadow-md bg-white">
-              <ImageDotSlider
-                images={sliderImages}
-                alt={content.heading || pages.gallery.title}
-                aspect={A4_ASPECT}
-                objectFit="contain"
-                autoSlide
-                intervalMs={4000}
-                showArrows
-                openImageOnClick
-                onSlideChange={handleSlideChange}
-              />
-            </div>
+            {sliderImages.length > 0 ? (
+              <>
+                <div className="rounded-2xl overflow-hidden border border-aegean-100 shadow-md bg-white">
+                  <ImageDotSlider
+                    images={sliderImages}
+                    alt={content.heading || pages.gallery.title}
+                    aspect={A4_ASPECT}
+                    objectFit="contain"
+                    autoSlide={sliderImages.length > 1}
+                    intervalMs={4000}
+                    showArrows
+                    openImageOnClick
+                    onSlideChange={handleSlideChange}
+                  />
+                </div>
 
-            {(activeSlide?.heading || activeSlide?.text) && (
-              <div className="mt-5 text-center space-y-2 px-2">
-                {activeSlide.heading && (
-                  <h3 className="text-xl md:text-2xl font-serif text-aegean-800">{activeSlide.heading}</h3>
+                {(activeSlide?.heading || activeSlide?.text) && (
+                  <div className="mt-5 text-center space-y-2 px-2">
+                    {activeSlide.heading && (
+                      <h3 className="text-xl md:text-2xl font-serif text-aegean-800">{activeSlide.heading}</h3>
+                    )}
+                    {activeSlide.text && (
+                      <p className="text-aegean-700 leading-relaxed">{activeSlide.text}</p>
+                    )}
+                  </div>
                 )}
-                {activeSlide.text && (
-                  <p className="text-aegean-700 leading-relaxed">{activeSlide.text}</p>
-                )}
-              </div>
+              </>
+            ) : (
+              <p className="text-center text-aegean-600 text-sm py-10 border border-dashed border-aegean-200 rounded-2xl bg-white">
+                New updates will appear here soon.
+              </p>
             )}
           </div>
         </div>

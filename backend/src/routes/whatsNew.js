@@ -73,7 +73,7 @@ async function readWhatsNewSettings() {
     heading: map[KEYS.heading] || DEFAULTS.heading,
     text: map[KEYS.text] || DEFAULTS.text,
     images: imageUrls,
-    slides,
+    slides: slides.filter((s) => s.image_url),
   };
 }
 
