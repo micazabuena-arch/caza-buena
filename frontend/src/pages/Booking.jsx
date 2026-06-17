@@ -91,6 +91,11 @@ export default function Booking() {
       .finally(() => setLoading(false));
   }, [preselectedRoom]);
 
+  const dateError = useMemo(
+    () => getStayDateError(form.check_in, form.check_out),
+    [form.check_in, form.check_out]
+  );
+
   useEffect(() => {
     if (!form.room_id || !form.check_in || !form.check_out || dateError) {
       setAvailability(null);
@@ -127,11 +132,6 @@ export default function Booking() {
     (parseInt(form.children_under6, 10) || 0) +
     (parseInt(form.children_7_12, 10) || 0);
   const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
-
-  const dateError = useMemo(
-    () => getStayDateError(form.check_in, form.check_out),
-    [form.check_in, form.check_out]
-  );
 
   useEffect(() => {
     if (!form.room_id) return;
