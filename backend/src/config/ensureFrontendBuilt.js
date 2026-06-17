@@ -49,7 +49,7 @@ export function ensureFrontendBuilt() {
 
   console.log('frontend/dist missing — building React app from', frontendDir);
 
-  execSync('npm install && npm run build', {
+  execSync('npm install --include=dev && npm run build', {
     cwd: frontendDir,
     stdio: 'inherit',
     env: process.env,
