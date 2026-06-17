@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
+import { getApiError } from '../api/client';
 export default function AdminLogin() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function AdminLogin() {
       const msg =
         err.response?.status === 401
           ? 'Invalid email or password'
-          : err.response?.data?.message || 'Sign in failed. Please try again.';
+          : getApiError(err);
       setError(msg);
       toast.error(msg);
     } finally {
