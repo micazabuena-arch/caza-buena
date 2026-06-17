@@ -10,6 +10,12 @@ import { validateBookingExtras } from '../../data/bookingAddOns';
 import { calculateIslandHopping } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
+import StayDateRangeCalendar from '../booking/StayDateRangeCalendar';
+import useRoomCalendar, {
+  isCheckInNightAvailable,
+  isStayRangeAvailable,
+} from '../../hooks/useRoomCalendar';
+import { isPastStayDate, minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -118,6 +124,11 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   ]);
 
   const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
+  const calendarViewMonth = useMemo(() => {
+    const base = form.check_in ? new Date(`${form.check_in}T12:00:00`) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }, [form.check_in]);
+  const { dayRates } = useRoomCalendar(form.room_id, calendarViewMonth);
   const roomType = selectedRoom?.room_type === 'suite' ? 'suite' : 'queen';
 
   const extrasQuote = validateBookingExtras(form.bookingExtras, roomType);
@@ -137,6 +148,13 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const validate = () => {
     if (!form.room_id) return 'Select a room (tab 1).';
     if (!form.check_in || !form.check_out) return 'Check-in and check-out are required (tab 1).';
+    if (isPastStayDate(form.check_in)) return 'Check-in cannot be in the past (tab 1).';
+    if (!isCheckInNightAvailable(form.check_in, dayRates)) {
+      return 'Selected check-in night is already booked or blocked (tab 1).';
+    }
+    if (!isStayRangeAvailable(form.check_in, form.check_out, dayRates)) {
+      return 'Some nights in this range are already booked or blocked (tab 1).';
+    }
     if (!form.guest_name.trim()) return 'Guest name is required (tab 2).';
     if (!form.guest_email.trim()) return 'Email is required (tab 2).';
     if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
@@ -268,8 +286,26 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 <input
                   type="date"
                   required
+                  min={minCheckInDate()}
                   value={form.check_in}
-                  onChange={(e) => update({ check_in: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (isPastStayDate(value)) {
+                      setError('Check-in cannot be in the past.');
+                      return;
+                    }
+                    if (form.room_id && !isCheckInNightAvailable(value, dayRates)) {
+                      setError('Selected check-in night is already booked or blocked.');
+                      return;
+                    }
+                    const earliest = minCheckOutDate(value);
+                    const patch = { check_in: value };
+                    if (earliest && form.check_out && form.check_out <= value) {
+                      patch.check_out = earliest;
+                    }
+                    update(patch);
+                    setError('');
+                  }}
                   className={inputClass}
                 />
               </Field>
@@ -277,13 +313,31 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 <input
                   type="date"
                   required
-                  min={form.check_in || undefined}
+                  min={minCheckOutDate(form.check_in) || minCheckInDate()}
                   value={form.check_out}
-                  onChange={(e) => update({ check_out: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (form.room_id && !isStayRangeAvailable(form.check_in, value, dayRates)) {
+                      setError('Some nights in this range are already booked or blocked.');
+                      return;
+                    }
+                    update({ check_out: value });
+                    setError('');
+                  }}
                   className={inputClass}
                 />
               </Field>
             </div>
+            <StayDateRangeCalendar
+              roomId={form.room_id}
+              checkIn={form.check_in}
+              checkOut={form.check_out}
+              onChange={({ check_in, check_out }) => {
+                update({ check_in, check_out });
+                setError('');
+              }}
+              compact
+            />
             <div>
               <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               <div className="grid grid-cols-3 gap-3">

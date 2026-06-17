@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CalendarRange } from 'lucide-react';
 
@@ -17,6 +17,12 @@ import RebookPricePreview, {
   rebookSuccessMessage,
 
 } from './RebookPricePreview';
+import StayDateRangeCalendar from '../booking/StayDateRangeCalendar';
+import useRoomCalendar, {
+  isCheckInNightAvailable,
+  isStayRangeAvailable,
+} from '../../hooks/useRoomCalendar';
+import { isPastStayDate, minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
 
 
 
@@ -59,6 +65,7 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
   const [checkOut, setCheckOut] = useState(booking.check_out?.slice(0, 10) || '');
 
   const [saving, setSaving] = useState(false);
+  const [dateError, setDateError] = useState('');
 
   const [quote, setQuote] = useState(null);
 
@@ -71,6 +78,7 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
     setCheckIn(booking.check_in?.slice(0, 10) || '');
 
     setCheckOut(booking.check_out?.slice(0, 10) || '');
+    setDateError('');
 
     setEditing(inline);
 
@@ -83,6 +91,12 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
     checkIn !== (booking.check_in?.slice(0, 10) || '') ||
 
     checkOut !== (booking.check_out?.slice(0, 10) || '');
+
+  const calendarViewMonth = useMemo(() => {
+    const base = checkIn ? new Date(`${checkIn}T12:00:00`) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }, [checkIn]);
+  const { dayRates } = useRoomCalendar(booking.room_id, calendarViewMonth);
 
 
 
@@ -141,14 +155,53 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
     setCheckOut(booking.check_out?.slice(0, 10) || '');
 
     setQuote(null);
+    setDateError('');
 
     setEditing(false);
 
   };
 
+  const handleCheckInChange = (value) => {
+    if (isPastStayDate(value)) {
+      setDateError('Check-in cannot be in the past.');
+      return;
+    }
+    if (!isCheckInNightAvailable(value, dayRates)) {
+      setDateError('This check-in night is already booked or blocked.');
+      return;
+    }
+    const earliest = minCheckOutDate(value);
+    setCheckIn(value);
+    if (earliest && checkOut && checkOut <= value) {
+      setCheckOut(earliest);
+    }
+    setDateError('');
+  };
+
+  const handleCheckOutChange = (value) => {
+    if (!isStayRangeAvailable(checkIn, value, dayRates)) {
+      setDateError('Some nights in this range are already booked or blocked.');
+      return;
+    }
+    setCheckOut(value);
+    setDateError('');
+  };
+
 
 
   const saveDates = async () => {
+    if (isPastStayDate(checkIn)) {
+      setDateError('Check-in cannot be in the past.');
+      return;
+    }
+    if (!isCheckInNightAvailable(checkIn, dayRates)) {
+      setDateError('This check-in night is already booked or blocked.');
+      return;
+    }
+    if (!isStayRangeAvailable(checkIn, checkOut, dayRates)) {
+      setDateError('Some nights in this range are already booked or blocked.');
+      return;
+    }
 
     const ok = await confirm({
 
@@ -183,6 +236,7 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
       setEditing(false);
 
       setQuote(null);
+      setDateError('');
 
     } catch (err) {
 
@@ -266,7 +320,9 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
 
             value={checkIn}
 
-            onChange={(e) => setCheckIn(e.target.value)}
+            min={minCheckInDate()}
+
+            onChange={(e) => handleCheckInChange(e.target.value)}
 
             className="w-full border border-aegean-200 rounded-lg px-2 py-1.5 text-sm"
 
@@ -284,9 +340,9 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
 
             value={checkOut}
 
-            min={checkIn || undefined}
+            min={minCheckOutDate(checkIn) || minCheckInDate()}
 
-            onChange={(e) => setCheckOut(e.target.value)}
+            onChange={(e) => handleCheckOutChange(e.target.value)}
 
             className="w-full border border-aegean-200 rounded-lg px-2 py-1.5 text-sm"
 
@@ -295,6 +351,20 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
         </div>
 
       </div>
+
+      <StayDateRangeCalendar
+        roomId={booking.room_id}
+        checkIn={checkIn}
+        checkOut={checkOut}
+        onChange={({ check_in, check_out }) => {
+          setCheckIn(check_in);
+          setCheckOut(check_out);
+          setDateError('');
+        }}
+        compact
+      />
+
+      {dateError && <p className="text-xs text-red-600">{dateError}</p>}
 
       {datesChanged && (
 

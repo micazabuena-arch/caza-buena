@@ -1,4 +1,4 @@
-import { getStayDateError, minCheckOutDate } from './stayDates';
+import { getStayDateError, minCheckOutDate, isPastStayDate } from './stayDates';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -48,6 +48,9 @@ export function validateManualBookingFields(form, context = {}) {
     }
     if (!form.check_in) {
       fieldErrors.check_in = 'Check-in date is required.';
+      markTab('stay');
+    } else if (isPastStayDate(form.check_in)) {
+      fieldErrors.check_in = 'Check-in cannot be in the past.';
       markTab('stay');
     }
     if (!form.check_out) {

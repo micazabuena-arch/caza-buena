@@ -177,6 +177,54 @@ export async function getRateCalendarDays(pool, from, to, guestCount = 1) {
   return days;
 }
 
+/** Per-night availability for one room (check-in on date = that night must be free). */
+export async function getRoomCalendarDays(pool, roomId, from, to) {
+  const id = parseInt(roomId, 10);
+  if (!id) return {};
+
+  const [roomRows] = await pool.query('SELECT id FROM rooms WHERE id = ?', [id]);
+  if (!roomRows.length) return {};
+
+  const rangeEndExclusive = nextCalendarDay(to);
+  const days = {};
+  const cursor = new Date(`${from}T12:00:00`);
+  const endDate = new Date(`${to}T12:00:00`);
+  while (cursor <= endDate) {
+    days[cursor.toISOString().slice(0, 10)] = { available: false };
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  const [blocks, bookings] = await Promise.all([
+    pool.query(
+      `SELECT start_date, end_date FROM room_unavailability
+       WHERE room_id = ? AND start_date < ? AND end_date > ?`,
+      [id, rangeEndExclusive, from]
+    ),
+    pool.query(
+      `SELECT check_in, check_out FROM bookings
+       WHERE room_id = ?
+         AND status IN ('pending', 'awaiting_payment', 'payment_submitted', 'confirmed')
+         AND check_in < ? AND check_out > ?`,
+      [id, rangeEndExclusive, from]
+    ),
+  ]);
+
+  for (const dateStr of Object.keys(days)) {
+    const checkOut = nextCalendarDay(dateStr);
+    const blocked = blocks[0].some((b) =>
+      nightOverlapsRange(b.start_date, b.end_date, dateStr, checkOut)
+    );
+    if (blocked) continue;
+
+    const booked = bookings[0].some((b) =>
+      nightOverlapsRange(b.check_in, b.check_out, dateStr, checkOut)
+    );
+    if (!booked) days[dateStr] = { available: true };
+  }
+
+  return days;
+}
+
 export async function applyDiscount(pool, code, nights, subtotal) {
   if (!code) return { amount: 0, code: null };
 

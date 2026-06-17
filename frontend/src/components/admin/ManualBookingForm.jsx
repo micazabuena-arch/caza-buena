@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, parseISO, startOfMonth } from 'date-fns';
 import api, { getApiError } from '../../api/client';
 import SubmitButton from '../ui/SubmitButton';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
@@ -18,6 +18,12 @@ import {
   validateManualBookingFields,
   minCheckOutDate,
 } from '../../utils/manualBookingValidation';
+import { minCheckInDate, isPastStayDate } from '../../utils/stayDates';
+import StayDateRangeCalendar from '../booking/StayDateRangeCalendar';
+import useRoomCalendar, {
+  isCheckInNightAvailable,
+  isStayRangeAvailable,
+} from '../../hooks/useRoomCalendar';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -148,6 +154,13 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
   ]);
 
   const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
+  const calendarViewMonth = useMemo(() => {
+    const base = form.check_in
+      ? parseISO(form.check_in)
+      : addDays(parseISO(minCheckInDate()), 1);
+    return startOfMonth(base);
+  }, [form.check_in]);
+  const { dayRates } = useRoomCalendar(form.room_id, calendarViewMonth);
   const roomType = selectedRoom?.room_type === 'suite' ? 'suite' : 'queen';
   const guestCount =
     (parseInt(form.adults, 10) || 0) +
@@ -187,6 +200,40 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       return next;
     });
     setError('');
+  };
+
+  const updateStayDates = (patch) => {
+    const nextCheckIn = patch.check_in ?? form.check_in;
+    const nextCheckOut = patch.check_out ?? form.check_out;
+
+    if (patch.check_in != null) {
+      if (isPastStayDate(patch.check_in)) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          check_in: 'Check-in cannot be in the past.',
+        }));
+        return;
+      }
+      if (form.room_id && !isCheckInNightAvailable(patch.check_in, dayRates)) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          check_in: 'This night is not available for the selected room.',
+        }));
+        return;
+      }
+    }
+
+    if (nextCheckIn && nextCheckOut) {
+      if (form.room_id && !isStayRangeAvailable(nextCheckIn, nextCheckOut, dayRates)) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          check_out: 'Some nights in this range are already booked or blocked.',
+        }));
+        if (patch.check_out != null) return;
+      }
+    }
+
+    update(patch);
   };
 
   const validationContext = useMemo(
@@ -427,6 +474,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               <Field label="Check-in" required error={fieldErrors.check_in}>
                 <input
                   type="date"
+                  min={minCheckInDate()}
                   value={form.check_in}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -435,7 +483,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                     if (earliest && form.check_out && form.check_out <= value) {
                       patch.check_out = earliest;
                     }
-                    update(patch);
+                    updateStayDates(patch);
                   }}
                   className={fieldInputClass(fieldErrors.check_in)}
                 />
@@ -443,13 +491,20 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               <Field label="Check-out" required error={fieldErrors.check_out}>
                 <input
                   type="date"
-                  min={minCheckOutDate(form.check_in)}
+                  min={minCheckOutDate(form.check_in) || minCheckInDate()}
                   value={form.check_out}
-                  onChange={(e) => update({ check_out: e.target.value })}
+                  onChange={(e) => updateStayDates({ check_out: e.target.value })}
                   className={fieldInputClass(fieldErrors.check_out)}
                 />
               </Field>
             </div>
+            <StayDateRangeCalendar
+              roomId={form.room_id}
+              checkIn={form.check_in}
+              checkOut={form.check_out}
+              onChange={updateStayDates}
+              compact
+            />
             <div>
               <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               <div className="grid grid-cols-3 gap-3">
