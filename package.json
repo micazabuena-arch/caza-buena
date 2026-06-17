@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "prestart": "node scripts/ensure-frontend-built.mjs",
     "start": "node server.js",
     "build": "npm install --prefix frontend && npm run build --prefix frontend",
     "dev:api": "npm run dev --prefix backend",
