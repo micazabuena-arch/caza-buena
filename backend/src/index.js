@@ -10,6 +10,7 @@ import { UPLOADS_DIR } from './utils/fileUpload.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
 import { isSmtpConfigured } from './services/email.js';
 import pool from './config/database.js';
+import { ensureFrontendBuilt } from './config/ensureFrontendBuilt.js';
 import { mountFrontend } from './config/serveFrontend.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,12 @@ import whatsNewRoutes from './routes/whatsNew.js';
 import adminRoutes from './routes/admin.js';
 
 dotenv.config();
+
+try {
+  ensureFrontendBuilt();
+} catch (err) {
+  console.error('Frontend build skipped:', err.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
