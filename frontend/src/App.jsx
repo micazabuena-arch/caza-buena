@@ -36,6 +36,7 @@ import AdminPolicies from './admin/PoliciesAdmin';
 import WhatsNewAdmin from './admin/WhatsNewAdmin';
 import AdminSettings from './admin/Settings';
 import IslandHoppingPrint from './admin/IslandHoppingPrint';
+import BookingSoaPrint from './admin/BookingSoaPrint';
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
 
           <Route path="admin/login" element={<AdminLogin />} />
           <Route path="admin/bookings/:bookingId/print-island" element={<IslandHoppingPrint />} />
+          <Route path="admin/bookings/:bookingId/print-soa" element={<BookingSoaPrint />} />
           <Route path="admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="bookings" element={<AdminBookings />} />

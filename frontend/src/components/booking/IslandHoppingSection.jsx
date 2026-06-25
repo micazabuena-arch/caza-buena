@@ -6,6 +6,7 @@ import {
   ISLAND_HOPPING_RATES,
 } from '../../data/islandHoppingRates';
 import { YesNoChoice } from './FormSection';
+import { digitsOnly } from '../../utils/inputSanitizers';
 
 export default function IslandHoppingSection({
   enabled,
@@ -288,7 +289,9 @@ export default function IslandHoppingSection({
               type="tel"
               placeholder="Cellphone number *"
               value={data.payor_phone}
-              onChange={(e) => update({ payor_phone: e.target.value })}
+              onChange={(e) => update({ payor_phone: digitsOnly(e.target.value) })}
+              inputMode="numeric"
+              pattern="[0-9]*"
               required
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
@@ -318,7 +321,9 @@ export default function IslandHoppingSection({
             <input
               type="tel"
               value={data.emergency_contact_phone}
-              onChange={(e) => update({ emergency_contact_phone: e.target.value })}
+              onChange={(e) => update({ emergency_contact_phone: digitsOnly(e.target.value) })}
+              inputMode="numeric"
+              pattern="[0-9]*"
               required
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />

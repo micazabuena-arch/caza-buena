@@ -38,6 +38,7 @@ export default function AdminCalendar() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(bookings);
 
   useEffect(() => {
@@ -90,6 +91,11 @@ export default function AdminCalendar() {
     return cells;
   }, [bookings, month, year]);
 
+  const selectedDayBookings = useMemo(() => {
+    if (!selectedDay) return [];
+    return bookings.filter((b) => dateInRange(selectedDay, b.check_in, b.check_out));
+  }, [bookings, selectedDay]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 mb-8">
@@ -136,7 +142,17 @@ export default function AdminCalendar() {
                 >
                   {cell && (
                     <>
-                      <span className="text-xs text-aegean-500 font-medium">{cell.day}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDay(cell.dateStr)}
+                        className={`text-xs font-medium rounded px-1 ${
+                          selectedDay === cell.dateStr
+                            ? 'bg-aegean-100 text-aegean-800'
+                            : 'text-aegean-500 hover:bg-aegean-50'
+                        }`}
+                      >
+                        {cell.day}
+                      </button>
                       <div className="mt-1 space-y-0.5">
                         {cell.bookings.slice(0, 2).map((b) => (
                           <button
@@ -158,6 +174,43 @@ export default function AdminCalendar() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm p-4 mb-8 border border-aegean-100">
+            <h2 className="text-lg font-serif text-aegean-800 mb-1">Daily booking summary</h2>
+            <p className="text-sm text-aegean-500 mb-3">
+              {selectedDay
+                ? `Selected date: ${selectedDay}`
+                : 'Click a calendar date to view booking summary for that day.'}
+            </p>
+            {selectedDay && selectedDayBookings.length === 0 && (
+              <p className="text-sm text-aegean-600">No bookings on this date.</p>
+            )}
+            {selectedDayBookings.length > 0 && (
+              <div className="space-y-2">
+                {selectedDayBookings.map((b) => {
+                  const adults = Number(b.adults || 0);
+                  const children = Number(b.children_under6 || 0) + Number(b.children_7_12 || 0);
+                  const pax = Number(b.guest_count || adults + children || 0);
+                  return (
+                    <button
+                      key={`${b.id}-${selectedDay}`}
+                      type="button"
+                      onClick={() => openBookingDetail(b.id)}
+                      className="w-full text-left rounded-lg border border-aegean-100 hover:border-aegean-200 hover:bg-aegean-50 p-3 text-sm"
+                    >
+                      <p className="font-medium text-aegean-800">{b.guest_name}</p>
+                      <p className="text-aegean-600">
+                        {b.room_name} · {pax} pax{adults || children ? ` (${adults} adults, ${children} children)` : ''}
+                      </p>
+                      <p className="text-aegean-500 text-xs">
+                        {b.check_in} → {b.check_out} · {b.reference_code}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <h2 className="text-lg font-serif text-aegean-800 mb-4">Upcoming stays</h2>

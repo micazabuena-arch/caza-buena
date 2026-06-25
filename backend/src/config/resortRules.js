@@ -3,7 +3,8 @@
  */
 
 export const EXTRA_PERSON_RATES = {
-  adult: 800,
+  adult_weekday: 800,
+  adult_weekend: 900,
   child_7_12: 400,
   child_under_6: 0,
 };
@@ -205,7 +206,8 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
 
 /**
  * Extra person fees when guests exceed the adults included in their package tier:
- * - Extra adult: ₱800/night · Child 7–12: ₱400/night · Child 6 & below: free
+ * - Extra adult: ₱800/night (weekday) or ₱900/night (weekend)
+ * - Child 7–12: ₱400/night · Child 6 & below: free
  */
 export function calculateExtraPersonCharges(room, { adults, childrenUnder6 = 0, children7_12 = 0 }) {
   const limits = getRoomLimits(room);
@@ -221,8 +223,12 @@ export function calculateExtraPersonCharges(room, { adults, childrenUnder6 = 0, 
   });
 
   const extraAdults = Math.max(0, a - includedAdults);
-  const adultCharge = extraAdults * EXTRA_PERSON_RATES.adult;
-  const childCharge = t712 * EXTRA_PERSON_RATES.child_7_12;
+  const adultWeekdayRate = EXTRA_PERSON_RATES.adult_weekday;
+  const adultWeekendRate = EXTRA_PERSON_RATES.adult_weekend;
+  const childRate = EXTRA_PERSON_RATES.child_7_12;
+  const nightlyAdultWeekday = extraAdults * adultWeekdayRate;
+  const nightlyAdultWeekend = extraAdults * adultWeekendRate;
+  const nightlyChild = t712 * childRate;
 
   return {
     ...limits,
@@ -233,12 +239,18 @@ export function calculateExtraPersonCharges(room, { adults, childrenUnder6 = 0, 
     extraChildrenUnder6: u6,
     children7_12: t712,
     childrenUnder6: u6,
-    adultCharge,
-    childCharge,
-    nightlyExtra: adultCharge + childCharge,
-    total: adultCharge + childCharge,
+    adultWeekdayRate,
+    adultWeekendRate,
+    childRate,
+    nightlyAdultWeekday,
+    nightlyAdultWeekend,
+    nightlyChild,
+    nightlyExtraWeekday: nightlyAdultWeekday + nightlyChild,
+    nightlyExtraWeekend: nightlyAdultWeekend + nightlyChild,
+    nightlyExtra: nightlyAdultWeekday + nightlyChild,
+    total: nightlyAdultWeekday + nightlyChild,
     note:
-      extraAdults === 0 && childCharge === 0
+      extraAdults === 0 && nightlyChild === 0
         ? 'All guests are covered by the room rate for this package.'
         : null,
   };

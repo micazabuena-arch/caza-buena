@@ -121,7 +121,7 @@ export default function BookingSearchBar({ className = '' }) {
 
   const [checkIn, setCheckIn] = useState(addDays(today, 1));
   const [checkOut, setCheckOut] = useState(addDays(today, 2));
-  const [guests, setGuests] = useState(2);
+  const [guestInput, setGuestInput] = useState('2');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarFocus, setCalendarFocus] = useState('arrival');
   const [viewMonth, setViewMonth] = useState(startOfMonth(addDays(today, 1)));
@@ -132,6 +132,11 @@ export default function BookingSearchBar({ className = '' }) {
 
   const viewMonthKey = format(viewMonth, 'yyyy-MM');
   const month2Start = useMemo(() => startOfMonth(addMonths(viewMonth, 1)), [viewMonthKey]);
+  const guests = useMemo(() => {
+    const parsed = parseInt(guestInput, 10);
+    if (Number.isNaN(parsed)) return 1;
+    return Math.min(10, Math.max(1, parsed));
+  }, [guestInput]);
   const fetchKey = `${viewMonthKey}|${guests}`;
 
   // Fetch two visible months; stable deps + debounce to avoid twitching on guest change
@@ -354,18 +359,15 @@ export default function BookingSearchBar({ className = '' }) {
               <span className="text-white/80 text-xs block mb-1">Guests</span>
               <div className="relative flex items-center">
                 <Users size={18} className="text-white/70 absolute left-0 pointer-events-none" />
-                <select
-                  value={guests}
-                  onChange={(e) => setGuests(+e.target.value)}
-                  className="w-full bg-transparent text-white font-medium pl-7 pr-8 appearance-none cursor-pointer outline-none"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                    <option key={n} value={n} className="text-aegean-900">
-                      {n} {n === 1 ? 'Guest' : 'Guests'}
-                    </option>
-                  ))}
-                </select>
-                <span className="absolute right-0 text-white/70 pointer-events-none">▾</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={guestInput}
+                  onChange={(e) => setGuestInput(e.target.value)}
+                  onBlur={() => setGuestInput(String(guests))}
+                  className="w-full bg-transparent text-white font-medium pl-7 pr-2 outline-none"
+                />
               </div>
             </div>
 

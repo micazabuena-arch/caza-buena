@@ -534,7 +534,8 @@ router.get('/admin/calendar', authenticateAdmin, async (req, res) => {
 
   const [bookings] = await pool.query(
     `SELECT b.id, b.reference_code, b.guest_name, b.check_in, b.check_out,
-            b.status, b.total_amount, r.name as room_name, r.id as room_id
+            b.status, b.total_amount, b.guest_count, b.adults, b.children_under6, b.children_7_12,
+            r.name as room_name, r.id as room_id
      FROM bookings b JOIN rooms r ON b.room_id = r.id
      WHERE b.status NOT IN ('cancelled', 'rejected')
        AND b.check_out >= CURDATE()

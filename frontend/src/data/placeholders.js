@@ -13,8 +13,8 @@ export const resort = {
   // Lucap, Alaminos — zoom 17 so the embed shows Caza Buena area, not a world map
   mapsEmbedUrl:
     'https://maps.google.com/maps?q=Caza+Buena,+Sitio+Inansuana,+Lucap,+Alaminos,+Pangasinan&hl=en&z=17&output=embed',
-  phone: '(0915) 711 8212',
-  phoneTel: '+639157118212',
+  phone: '0947 191 8080',
+  phoneTel: '+639471918080',
   email: 'mi.caza.buena@gmail.com',
   instagram: 'https://www.instagram.com/cazabuena_',
   facebook: 'https://www.facebook.com/profile.php?id=61557575977651',

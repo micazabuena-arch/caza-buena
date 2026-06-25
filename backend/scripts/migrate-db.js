@@ -210,12 +210,12 @@ async function run() {
 
   console.log('\nsite contact phone:');
   await pool.query(
-    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('phone', '(0915) 711 8212') ON DUPLICATE KEY UPDATE setting_value = '(0915) 711 8212'"
+    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('phone', '0947 191 8080') ON DUPLICATE KEY UPDATE setting_value = '0947 191 8080'"
   );
-  console.log('  updated site_settings.phone → (0915) 711 8212');
+  console.log('  updated site_settings.phone → 0947 191 8080');
 
   const [payUpdate] = await pool.query(
-    "UPDATE payment_methods SET account_number = '09157118212' WHERE account_number IN ('09178290292', '+639178290292', '+63 917 829 0292')"
+    "UPDATE payment_methods SET account_number = '09471918080' WHERE account_number IN ('09157118212', '09178290292', '+639178290292', '+63 917 829 0292')"
   );
   if (payUpdate.affectedRows > 0) {
     console.log(`  updated ${payUpdate.affectedRows} payment method account number(s)`);

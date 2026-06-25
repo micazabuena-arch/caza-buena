@@ -29,6 +29,7 @@ import {
   validateBookingExtras,
 } from '../data/bookingAddOns';
 import { getStayDateError, minCheckOutDate, minCheckInDate } from '../utils/stayDates';
+import { digitsOnly } from '../utils/inputSanitizers';
 
 function capacityNoteForRoom(room) {
   if (!room) return null;
@@ -296,9 +297,10 @@ export default function Booking() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     const numeric = ['adults', 'children_under6', 'children_7_12'];
+    const nextValue = name === 'guest_phone' ? digitsOnly(value) : value;
     const next = {
       ...form,
-      [name]: numeric.includes(name) ? (value === '' ? '' : parseInt(value, 10)) : value,
+      [name]: numeric.includes(name) ? (nextValue === '' ? '' : parseInt(nextValue, 10)) : nextValue,
     };
 
     if (name === 'check_in' && value) {
@@ -691,7 +693,7 @@ export default function Booking() {
                   {availability?.extra_breakdown?.packageLabel ? (
                     <>Package: {availability.extra_breakdown.packageLabel}. </>
                   ) : null}
-                  Extra adult ₱{EXTRA_PERSON_RATES.adult}/night above included adults · child 7–12
+                  Extra adult ₱{EXTRA_PERSON_RATES.adult_weekday}/night (Mon–Thu) or ₱{EXTRA_PERSON_RATES.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
                   ₱{EXTRA_PERSON_RATES.child_7_12}/night · child 6 & below free.
                 </p>
               </div>
@@ -725,6 +727,8 @@ export default function Booking() {
                     name="guest_phone"
                     value={form.guest_phone}
                     onChange={handleChange}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                     required
                     className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
                   />
@@ -839,15 +843,16 @@ export default function Booking() {
                           {availability.extra_breakdown.extraAdults > 0 && (
                             <div className="flex justify-between text-aegean-700">
                               <span>
-                                Extra adults ({availability.extra_breakdown.extraAdults} × ₱
-                                {EXTRA_PERSON_RATES.adult}/night × {nights} night
-                                {nights !== 1 ? 's' : ''})
+                                Extra adults ({availability.extra_breakdown.extraAdults} pax ·{' '}
+                                {availability.extra_breakdown.weekdayNights} weekday night
+                                {availability.extra_breakdown.weekdayNights !== 1 ? 's' : ''} @ ₱
+                                {EXTRA_PERSON_RATES.adult_weekday} +{' '}
+                                {availability.extra_breakdown.weekendNights} weekend night
+                                {availability.extra_breakdown.weekendNights !== 1 ? 's' : ''} @ ₱
+                                {EXTRA_PERSON_RATES.adult_weekend})
                               </span>
                               <span>
-                                ₱
-                                {(
-                                  availability.extra_breakdown.adultCharge * nights
-                                ).toLocaleString()}
+                                ₱{Number(availability.extra_breakdown.adultChargeTotal || 0).toLocaleString()}
                               </span>
                             </div>
                           )}
@@ -859,10 +864,7 @@ export default function Booking() {
                                 {nights !== 1 ? 's' : ''})
                               </span>
                               <span>
-                                ₱
-                                {(
-                                  availability.extra_breakdown.childCharge * nights
-                                ).toLocaleString()}
+                                ₱{Number(availability.extra_breakdown.childChargeTotal || 0).toLocaleString()}
                               </span>
                             </div>
                           )}

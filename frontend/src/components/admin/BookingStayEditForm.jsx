@@ -11,6 +11,7 @@ import { calculateIslandHopping } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
 import { minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
+import { digitsOnly } from '../../utils/inputSanitizers';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -133,7 +134,13 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const estimatedAddOns = islandTotal + addOnsTotal;
 
-  const update = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const update = (patch) => {
+    const cleanPatch = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(cleanPatch, 'guest_phone')) {
+      cleanPatch.guest_phone = digitsOnly(cleanPatch.guest_phone);
+    }
+    setForm((f) => ({ ...f, ...cleanPatch }));
+  };
 
   const validate = () => {
     if (!form.room_id) return 'Select a room (tab 1).';
@@ -350,9 +357,12 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Phone" required>
                 <input
+                  type="tel"
                   required
                   value={form.guest_phone}
                   onChange={(e) => update({ guest_phone: e.target.value })}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className={inputClass}
                 />
               </Field>

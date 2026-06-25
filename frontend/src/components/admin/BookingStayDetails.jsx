@@ -13,6 +13,7 @@ import {
   getOpenIslandHoppingPrintError,
   openIslandHoppingPrint,
 } from '../../utils/openIslandHoppingPrint';
+import { openBookingSoaPrint } from '../../utils/openBookingSoaPrint';
 import { useToast } from '../../context/ToastContext';
 
 const TABS = [
@@ -261,8 +262,23 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
         )}
       </div>
 
-      {(onEdit || Boolean(booking.island_hopping)) && (
+      {(onEdit || Boolean(booking.island_hopping) || Boolean(booking.reference_code)) && (
         <div className="border-t border-aegean-100 pt-4 mt-6 flex flex-wrap gap-3">
+          {booking.reference_code && (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  openBookingSoaPrint(booking.id);
+                } catch (err) {
+                  toast.error(err.message || 'Could not open printable SOA.');
+                }
+              }}
+              className="btn-outline text-sm inline-flex items-center gap-2"
+            >
+              <Printer size={16} /> Print SOA / confirmation
+            </button>
+          )}
           {Boolean(booking.island_hopping) && (
             <button
               type="button"

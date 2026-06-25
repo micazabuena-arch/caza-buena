@@ -6,7 +6,7 @@ INSERT INTO site_settings (setting_key, setting_value) VALUES
 ('resort_name', 'Caza Buena'),
 ('tagline', 'Your home after the sea'),
 ('address', 'Sitio Inansuana, Brgy. Lucap, Alaminos, Pangasinan'),
-('phone', '(0915) 711 8212'),
+('phone', '0947 191 8080'),
 ('email', 'mi.caza.buena@gmail.com'),
 ('instagram', 'https://www.instagram.com/cazabuena_'),
 ('facebook', 'https://www.facebook.com/profile.php?id=61557575977651'),
@@ -74,9 +74,9 @@ INSERT INTO gallery_images (title, image_url, category, sort_order) VALUES
 ('Whitewashed Walkway', 'https://images.unsplash.com/photo-1582719508461-905c59372395?w=800', 'exterior', 4);
 
 INSERT INTO payment_methods (name, type, account_name, account_number, instructions, sort_order) VALUES
-('GCash', 'gcash', 'Caza Buena', '09157118212',
+('GCash', 'gcash', 'Caza Buena', '09471918080',
  'Scan the GCash QR code. Use your booking reference as payment notes.', 1),
-('Maya', 'maya', 'Caza Buena', '09157118212',
+('Maya', 'maya', 'Caza Buena', '09471918080',
  'Scan the Maya QR code. Screenshot your receipt after payment.', 2),
 ('BDO Bank Transfer', 'bdo', 'Caza Buena Resort', '0000000000',
  'Transfer to BDO account. Email or upload proof of payment.', 3),

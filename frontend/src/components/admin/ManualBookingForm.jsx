@@ -19,6 +19,7 @@ import {
   minCheckOutDate,
 } from '../../utils/manualBookingValidation';
 import { minCheckInDate } from '../../utils/stayDates';
+import { digitsOnly } from '../../utils/inputSanitizers';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -181,10 +182,14 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
           : 0;
 
   const update = (patch) => {
-    setForm((f) => ({ ...f, ...patch }));
+    const cleanPatch = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(cleanPatch, 'guest_phone')) {
+      cleanPatch.guest_phone = digitsOnly(cleanPatch.guest_phone);
+    }
+    setForm((f) => ({ ...f, ...cleanPatch }));
     setFieldErrors((prev) => {
       const next = { ...prev };
-      Object.keys(patch).forEach((key) => delete next[key]);
+      Object.keys(cleanPatch).forEach((key) => delete next[key]);
       return next;
     });
     setError('');
@@ -547,6 +552,8 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                   type="tel"
                   value={form.guest_phone}
                   onChange={(e) => update({ guest_phone: e.target.value })}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className={fieldInputClass(fieldErrors.guest_phone)}
                   placeholder="e.g. 09171234567"
                 />

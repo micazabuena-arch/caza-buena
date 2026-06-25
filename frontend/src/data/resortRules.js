@@ -20,7 +20,8 @@ export const ROOM_INVENTORY = {
 };
 
 export const EXTRA_PERSON_RATES = {
-  adult: 800,
+  adult_weekday: 800,
+  adult_weekend: 900,
   child_under_6: 0,
   child_7_12: 400,
 };
