@@ -14,6 +14,7 @@ import {
   openIslandHoppingPrint,
 } from '../../utils/openIslandHoppingPrint';
 import { openBookingSoaPrint } from '../../utils/openBookingSoaPrint';
+import { bookingRoomStayTotal } from '../../utils/bookingSoaLines';
 import { useToast } from '../../context/ToastContext';
 
 const TABS = [
@@ -35,16 +36,6 @@ function Row({ label, value, children }) {
       <span className="text-aegean-500">{label}:</span>{' '}
       <span className="text-aegean-800">{content}</span>
     </p>
-  );
-}
-
-export function bookingRoomStayTotal(booking) {
-  if (!booking) return 0;
-  return (
-    Number(booking.total_amount) -
-    Number(booking.island_hopping_amount || 0) -
-    Number(booking.bilao_amount || 0) -
-    Number(booking.boodle_fight_amount || 0)
   );
 }
 

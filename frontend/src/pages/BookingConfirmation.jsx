@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Upload, QrCode, CheckCircle, Copy, Mail } from 'lucide-react';
 import api, { getApiError } from '../api/client';
+import { paymentMethodsForGuestBooking } from '../data/paymentMethodFilters';
 import PageHero from '../components/ui/PageHero';
 import PaymentWorkflowSteps, { PAYMENT_METHOD_LABELS } from '../components/booking/PaymentWorkflowSteps';
 import PaymentMethodSelect from '../components/booking/PaymentMethodSelect';
@@ -41,7 +42,7 @@ export default function BookingConfirmation() {
     ])
       .then(([b, p]) => {
         setBooking(b.data);
-        setPaymentMethods(p.data);
+        setPaymentMethods(paymentMethodsForGuestBooking(p.data, b.data));
         if (b.data.payment_method_id) {
           setPaymentMethodId(String(b.data.payment_method_id));
         } else if (p.data[0]?.id) {

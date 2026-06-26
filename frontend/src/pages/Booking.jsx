@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
 import api, { getApiError } from '../api/client';
+import { guestFacingPaymentMethods } from '../data/paymentMethodFilters';
 import PageHero from '../components/ui/PageHero';
 import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
 import PaymentMethodSelect from '../components/booking/PaymentMethodSelect';
@@ -82,7 +83,7 @@ export default function Booking() {
     Promise.all([api.get('/rooms'), api.get('/payment-methods'), api.get('/settings/public')])
       .then(([roomsRes, payRes, settingsRes]) => {
         setRooms(roomsRes.data);
-        setPaymentMethods(payRes.data);
+        setPaymentMethods(guestFacingPaymentMethods(payRes.data));
         if (settingsRes.data?.booking_deposit_percent) {
           setDepositPercent(settingsRes.data.booking_deposit_percent);
         }

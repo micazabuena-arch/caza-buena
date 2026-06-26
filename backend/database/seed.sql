@@ -81,7 +81,9 @@ INSERT INTO payment_methods (name, type, account_name, account_number, instructi
 ('BDO Bank Transfer', 'bdo', 'Caza Buena Resort', '0000000000',
  'Transfer to BDO account. Email or upload proof of payment.', 3),
 ('BPI Bank Transfer', 'bpi', 'Caza Buena Resort', '0000000000',
- 'Transfer to BPI account. Include booking reference in remarks.', 4);
+ 'Transfer to BPI account. Include booking reference in remarks.', 4),
+('Online Booking Platform', 'other', NULL, NULL,
+ 'Booking paid through an online platform (e.g. Airbnb, Booking.com).', 5);
 
 INSERT INTO discounts (code, description, type, value, min_nights, is_active) VALUES
 ('WELCOME10', '10% off your first stay', 'percentage', 10.00, 1, 1),
