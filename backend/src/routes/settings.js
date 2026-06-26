@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/database.js';
 import { DEFAULT_DEPOSIT_PERCENT, getDepositPercent } from '../utils/paymentAmount.js';
+import { getExtraPersonRates } from '../utils/extraPersonRates.js';
 
 const router = Router();
 
@@ -11,9 +12,11 @@ router.get('/public', async (_req, res) => {
      WHERE setting_key IN ('booking_deposit_percent', 'resort_name')`
   );
   const map = Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value]));
+  const extra_person_rates = await getExtraPersonRates(pool);
   res.json({
     booking_deposit_percent: getDepositPercent(map.booking_deposit_percent ?? DEFAULT_DEPOSIT_PERCENT),
     resort_name: map.resort_name || 'Caza Buena',
+    extra_person_rates,
   });
 });
 

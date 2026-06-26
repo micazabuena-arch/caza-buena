@@ -214,6 +214,18 @@ async function run() {
   );
   console.log('  updated site_settings.phone → 0947 191 8080');
 
+  console.log('\nextra guest rates:');
+  await pool.query(
+    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('extra_pax_adult_weekday', '800') ON DUPLICATE KEY UPDATE setting_value = setting_value"
+  );
+  await pool.query(
+    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('extra_pax_adult_weekend', '900') ON DUPLICATE KEY UPDATE setting_value = setting_value"
+  );
+  await pool.query(
+    "INSERT INTO site_settings (setting_key, setting_value) VALUES ('extra_pax_child_7_12', '400') ON DUPLICATE KEY UPDATE setting_value = setting_value"
+  );
+  console.log('  ✓ extra_pax_* settings (defaults if new)');
+
   const [payUpdate] = await pool.query(
     "UPDATE payment_methods SET account_number = '09471918080' WHERE account_number IN ('09157118212', '09178290292', '+639178290292', '+63 917 829 0292')"
   );

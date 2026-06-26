@@ -323,7 +323,15 @@ router.get('/settings', async (_req, res) => {
 });
 
 router.put('/settings', authenticateAdmin, async (req, res) => {
-  for (const [key, value] of Object.entries(req.body)) {
+  const { validateExtraPersonRatesInput } = await import('../utils/extraPersonRates.js');
+  const { errors, parsed } = validateExtraPersonRatesInput(req.body);
+  if (errors.length > 0) {
+    return res.status(400).json({ message: errors[0] });
+  }
+
+  const entries = { ...req.body, ...parsed };
+
+  for (const [key, value] of Object.entries(entries)) {
     await pool.query(
       'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
       [key, value, value]

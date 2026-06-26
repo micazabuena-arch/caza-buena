@@ -61,6 +61,7 @@ export default function Booking() {
   const [availabilityChecking, setAvailabilityChecking] = useState(false);
   const [error, setError] = useState('');
   const [depositPercent, setDepositPercent] = useState(20);
+  const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
@@ -89,6 +90,9 @@ export default function Booking() {
         setPaymentMethods(payRes.data);
         if (settingsRes.data?.booking_deposit_percent) {
           setDepositPercent(settingsRes.data.booking_deposit_percent);
+        }
+        if (settingsRes.data?.extra_person_rates) {
+          setExtraPersonRates(settingsRes.data.extra_person_rates);
         }
         if (preselectedRoom) setForm((f) => ({ ...f, room_id: preselectedRoom }));
       })
@@ -690,15 +694,15 @@ export default function Booking() {
                     onChange={handleChange}
                     className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
                   />
-                  <p className="text-xs text-aegean-500 mt-1">₱{EXTRA_PERSON_RATES.child_7_12}/night each</p>
+                  <p className="text-xs text-aegean-500 mt-1">₱{extraPersonRates.child_7_12}/night each</p>
                 </div>
               </div>
                 <p className="text-xs text-aegean-500 mt-3">
                   {availability?.extra_breakdown?.packageLabel ? (
                     <>Package: {availability.extra_breakdown.packageLabel}. </>
                   ) : null}
-                  Extra adult ₱{EXTRA_PERSON_RATES.adult_weekday}/night (Mon–Thu) or ₱{EXTRA_PERSON_RATES.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
-                  ₱{EXTRA_PERSON_RATES.child_7_12}/night · child 6 & below free.
+                  Extra adult ₱{extraPersonRates.adult_weekday}/night (Mon–Thu) or ₱{extraPersonRates.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
+                  ₱{extraPersonRates.child_7_12}/night · child 6 & below free.
                 </p>
               </div>
 

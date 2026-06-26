@@ -76,7 +76,9 @@ export async function calculateStayTotal(pool, roomId, checkIn, checkOut, occupa
 
   if (occupancy && occupancy.adults != null) {
     const { calculateExtraPersonCharges } = await import('../config/resortRules.js');
-    extraBreakdown = calculateExtraPersonCharges(room, occupancy);
+    const { getExtraPersonRates } = await import('./extraPersonRates.js');
+    const extraRates = await getExtraPersonRates(pool);
+    extraBreakdown = calculateExtraPersonCharges(room, occupancy, extraRates);
     const weekendNights = breakdown.filter((n) => isWeekendNight(n.date)).length;
     const weekdayNights = breakdown.length - weekendNights;
     const adultChargeTotal =

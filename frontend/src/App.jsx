@@ -35,6 +35,7 @@ import AdminMenu from './admin/MenuAdmin';
 import AdminPolicies from './admin/PoliciesAdmin';
 import WhatsNewAdmin from './admin/WhatsNewAdmin';
 import AdminSettings from './admin/Settings';
+import AdminPricing from './admin/Pricing';
 import IslandHoppingPrint from './admin/IslandHoppingPrint';
 import BookingSoaPrint from './admin/BookingSoaPrint';
 
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="rooms" element={<AdminRooms />} />
             <Route path="availability" element={<AdminAvailability />} />
             <Route path="payments" element={<AdminPaymentMethods />} />
+            <Route path="pricing" element={<AdminPricing />} />
             <Route path="guests" element={<AdminGuests />} />
             <Route path="inquiries" element={<AdminInquiries />} />
             <Route path="gallery" element={<AdminGallery />} />

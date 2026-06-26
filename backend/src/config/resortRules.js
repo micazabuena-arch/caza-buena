@@ -209,7 +209,11 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
  * - Extra adult: ₱800/night (weekday) or ₱900/night (weekend)
  * - Child 7–12: ₱400/night · Child 6 & below: free
  */
-export function calculateExtraPersonCharges(room, { adults, childrenUnder6 = 0, children7_12 = 0 }) {
+export function calculateExtraPersonCharges(
+  room,
+  { adults, childrenUnder6 = 0, children7_12 = 0 },
+  rates = EXTRA_PERSON_RATES
+) {
   const limits = getRoomLimits(room);
   const roomType = resolveRoomType(room);
   const a = Number(adults) || 0;
@@ -223,9 +227,9 @@ export function calculateExtraPersonCharges(room, { adults, childrenUnder6 = 0, 
   });
 
   const extraAdults = Math.max(0, a - includedAdults);
-  const adultWeekdayRate = EXTRA_PERSON_RATES.adult_weekday;
-  const adultWeekendRate = EXTRA_PERSON_RATES.adult_weekend;
-  const childRate = EXTRA_PERSON_RATES.child_7_12;
+  const adultWeekdayRate = rates.adult_weekday;
+  const adultWeekendRate = rates.adult_weekend;
+  const childRate = rates.child_7_12;
   const nightlyAdultWeekday = extraAdults * adultWeekdayRate;
   const nightlyAdultWeekend = extraAdults * adultWeekendRate;
   const nightlyChild = t712 * childRate;

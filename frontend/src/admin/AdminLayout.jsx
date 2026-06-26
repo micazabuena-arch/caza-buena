@@ -16,6 +16,7 @@ import {
   Sparkles,
   Menu,
   X,
+  BadgeDollarSign,
   Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,7 @@ const nav = [
   { to: '/admin/rooms', icon: Bed, label: 'Rooms' },
   { to: '/admin/availability', icon: Ban, label: 'Availability' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/pricing', icon: BadgeDollarSign, label: 'Pricing' },
   { to: '/admin/guests', icon: Users, label: 'Guests' },
   { to: '/admin/inquiries', icon: Mail, label: 'Inquiries' },
   { to: '/admin/gallery', icon: Image, label: 'Gallery' },

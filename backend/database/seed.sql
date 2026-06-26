@@ -14,7 +14,10 @@ INSERT INTO site_settings (setting_key, setting_value) VALUES
 ('check_out_time', '11:00 AM'),
 ('dot_accredited', 'DEPARTMENT OF TOURISM (DOT) Accredited'),
 ('hero_subtitle', 'Book the Santorini vibe—no passport needed.'),
-('booking_deposit_percent', '20');
+('booking_deposit_percent', '20'),
+('extra_pax_adult_weekday', '800'),
+('extra_pax_adult_weekend', '900'),
+('extra_pax_child_7_12', '400');
 
 -- Resort units: 3 Suite + 6 Queen
 INSERT INTO rooms (name, room_type, slug, description, short_description, capacity, included_adults, min_guests, max_guests, price_per_night, price_weekend, amenities_json, is_active, sort_order) VALUES
