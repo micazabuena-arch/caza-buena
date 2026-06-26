@@ -16,6 +16,10 @@ import { useConfirm } from '../context/ConfirmContext';
 import { pages, images } from '../data/placeholders';
 import { EXTRA_PERSON_RATES, ROOM_INVENTORY } from '../data/resortRules';
 import {
+  formatExtraChildrenLabel,
+  getExtraAdultsLines,
+} from '../utils/extraGuestLabels';
+import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
   emptyPassenger,
@@ -840,30 +844,19 @@ export default function Booking() {
                             Room rate includes {availability.extra_breakdown.includedAdults}{' '}
                             adult(s) for this package.
                           </p>
-                          {availability.extra_breakdown.extraAdults > 0 && (
-                            <div className="flex justify-between text-aegean-700">
-                              <span>
-                                Extra adults ({availability.extra_breakdown.extraAdults} pax ·{' '}
-                                {availability.extra_breakdown.weekdayNights} weekday night
-                                {availability.extra_breakdown.weekdayNights !== 1 ? 's' : ''} @ ₱
-                                {EXTRA_PERSON_RATES.adult_weekday} +{' '}
-                                {availability.extra_breakdown.weekendNights} weekend night
-                                {availability.extra_breakdown.weekendNights !== 1 ? 's' : ''} @ ₱
-                                {EXTRA_PERSON_RATES.adult_weekend})
-                              </span>
-                              <span>
-                                ₱{Number(availability.extra_breakdown.adultChargeTotal || 0).toLocaleString()}
-                              </span>
+                          {getExtraAdultsLines(availability.extra_breakdown).map((line) => (
+                            <div
+                              key={line.label}
+                              className="flex justify-between text-aegean-700 gap-4"
+                            >
+                              <span>{line.label}</span>
+                              <span className="shrink-0">₱{Number(line.amount).toLocaleString()}</span>
                             </div>
-                          )}
+                          ))}
                           {availability.extra_breakdown.extraChildren7_12 > 0 && (
-                            <div className="flex justify-between text-aegean-700">
-                              <span>
-                                Children 7–12 ({availability.extra_breakdown.extraChildren7_12} × ₱
-                                {EXTRA_PERSON_RATES.child_7_12}/night × {nights} night
-                                {nights !== 1 ? 's' : ''})
-                              </span>
-                              <span>
+                            <div className="flex justify-between text-aegean-700 gap-4">
+                              <span>{formatExtraChildrenLabel(availability.extra_breakdown)}</span>
+                              <span className="shrink-0">
                                 ₱{Number(availability.extra_breakdown.childChargeTotal || 0).toLocaleString()}
                               </span>
                             </div>
