@@ -222,18 +222,13 @@ async function run() {
   }
 
   console.log('\npayment_methods:');
-  const [platformRows] = await pool.query(
-    "SELECT id FROM payment_methods WHERE name = 'Online Booking Platform' LIMIT 1"
+  const [platformDelete] = await pool.query(
+    "DELETE FROM payment_methods WHERE name = 'Online Booking Platform'"
   );
-  if (platformRows.length === 0) {
-    await pool.query(
-      `INSERT INTO payment_methods (name, type, account_name, account_number, instructions, sort_order)
-       VALUES ('Online Booking Platform', 'other', NULL, NULL,
-         'Booking paid through an online platform (e.g. Airbnb, Booking.com).', 5)`
-    );
-    console.log('  + added Online Booking Platform payment method');
+  if (platformDelete.affectedRows > 0) {
+    console.log(`  removed ${platformDelete.affectedRows} Online Booking Platform row(s) from payment_methods`);
   } else {
-    console.log('  ✓ Online Booking Platform (already exists)');
+    console.log('  ✓ Online Booking Platform not in payment_methods');
   }
 
   console.log('\nDone. Restart the API (npm run dev) and try saving the room again.');

@@ -23,6 +23,7 @@ export function validateManualBookingFields(form, context = {}) {
     selectedRoom,
     guestCount,
     paymentMethods = [],
+    manualOnlyPaymentMethods = [],
     extrasQuote,
     islandHoppingEnabled,
     islandQuote,
@@ -149,7 +150,9 @@ export function validateManualBookingFields(form, context = {}) {
   }
 
   if (need(['payment'])) {
-    if (paymentMethods.length > 0 && !form.payment_method_id) {
+    const hasPaymentOptions =
+      paymentMethods.length > 0 || manualOnlyPaymentMethods.length > 0;
+    if (hasPaymentOptions && !form.payment_method_id) {
       fieldErrors.payment_method_id = 'Select a payment method.';
       markTab('payment');
     }

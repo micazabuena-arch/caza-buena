@@ -5,6 +5,7 @@ import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
 import { isSeniorPassenger, isPwdPassenger } from '../data/islandHoppingRates';
 import { getBilaoPackage, getBoodlePackage } from '../data/bookingAddOns';
+import { getBookingPaymentMethodLabel } from '../data/manualBookingPayment';
 import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
@@ -575,8 +576,8 @@ export default function AdminBookings() {
                       </>
                     );
                   })()}
-                  {detail.payment_method_name && (
-                    <p><strong>Payment:</strong> {detail.payment_method_name}</p>
+                  {getBookingPaymentMethodLabel(detail) && (
+                    <p><strong>Payment:</strong> {getBookingPaymentMethodLabel(detail)}</p>
                   )}
                   {detail.special_requests && (
                     <p><strong>Special requests:</strong> {detail.special_requests}</p>

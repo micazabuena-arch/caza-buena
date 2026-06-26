@@ -1,5 +1,10 @@
-import { emptyIslandHoppingForm } from '../data/islandHoppingRates';
-import { parseIslandHoppingData } from '../data/islandHoppingRates';
+import {
+  getManualOnlyPaymentMethodName,
+  isManualOnlyPaymentMethodId,
+  resolveEditFormPaymentMethodId,
+  stripManualPaymentFromNotes,
+} from '../data/manualBookingPayment';
+import { emptyIslandHoppingForm, parseIslandHoppingData } from '../data/islandHoppingRates';
 
 export function bookingToEditState(booking) {
   const islandRaw = booking?.island_hopping
@@ -19,8 +24,8 @@ export function bookingToEditState(booking) {
     valid_id: booking?.valid_id || '',
     estimated_arrival: booking?.estimated_arrival || '',
     special_requests: booking?.special_requests || '',
-    admin_notes: booking?.admin_notes || '',
-    payment_method_id: booking?.payment_method_id ? String(booking.payment_method_id) : '',
+    admin_notes: stripManualPaymentFromNotes(booking?.admin_notes || ''),
+    payment_method_id: resolveEditFormPaymentMethodId(booking),
     payment_option: booking?.payment_option || 'deposit',
     custom_payment_amount:
       booking?.payment_option === 'custom' ? String(booking.amount_to_pay ?? '') : '',
@@ -75,7 +80,14 @@ export function editStateToPayload(state) {
     estimated_arrival: state.estimated_arrival.trim(),
     special_requests: state.special_requests.trim(),
     admin_notes: state.admin_notes.trim(),
-    payment_method_id: state.payment_method_id ? parseInt(state.payment_method_id, 10) : null,
+    payment_method_id: isManualOnlyPaymentMethodId(state.payment_method_id)
+      ? null
+      : state.payment_method_id
+        ? parseInt(state.payment_method_id, 10)
+        : null,
+    manual_payment_method: isManualOnlyPaymentMethodId(state.payment_method_id)
+      ? getManualOnlyPaymentMethodName(state.payment_method_id)
+      : null,
     payment_option: state.payment_option,
     bringing_car: state.bookingExtras.bringing_car,
     car_count: state.bookingExtras.bringing_car

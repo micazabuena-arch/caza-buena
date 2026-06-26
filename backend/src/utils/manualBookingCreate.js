@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import { generateReferenceCode, calculateNights, isRoomAvailable } from './booking.js';
 import { sendBookingConfirmation } from '../services/email.js';
+import { buildAdminNotesWithManualPayment } from './manualBookingPayment.js';
 
 /**
  * Creates an admin manual booking with the same pricing fields as the public form.
@@ -23,6 +24,7 @@ export async function createManualBooking(body) {
     special_requests,
     send_confirmation_email = false,
     payment_method_id,
+    manual_payment_method,
     payment_option = 'full',
     custom_payment_amount,
     island_hopping: islandHoppingFlag,
@@ -128,7 +130,11 @@ export async function createManualBooking(body) {
   if (payResolved.error) return { error: payResolved.error };
 
   const reference = generateReferenceCode();
-  const notes = [admin_notes?.trim(), 'Manual booking (admin)'].filter(Boolean).join(' — ');
+  const notes = buildAdminNotesWithManualPayment({
+    userNotes: admin_notes,
+    manualPaymentLabel: manual_payment_method,
+    includeManualBookingTag: true,
+  });
   const confirmedAt = status === 'confirmed' ? new Date() : null;
 
   const [result] = await pool.query(

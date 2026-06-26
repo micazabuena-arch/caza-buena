@@ -462,6 +462,7 @@ router.post(
     body('special_requests').optional().trim(),
     body('send_confirmation_email').optional().isBoolean(),
     body('payment_method_id').optional({ nullable: true }).toInt().isInt({ min: 1 }),
+    body('manual_payment_method').optional().trim(),
     body('payment_option').optional().isIn(['deposit', 'full', 'custom']),
     body('custom_payment_amount').optional().isFloat({ min: 0 }),
     body('island_hopping').optional({ values: 'falsy' }).isBoolean().toBoolean(),

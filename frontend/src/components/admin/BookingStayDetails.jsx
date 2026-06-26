@@ -13,6 +13,7 @@ import {
   getOpenIslandHoppingPrintError,
   openIslandHoppingPrint,
 } from '../../utils/openIslandHoppingPrint';
+import { getBookingPaymentMethodLabel } from '../../data/manualBookingPayment';
 import { openBookingSoaPrint } from '../../utils/openBookingSoaPrint';
 import { bookingRoomStayTotal } from '../../utils/bookingSoaLines';
 import { useToast } from '../../context/ToastContext';
@@ -226,7 +227,7 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
             {payment.isPartial && (
               <Row label="Balance due" value={`₱${payment.balance.toLocaleString()}`} />
             )}
-            <Row label="Payment method" value={booking.payment_method_name || '—'} />
+            <Row label="Payment method" value={getBookingPaymentMethodLabel(booking) || '—'} />
             {booking.payment_proof_url && onViewPaymentProof && (
               <button
                 type="button"

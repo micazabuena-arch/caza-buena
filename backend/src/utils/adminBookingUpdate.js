@@ -1,4 +1,9 @@
 import { applyDiscount, calculateNights, isRoomAvailable } from './booking.js';
+import {
+  buildAdminNotesWithManualPayment,
+  resolveStoredManualPayment,
+  stripManualPaymentFromNotes,
+} from './manualBookingPayment.js';
 
 /**
  * Validates and computes pricing for an admin booking update.
@@ -20,6 +25,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     special_requests,
     admin_notes,
     payment_method_id,
+    manual_payment_method,
     payment_option,
     custom_payment_amount,
     bringing_car,
@@ -161,6 +167,21 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
 
   const avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(room.price_per_night);
 
+  const storedPayment = resolveStoredManualPayment({
+    manual_payment_method,
+    payment_method_id,
+    existingBooking,
+  });
+
+  const resolvedAdminNotes = buildAdminNotesWithManualPayment({
+    userNotes:
+      admin_notes != null
+        ? String(admin_notes).trim()
+        : stripManualPaymentFromNotes(existingBooking.admin_notes),
+    manualPaymentLabel: storedPayment.manualPaymentLabel,
+    existingNotes: existingBooking.admin_notes,
+  });
+
   return {
     values: {
       room_id: roomId,
@@ -178,7 +199,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       children_7_12: children712,
       special_requests:
         special_requests != null ? String(special_requests).trim() || null : existingBooking.special_requests,
-      admin_notes: admin_notes != null ? String(admin_notes).trim() || null : existingBooking.admin_notes,
+      admin_notes: resolvedAdminNotes,
       check_in: checkIn,
       check_out: checkOut,
       nights,
@@ -198,7 +219,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       boodle_fight: extrasValidation.boodle_fight ? 1 : 0,
       boodle_fight_tier: extrasValidation.boodle_fight_tier,
       boodle_fight_amount: extrasValidation.boodle_fight_amount,
-      payment_method_id: payment_method_id != null ? payment_method_id || null : existingBooking.payment_method_id,
+      payment_method_id: storedPayment.payment_method_id,
       payment_option: payOption,
       amount_to_pay: payResolved.amount,
     },

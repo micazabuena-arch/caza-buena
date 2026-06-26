@@ -7,6 +7,7 @@ import BookingExtrasSection from '../booking/BookingExtrasSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
 import { validateBookingExtras } from '../../data/bookingAddOns';
+import { MANUAL_ONLY_PAYMENT_METHODS } from '../../data/manualBookingPayment';
 import { calculateIslandHopping } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
@@ -418,7 +419,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
 
         {activeTab === 'payment' && (
           <Panel title="Payment & notes">
-            {paymentMethods.length > 0 && (
+            {(paymentMethods.length > 0 || MANUAL_ONLY_PAYMENT_METHODS.length > 0) && (
               <Field label="Payment method">
                 <select
                   value={form.payment_method_id}
@@ -427,6 +428,11 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 >
                   <option value="">None selected</option>
                   {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                  {MANUAL_ONLY_PAYMENT_METHODS.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
                     </option>

@@ -5,8 +5,13 @@ import SubmitButton from '../ui/SubmitButton';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
-import { useToast } from '../../context/ToastContext';
+import {
+  getManualOnlyPaymentMethodName,
+  isManualOnlyPaymentMethodId,
+  MANUAL_ONLY_PAYMENT_METHODS,
+} from '../../data/manualBookingPayment';
 import { useConfirm } from '../../context/ConfirmContext';
+import { useToast } from '../../context/ToastContext';
 import { emptyBookingExtras, validateBookingExtras } from '../../data/bookingAddOns';
 import {
   calculateIslandHopping,
@@ -202,6 +207,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       selectedRoom,
       guestCount,
       paymentMethods,
+      manualOnlyPaymentMethods: MANUAL_ONLY_PAYMENT_METHODS,
       extrasQuote,
       islandHoppingEnabled,
       islandQuote,
@@ -256,7 +262,14 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     status: form.status,
     special_requests: form.special_requests.trim() || undefined,
     send_confirmation_email: form.send_confirmation_email,
-    payment_method_id: form.payment_method_id ? parseInt(form.payment_method_id, 10) : null,
+    payment_method_id: isManualOnlyPaymentMethodId(form.payment_method_id)
+      ? null
+      : form.payment_method_id
+        ? parseInt(form.payment_method_id, 10)
+        : null,
+    manual_payment_method: isManualOnlyPaymentMethodId(form.payment_method_id)
+      ? getManualOnlyPaymentMethodName(form.payment_method_id)
+      : undefined,
     payment_option: form.payment_option,
     custom_payment_amount: form.payment_option === 'custom' ? customPay : undefined,
     island_hopping: islandHoppingEnabled,
@@ -610,7 +623,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
         {activeTab === 'payment' && (
           <Panel title="Payment & notes">
-            {paymentMethods.length > 0 && (
+            {(paymentMethods.length > 0 || MANUAL_ONLY_PAYMENT_METHODS.length > 0) && (
               <Field label="Payment method" required error={fieldErrors.payment_method_id}>
                 <select
                   value={form.payment_method_id}
@@ -619,6 +632,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                 >
                   <option value="">Select payment method</option>
                   {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                  {MANUAL_ONLY_PAYMENT_METHODS.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
                     </option>
