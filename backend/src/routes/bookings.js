@@ -104,6 +104,8 @@ router.get('/availability', async (req, res) => {
       ? {
           ...roomLimits,
           capacity_summary: roomLimits.capacitySummary,
+          min_guests: roomLimits.adminMin,
+          max_guests: roomLimits.adminMax ?? roomLimits.maxGuests,
         }
       : null,
   });

@@ -62,6 +62,17 @@ export function roomShortDescription(room) {
   return floor ? `${type} - Floor ${floor}` : type;
 }
 
+/** Guest-facing capacity — always mirrors Admin → Rooms min/max for that room. */
+export function roomGuestCapacityLabel(room) {
+  const max = Number(room?.max_guests) || Number(room?.capacity);
+  const min = Number(room?.min_guests) || 1;
+  if (max > 0) {
+    if (min > 1) return `${min}–${max} guests for this room.`;
+    return `Up to ${max} guests for this room.`;
+  }
+  return null;
+}
+
 export const DISCOUNT_POLICY = [
   'Discounts cannot be combined with other promos, flash sales, early bird rates, or group discounts.',
   'If multiple discounts apply, only the single highest discount is used.',

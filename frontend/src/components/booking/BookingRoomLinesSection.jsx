@@ -1,16 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
-import { ROOM_INVENTORY } from '../../data/resortRules';
+import { roomGuestCapacityLabel } from '../../data/resortRules';
 import { roomLineGuestCount } from '../../utils/bookingRoomLines';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none';
-
-function capacityNoteForRoom(room) {
-  if (!room) return null;
-  const type = room.room_type === 'suite' ? 'suite' : 'queen';
-  return ROOM_INVENTORY[type]?.capacityNote;
-}
 
 function RoomLineCard({
   line,
@@ -27,8 +21,14 @@ function RoomLineCard({
 }) {
   const selectedRoom = rooms.find((r) => String(r.id) === String(line.room_id));
   const guestCount = roomLineGuestCount(line);
-  const maxG = selectedRoom?.max_guests ?? selectedRoom?.capacity ?? 99;
-  const minG = selectedRoom?.min_guests ?? 1;
+  const maxG =
+    lineQuote?.room_limits?.max_guests ??
+    selectedRoom?.max_guests ??
+    selectedRoom?.capacity ??
+    99;
+  const minG = lineQuote?.room_limits?.min_guests ?? selectedRoom?.min_guests ?? 1;
+  const capacityLabel =
+    lineQuote?.room_limits?.capacity_summary || roomGuestCapacityLabel(selectedRoom);
   const overCapacity = selectedRoom && guestCount > maxG;
   const underCapacity = selectedRoom && guestCount < minG;
   const lockThisRoom = roomLocked && index === 0;
@@ -65,8 +65,8 @@ function RoomLineCard({
           <div className="rounded-lg border border-aegean-100 bg-aegean-50/60 p-4">
             <p className="text-xs uppercase tracking-wider text-aegean-500 mb-1">Selected room</p>
             <p className="font-serif text-lg text-aegean-800">{selectedRoom.name}</p>
-            {capacityNoteForRoom(selectedRoom) && (
-              <p className="text-sm text-aegean-600 mt-1">{capacityNoteForRoom(selectedRoom)}</p>
+            {capacityLabel && (
+              <p className="text-sm text-aegean-600 mt-1">{capacityLabel}</p>
             )}
             <Link to={roomsSearchUrl()} className="text-sm text-aegean-500 hover:underline mt-2 inline-block">
               Change room
@@ -84,7 +84,7 @@ function RoomLineCard({
               <option value="">Select a room</option>
               {availableRooms.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} (up to {r.max_guests ?? r.capacity} guests)
+                  {r.name} ({r.min_guests ?? 1}–{r.max_guests ?? r.capacity} guests)
                 </option>
               ))}
             </select>
@@ -99,10 +99,10 @@ function RoomLineCard({
           </div>
         )}
 
-        {selectedRoom && capacityNoteForRoom(selectedRoom) && !lockThisRoom && (
+        {selectedRoom && capacityLabel && !lockThisRoom && (
           <p className="text-xs text-aegean-600">
-            <span className="font-medium">Max: </span>
-            {capacityNoteForRoom(selectedRoom)}
+            <span className="font-medium">Capacity: </span>
+            {capacityLabel}
           </p>
         )}
 
@@ -158,12 +158,14 @@ function RoomLineCard({
         )}
         {overCapacity && (
           <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            This room fits up to {maxG} guests. Add another room below or lower the guest count for this
-            room.
+            This room allows up to {maxG} guest{maxG !== 1 ? 's' : ''}. Add another room below or
+            lower the guest count for this room.
           </p>
         )}
         {underCapacity && (
-          <p className="text-sm text-red-600">This room requires at least {minG} guest(s).</p>
+          <p className="text-sm text-red-600">
+            This room requires at least {minG} guest{minG !== 1 ? 's' : ''}.
+          </p>
         )}
         {lineQuote?.available && lineQuote.subtotal != null && (
           <p className="text-sm text-aegean-700">

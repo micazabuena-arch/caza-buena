@@ -72,6 +72,24 @@ export function resolveRoomType(room) {
   return 'queen';
 }
 
+/** Guest-facing capacity line from Admin → Rooms min/max (automated per room). */
+export function formatRoomCapacitySummary(room) {
+  const max = Number(room?.max_guests) || Number(room?.capacity) || 0;
+  const min = Number(room?.min_guests) > 0 ? Number(room.min_guests) : 1;
+  if (max > 0) {
+    if (min > 1) return `${min}–${max} guests for this room.`;
+    return `Up to ${max} guests for this room.`;
+  }
+  const roomType = resolveRoomType(room);
+  return ROOM_TYPE_CAPACITY[roomType]?.summary || null;
+}
+
+/** True when this room has an admin-configured guest cap (max_guests or capacity). */
+export function hasAdminGuestCap(room) {
+  const max = Number(room?.max_guests) || Number(room?.capacity) || 0;
+  return max > 0;
+}
+
 /** Suite maximum combinations */
 export function validateSuiteOccupancy(adults, childrenUnder6, children7_12) {
   const a = Number(adults) || 0;
@@ -145,20 +163,24 @@ export function getRoomLimits(room) {
 
   const policyMax = typeCap.maxTotalGuests;
   const maxGuests = adminMax > 0 ? Math.min(adminMax, policyMax) : policyMax;
+  const capacitySummary = formatRoomCapacitySummary(room) || typeCap.summary;
 
   return {
     minGuests: adminMin,
     maxGuests,
+    adminMax: adminMax > 0 ? adminMax : null,
+    adminMin,
     policyMax,
     includedAdults: ROOM_TYPE_CAPACITY[roomType]?.defaultIncludedAdults ?? 2,
     roomType,
-    capacitySummary: typeCap.summary,
+    capacitySummary,
     capacityLabel: typeCap.label,
   };
 }
 
 /**
- * Validate booking occupancy: room-type rules first, then Admin min/max (if stricter).
+ * Validate booking occupancy.
+ * When Admin → Rooms has min/max set, that headcount is the only guest limit for that room.
  */
 export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_12 = 0 }) {
   const a = Number(adults) || 0;
@@ -166,6 +188,32 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
   const t712 = Number(children7_12) || 0;
 
   if (a < 1) return { valid: false, message: 'At least one adult is required.' };
+
+  const total = totalGuests({ adults: a, childrenUnder6: u6, children7_12: t712 });
+  const limits = getRoomLimits(room);
+  const prefix = room.name ? `${room.name}: ` : '';
+  const adminMax = Number(room.max_guests) || Number(room.capacity) || 0;
+  const adminMin = limits.adminMin;
+
+  if (hasAdminGuestCap(room)) {
+    if (total < adminMin) {
+      return {
+        valid: false,
+        message: `${prefix}requires at least ${adminMin} guest(s). You selected ${total}.`,
+      };
+    }
+    if (total > adminMax) {
+      return {
+        valid: false,
+        message: `${prefix}allows up to ${adminMax} guest(s). You selected ${total}.`,
+      };
+    }
+    return {
+      valid: true,
+      roomType: limits.roomType,
+      capacitySummary: limits.capacitySummary,
+    };
+  }
 
   const roomType = resolveRoomType(room);
   const typeCheck = validateRoomTypeOccupancy(roomType, {
@@ -175,33 +223,21 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
   });
   if (!typeCheck.valid) return typeCheck;
 
-  const total = totalGuests({ adults: a, childrenUnder6: u6, children7_12: t712 });
-  const { minGuests, maxGuests } = getRoomLimits(room);
-  const prefix = room.name ? `${room.name}: ` : '';
-
-  if (total < minGuests) {
+  if (total < limits.minGuests) {
     return {
       valid: false,
-      message: `${prefix}requires at least ${minGuests} guest(s). You selected ${total}.`,
+      message: `${prefix}requires at least ${limits.minGuests} guest(s). You selected ${total}.`,
     };
   }
 
-  const adminMax = Number(room.max_guests) || Number(room.capacity) || 0;
-  if (adminMax > 0 && total > adminMax) {
+  if (total > limits.maxGuests) {
     return {
       valid: false,
-      message: `${prefix}allows up to ${adminMax} guest(s) for this unit. You selected ${total}.`,
+      message: `${prefix}allows up to ${limits.maxGuests} guest(s). You selected ${total}.`,
     };
   }
 
-  if (total > maxGuests) {
-    return {
-      valid: false,
-      message: `${prefix}allows up to ${maxGuests} guest(s). You selected ${total}.`,
-    };
-  }
-
-  return { valid: true, roomType, capacitySummary: ROOM_TYPE_CAPACITY[roomType]?.summary };
+  return { valid: true, roomType, capacitySummary: limits.capacitySummary };
 }
 
 /**
