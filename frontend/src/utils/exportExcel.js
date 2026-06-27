@@ -1,14 +1,5 @@
-import * as XLSX from 'xlsx';
-
-/** @typedef {{ label: string, key?: string, value?: (row: object) => unknown }} ExportColumn */
-
-/**
- * @param {string} filename
- * @param {string} sheetName
- * @param {ExportColumn[]} columns
- * @param {object[]} rows
- */
-export function downloadExcel(filename, sheetName, columns, rows) {
+export async function downloadExcel(filename, sheetName, columns, rows) {
+  const XLSX = await import('xlsx');
   const data = rows.map((row) => {
     const record = {};
     columns.forEach((col) => {

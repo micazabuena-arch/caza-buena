@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -19,25 +20,37 @@ import Policies from './pages/Policies';
 import Meals from './pages/Meals';
 import WhatsNew from './pages/WhatsNew';
 
-import AdminLayout from './admin/AdminLayout';
-import AdminLogin from './admin/Login';
-import AdminDashboard from './admin/Dashboard';
-import AdminBookings from './admin/Bookings';
-import AdminCalendar from './admin/Calendar';
-import AdminRooms from './admin/Rooms';
-import AdminGuests from './admin/Guests';
-import AdminGallery from './admin/GalleryAdmin';
-import AdminPaymentMethods from './admin/PaymentMethods';
-import AdminInquiries from './admin/Inquiries';
-import AdminAvailability from './admin/Availability';
-import AdminFAQ from './admin/FAQAdmin';
-import AdminMenu from './admin/MenuAdmin';
-import AdminPolicies from './admin/PoliciesAdmin';
-import WhatsNewAdmin from './admin/WhatsNewAdmin';
-import AdminSettings from './admin/Settings';
-import AdminPricing from './admin/Pricing';
-import IslandHoppingPrint from './admin/IslandHoppingPrint';
-import BookingSoaPrint from './admin/BookingSoaPrint';
+const AdminLayout = lazy(() => import('./admin/AdminLayout'));
+const AdminLogin = lazy(() => import('./admin/Login'));
+const AdminDashboard = lazy(() => import('./admin/Dashboard'));
+const AdminBookings = lazy(() => import('./admin/Bookings'));
+const AdminCalendar = lazy(() => import('./admin/Calendar'));
+const AdminRooms = lazy(() => import('./admin/Rooms'));
+const AdminGuests = lazy(() => import('./admin/Guests'));
+const AdminGallery = lazy(() => import('./admin/GalleryAdmin'));
+const AdminPaymentMethods = lazy(() => import('./admin/PaymentMethods'));
+const AdminInquiries = lazy(() => import('./admin/Inquiries'));
+const AdminAvailability = lazy(() => import('./admin/Availability'));
+const AdminFAQ = lazy(() => import('./admin/FAQAdmin'));
+const AdminMenu = lazy(() => import('./admin/MenuAdmin'));
+const AdminPolicies = lazy(() => import('./admin/PoliciesAdmin'));
+const WhatsNewAdmin = lazy(() => import('./admin/WhatsNewAdmin'));
+const AdminSettings = lazy(() => import('./admin/Settings'));
+const AdminPricing = lazy(() => import('./admin/Pricing'));
+const IslandHoppingPrint = lazy(() => import('./admin/IslandHoppingPrint'));
+const BookingSoaPrint = lazy(() => import('./admin/BookingSoaPrint'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center text-aegean-600 text-sm">
+      Loading…
+    </div>
+  );
+}
+
+function Lazy({ children }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
+}
 
 export default function App() {
   return (
@@ -63,10 +76,38 @@ export default function App() {
             <Route path="policies" element={<Policies />} />
           </Route>
 
-          <Route path="admin/login" element={<AdminLogin />} />
-          <Route path="admin/bookings/:bookingId/print-island" element={<IslandHoppingPrint />} />
-          <Route path="admin/bookings/:bookingId/print-soa" element={<BookingSoaPrint />} />
-          <Route path="admin" element={<AdminLayout />}>
+          <Route
+            path="admin/login"
+            element={
+              <Lazy>
+                <AdminLogin />
+              </Lazy>
+            }
+          />
+          <Route
+            path="admin/bookings/:bookingId/print-island"
+            element={
+              <Lazy>
+                <IslandHoppingPrint />
+              </Lazy>
+            }
+          />
+          <Route
+            path="admin/bookings/:bookingId/print-soa"
+            element={
+              <Lazy>
+                <BookingSoaPrint />
+              </Lazy>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <Lazy>
+                <AdminLayout />
+              </Lazy>
+            }
+          >
             <Route index element={<AdminDashboard />} />
             <Route path="bookings" element={<AdminBookings />} />
             <Route path="calendar" element={<AdminCalendar />} />
