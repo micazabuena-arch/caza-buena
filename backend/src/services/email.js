@@ -8,7 +8,6 @@ import {
   getEmailLogoAttachment,
   escapeHtml,
 } from './emailTemplate.js';
-import { generateBookingSoaPdf } from '../utils/bookingSoaPdf.js';
 import { soaAttachmentFilename } from '../utils/bookingSoa.js';
 
 dotenv.config();
@@ -229,6 +228,7 @@ export async function sendBookingConfirmation(booking, room) {
 
   let soaPdf = null;
   try {
+    const { generateBookingSoaPdf } = await import('../utils/bookingSoaPdf.js');
     soaPdf = await generateBookingSoaPdf({ ...booking, room_name: booking.room_name || room?.name });
   } catch (err) {
     console.warn('[Email] SOA PDF generation failed:', err.message);

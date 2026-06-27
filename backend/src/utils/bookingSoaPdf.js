@@ -1,9 +1,7 @@
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import PDFDocument from 'pdfkit';
-import {
-  buildBookingSoaLineItems,
+import {  buildBookingSoaLineItems,
   formatSoaAmount,
   getBookingPaymentSummary,
 } from './bookingSoa.js';
@@ -46,8 +44,21 @@ function drawTableRow(doc, y, label, amount, { bold = false, width, colAmount = 
  * Generate booking confirmation / SOA PDF (matches admin print layout).
  * @returns {Promise<Buffer|null>}
  */
-export function generateBookingSoaPdf(booking) {
-  if (!booking) return Promise.resolve(null);
+export async function generateBookingSoaPdf(booking) {
+  if (!booking) return null;
+
+  let PDFDocument;
+  try {
+    ({ default: PDFDocument } = await import('pdfkit'));
+  } catch (err) {
+    console.warn('[SOA PDF] pdfkit not installed — skipping attachment:', err.message);
+    return null;
+  }
+
+  return generateBookingSoaPdfWithDoc(booking, PDFDocument);
+}
+
+function generateBookingSoaPdfWithDoc(booking, PDFDocument) {
 
   return new Promise((resolve, reject) => {
     try {
