@@ -5,12 +5,12 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('xlsx')) return 'vendor-xlsx';
-          if (id.includes('lucide-react')) return 'vendor-icons';
           if (id.includes('date-fns')) return 'vendor-date';
           if (id.includes('axios')) return 'vendor-axios';
           if (
@@ -20,7 +20,7 @@ export default defineConfig({
           ) {
             return 'vendor-react';
           }
-          return 'vendor-misc';
+          return undefined;
         },
       },
     },

@@ -7,18 +7,19 @@ import Layout from './components/layout/Layout';
 import ScrollToTop from './components/layout/ScrollToTop';
 
 import Home from './pages/Home';
-import About from './pages/About';
-import Rooms from './pages/Rooms';
-import RoomDetail from './pages/RoomDetail';
-import Amenities from './pages/Amenities';
-import Gallery from './pages/Gallery';
-import Booking from './pages/Booking';
-import BookingConfirmation from './pages/BookingConfirmation';
-import Contact from './pages/Contact';
-import FAQ from './pages/FAQ';
-import Policies from './pages/Policies';
-import Meals from './pages/Meals';
-import WhatsNew from './pages/WhatsNew';
+
+const About = lazy(() => import('./pages/About'));
+const Rooms = lazy(() => import('./pages/Rooms'));
+const RoomDetail = lazy(() => import('./pages/RoomDetail'));
+const Amenities = lazy(() => import('./pages/Amenities'));
+const Gallery = lazy(() => import('./pages/Gallery'));
+const Booking = lazy(() => import('./pages/Booking'));
+const BookingConfirmation = lazy(() => import('./pages/BookingConfirmation'));
+const Contact = lazy(() => import('./pages/Contact'));
+const FAQ = lazy(() => import('./pages/FAQ'));
+const Policies = lazy(() => import('./pages/Policies'));
+const Meals = lazy(() => import('./pages/Meals'));
+const WhatsNew = lazy(() => import('./pages/WhatsNew'));
 
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const AdminLogin = lazy(() => import('./admin/Login'));
@@ -62,18 +63,18 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Home />} />
-            <Route path="about" element={<About />} />
-            <Route path="rooms" element={<Rooms />} />
-            <Route path="rooms/:slug" element={<RoomDetail />} />
-            <Route path="amenities" element={<Amenities />} />
-            <Route path="gallery" element={<Gallery />} />
-            <Route path="meals" element={<Meals />} />
-            <Route path="whats-new" element={<WhatsNew />} />
-            <Route path="booking" element={<Booking />} />
-            <Route path="booking/confirm/:reference" element={<BookingConfirmation />} />
-            <Route path="contact" element={<Contact />} />
-            <Route path="faq" element={<FAQ />} />
-            <Route path="policies" element={<Policies />} />
+            <Route path="about" element={<Lazy><About /></Lazy>} />
+            <Route path="rooms" element={<Lazy><Rooms /></Lazy>} />
+            <Route path="rooms/:slug" element={<Lazy><RoomDetail /></Lazy>} />
+            <Route path="amenities" element={<Lazy><Amenities /></Lazy>} />
+            <Route path="gallery" element={<Lazy><Gallery /></Lazy>} />
+            <Route path="meals" element={<Lazy><Meals /></Lazy>} />
+            <Route path="whats-new" element={<Lazy><WhatsNew /></Lazy>} />
+            <Route path="booking" element={<Lazy><Booking /></Lazy>} />
+            <Route path="booking/confirm/:reference" element={<Lazy><BookingConfirmation /></Lazy>} />
+            <Route path="contact" element={<Lazy><Contact /></Lazy>} />
+            <Route path="faq" element={<Lazy><FAQ /></Lazy>} />
+            <Route path="policies" element={<Lazy><Policies /></Lazy>} />
           </Route>
 
           <Route

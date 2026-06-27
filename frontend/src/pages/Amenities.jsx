@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import * as Icons from 'lucide-react';
 import api from '../api/client';
 import StaticPageLayout from '../components/layout/StaticPageLayout';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import { pages, images } from '../data/placeholders';
+import { getAmenityIcon } from '../utils/amenityIcons';
 
 export default function Amenities() {
   const { amenities } = pages;
@@ -37,7 +37,7 @@ export default function Amenities() {
           )}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {display.map((item, i) => {
-              const Icon = Icons[item.icon] || Icons.Sparkles;
+              const Icon = getAmenityIcon(item.icon);
               return (
                 <div key={item.id || i} className="bg-white p-8 rounded-2xl shadow-sm">
                   <Icon className="w-8 h-8 text-aegean-500 mb-4" />
