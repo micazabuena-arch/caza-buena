@@ -99,10 +99,11 @@ export function buildBrandedEmail({ headline, guestName, bodyHtml }) {
   `.trim();
 }
 
-export function bookingDetailsTable(booking, room) {
+export function bookingDetailsTable(booking, roomFallback) {
+  const roomRows = formatBookingRoomRows(booking, roomFallback);
   const rows = [
     ['Reference', booking.reference_code],
-    ['Room', room.name],
+    ...roomRows,
     ['Check-in', booking.check_in],
     ['Check-out', booking.check_out],
     ['Nights', booking.nights],
@@ -114,15 +115,52 @@ export function bookingDetailsTable(booking, room) {
   ].filter(([, val]) => val != null && val !== '');
 
   const trs = rows
-    .map(
-      ([label, value]) => `
+    .map((row) => {
+      const [label, value, isHtml] = row.length > 2 ? row : [...row, false];
+      const cell = isHtml ? value : escapeHtml(value);
+      return `
       <tr>
         <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-size:13px;color:${BRAND.muted};">${escapeHtml(label)}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-size:14px;font-weight:bold;color:${BRAND.text};">${escapeHtml(value)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid ${BRAND.border};font-size:14px;font-weight:bold;color:${BRAND.text};">${cell}</td>
       </tr>
-    `
-    )
+    `;
+    })
     .join('');
 
   return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;border:1px solid ${BRAND.border};border-radius:6px;">${trs}</table>`;
+}
+
+/** Room row(s) for email summary — lists every room on multi-room bookings. */
+export function formatBookingRoomRows(booking, roomFallback) {
+  const lines = Array.isArray(booking?.room_lines) ? booking.room_lines.filter(Boolean) : [];
+
+  if (lines.length === 0) {
+    const name = booking?.room_names || booking?.room_name || roomFallback?.name;
+    return name ? [['Room', name]] : [];
+  }
+
+  if (lines.length === 1) {
+    return [['Room', lines[0].room_name || roomFallback?.name || '—']];
+  }
+
+  const valueHtml = lines
+    .map((line) => {
+      const guests =
+        Number(line.guest_count) ||
+        (Number(line.adults) || 0) +
+          (Number(line.children_under6) || 0) +
+          (Number(line.children_7_12) || 0);
+      return `${escapeHtml(line.room_name || 'Room')} · ${guests} guest${guests !== 1 ? 's' : ''}`;
+    })
+    .join('<br />');
+
+  return [['Rooms', valueHtml, true]];
+}
+
+export function formatBookingRoomsPlainLabel(booking, roomFallback) {
+  const lines = Array.isArray(booking?.room_lines) ? booking.room_lines.filter(Boolean) : [];
+  if (lines.length > 0) {
+    return lines.map((l) => l.room_name).filter(Boolean).join(', ');
+  }
+  return booking?.room_names || booking?.room_name || roomFallback?.name || '—';
 }

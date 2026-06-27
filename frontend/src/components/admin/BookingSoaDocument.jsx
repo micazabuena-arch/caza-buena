@@ -74,7 +74,10 @@ export default function BookingSoaDocument({ booking }) {
           <strong>Phone:</strong> {booking.guest_phone || '—'}
         </p>
         <p className="m-0">
-          <strong>Room:</strong> {booking.room_name}
+          <strong>{booking.room_count > 1 ? 'Rooms' : 'Room'}:</strong>{' '}
+          {booking.room_lines?.length
+            ? booking.room_lines.map((line) => line.room_name).join(', ')
+            : booking.room_names || booking.room_name}
         </p>
         <p className="m-0">
           <strong>Stay Dates:</strong> {booking.check_in} - {booking.check_out} ( {nightsLabel} )

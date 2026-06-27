@@ -12,6 +12,7 @@ import {
   getRateCalendarDays,
 } from '../utils/booking.js';
 import { sendPaymentProofReceivedEmail, sendBookingConfirmation, sendBookingRejectedEmail } from '../services/email.js';
+import { prepareBookingForEmail } from '../utils/bookingRooms.js';
 
 const router = Router();
 
@@ -833,10 +834,10 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
   });
 
   if (status === 'confirmed') {
-    sendBookingConfirmation(
-      { ...booking, status: 'confirmed' },
-      { name: booking.room_name }
-    )
+    prepareBookingForEmail(pool, { ...booking, status: 'confirmed' })
+      .then((emailBooking) =>
+        sendBookingConfirmation(emailBooking, { name: emailBooking.room_name })
+      )
       .then((emailResult) => {
         if (!emailResult.sent) {
           console.warn('[Booking confirm] Guest email not sent:', emailResult.reason, emailResult.hint || '');
@@ -846,11 +847,18 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
   }
 
   if (shouldEmailRejection) {
-    sendBookingRejectedEmail(
-      { ...booking, status: 'rejected', rejection_reason: rejection_reason || null },
-      { name: booking.room_name },
-      rejection_reason
-    )
+    prepareBookingForEmail(pool, {
+      ...booking,
+      status: 'rejected',
+      rejection_reason: rejection_reason || null,
+    })
+      .then((emailBooking) =>
+        sendBookingRejectedEmail(
+          emailBooking,
+          { name: emailBooking.room_name },
+          rejection_reason
+        )
+      )
       .then((emailResult) => {
         if (!emailResult.sent) {
           console.warn('[Booking reject] Guest email not sent:', emailResult.reason, emailResult.hint || '');
@@ -920,10 +928,10 @@ router.post(
     });
 
     if (sendAcknowledgmentEmail) {
-      sendPaymentProofReceivedEmail(
-        { ...booking, status: 'payment_submitted' },
-        { name: booking.room_name }
-      )
+      prepareBookingForEmail(pool, { ...booking, status: 'payment_submitted' })
+        .then((emailBooking) =>
+          sendPaymentProofReceivedEmail(emailBooking, { name: emailBooking.room_name })
+        )
         .then((emailResult) => {
           if (!emailResult.sent) {
             console.warn('[Payment proof] Guest email not sent:', emailResult.reason, emailResult.hint || '');

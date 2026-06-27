@@ -176,6 +176,15 @@ export async function attachBookingRooms(pool, booking) {
   };
 }
 
+/** Load booking_rooms before guest emails / SOA PDF (multi-room aware). */
+export async function prepareBookingForEmail(pool, booking) {
+  const enriched = await attachBookingRooms(pool, booking);
+  return {
+    ...enriched,
+    room_name: enriched.room_names || enriched.room_name,
+  };
+}
+
 export async function attachBookingRoomsToList(pool, bookings) {
   if (!bookings?.length) return bookings;
   const ids = bookings.map((b) => b.id);

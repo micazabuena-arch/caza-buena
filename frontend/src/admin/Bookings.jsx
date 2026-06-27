@@ -397,7 +397,7 @@ export default function AdminBookings() {
                       <p className="text-xs text-aegean-500">{b.guest_email}</p>
                     </td>
                     <td className="p-4 text-aegean-700 whitespace-nowrap">{formatGuestCount(b)}</td>
-                    <td className="p-4">{b.room_name}</td>
+                    <td className="p-4">{b.room_names || b.room_name}</td>
                     <td className="p-4 whitespace-nowrap">{b.check_in} → {b.check_out}</td>
                     <td className="p-4">
                       <span className="block">₱{Number(b.amount_to_pay ?? b.total_amount).toLocaleString()} due</span>
@@ -513,7 +513,12 @@ export default function AdminBookings() {
                   {detail.estimated_arrival && (
                     <p><strong>ETA:</strong> {detail.estimated_arrival}</p>
                   )}
-                  <p><strong>Room:</strong> {detail.room_name}</p>
+                  <p>
+                    <strong>{detail.room_count > 1 ? 'Rooms' : 'Room'}:</strong>{' '}
+                    {detail.room_lines?.length
+                      ? detail.room_lines.map((line) => line.room_name).join(', ')
+                      : detail.room_names || detail.room_name}
+                  </p>
                   <p><strong>Stay:</strong> {detail.check_in} → {detail.check_out} ({detail.nights} nights)</p>
                   <BookingDateEditor
                     booking={detail}

@@ -121,7 +121,9 @@ function generateBookingSoaPdfWithDoc(booking, PDFDocument) {
         `Guest: ${booking.guest_name || '—'}`,
         `E-mail: ${booking.guest_email || '—'}`,
         `Phone: ${booking.guest_phone || '—'}`,
-        `Room: ${booking.room_name || '—'}`,
+        `${
+          Array.isArray(booking.room_lines) && booking.room_lines.length > 1 ? 'Rooms' : 'Room'
+        }: ${booking.room_name || booking.room_names || '—'}`,
         `Stay Dates: ${booking.check_in} - ${booking.check_out} ( ${nightsLabel} )`,
       ];
 
