@@ -8,7 +8,6 @@ export function getExtraAdultsLines(extraBreakdown) {
   const count = extraBreakdown?.extraAdults || 0;
   if (!count) return [];
 
-  const pax = `${count} PAX`;
   const weekdayNights = extraBreakdown.weekdayNights || 0;
   const weekendNights = extraBreakdown.weekendNights || 0;
   const weekdayRate =
@@ -22,13 +21,13 @@ export function getExtraAdultsLines(extraBreakdown) {
 
   if (weekdayNights > 0) {
     lines.push({
-      label: `Extra adults · ${pax} = ₱${weekdayRate.toLocaleString()}/weekday night`,
+      label: `Extra adults (${count}) · ₱${weekdayRate.toLocaleString()}/weekday night × ${weekdayNights}`,
       amount: nightlyWeekday * weekdayNights,
     });
   }
   if (weekendNights > 0) {
     lines.push({
-      label: `Extra adults · ${pax} = ₱${weekendRate.toLocaleString()}/weekend night`,
+      label: `Extra adults (${count}) · ₱${weekendRate.toLocaleString()}/weekend night × ${weekendNights}`,
       amount: nightlyWeekend * weekendNights,
     });
   }
@@ -41,5 +40,65 @@ export function formatExtraChildrenLabel(extraBreakdown) {
   if (!count) return '';
 
   const rate = extraBreakdown.childRate ?? EXTRA_PERSON_RATES.child_7_12;
-  return `Children 7–12 · ${count} PAX = ₱${rate.toLocaleString()}/night`;
+  const nights = (extraBreakdown.weekdayNights || 0) + (extraBreakdown.weekendNights || 0);
+  const nightLabel = nights === 1 ? '1 night' : `${nights} nights`;
+  return `Children 7–12 (${count}) · ₱${rate.toLocaleString()}/night × ${nightLabel}`;
+}
+
+/** Per-room extra guest charge lines for the booking price summary. */
+export function getExtraGuestChargeLines(extraBreakdown, { roomName } = {}) {
+  if (!extraBreakdown) return [];
+
+  const chargeTotal =
+    Number(extraBreakdown.total) ||
+    Number(extraBreakdown.adultChargeTotal || 0) + Number(extraBreakdown.childChargeTotal || 0);
+  if (chargeTotal <= 0) return [];
+
+  const prefix = roomName ? `${roomName} · ` : '';
+  const lines = getExtraAdultsLines(extraBreakdown).map(({ label, amount }) => ({
+    label: `${prefix}${label}`,
+    amount,
+  }));
+
+  const childCount = extraBreakdown.extraChildren7_12 || 0;
+  if (childCount > 0) {
+    const nights = (extraBreakdown.weekdayNights || 0) + (extraBreakdown.weekendNights || 0);
+    const amount =
+      Number(extraBreakdown.childChargeTotal) ||
+      (extraBreakdown.nightlyChild || 0) * nights;
+    if (amount > 0) {
+      lines.push({
+        label: `${prefix}${formatExtraChildrenLabel(extraBreakdown)}`,
+        amount,
+      });
+    }
+  }
+
+  return lines;
+}
+
+/** Combined extra guest lines across all booked rooms. */
+export function collectBookingExtraChargeLines(roomLines, lineQuotes, rooms) {
+  const lines = [];
+  for (const line of roomLines) {
+    if (!line.room_id) continue;
+    const quote = lineQuotes[line.id];
+    const chargeTotal = Number(quote?.extra_person_charges) || 0;
+    if (chargeTotal <= 0) continue;
+
+    const room = rooms.find((r) => String(r.id) === String(line.room_id));
+    lines.push(
+      ...getExtraGuestChargeLines(quote?.extra_breakdown, { roomName: room?.name })
+    );
+  }
+  return lines;
+}
+
+/** Room line amount — base rate only when extra guest charges are shown separately. */
+export function quoteRoomDisplayAmount(quote) {
+  const extra = Number(quote?.extra_person_charges) || 0;
+  if (extra > 0 && quote?.room_subtotal != null) {
+    return Number(quote.room_subtotal);
+  }
+  return Number(quote?.subtotal || 0);
 }

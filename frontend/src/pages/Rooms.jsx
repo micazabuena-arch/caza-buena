@@ -9,6 +9,7 @@ import PlaceholderImage from '../components/ui/PlaceholderImage';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import { pages, images, placeholderRooms } from '../data/placeholders';
 import { bedroomCountLabel, roomShortDescription } from '../data/resortRules';
+import RoomCapacityPricingNote from '../components/booking/RoomCapacityPricingNote';
 
 function formatStayDate(dateStr) {
   try {
@@ -241,9 +242,7 @@ export default function Rooms() {
                           </span>
                         </p>
                       ) : (
-                        <p className="text-aegean-600 font-medium">
-                          From ₱{Number(room.price_per_night).toLocaleString()} / night
-                        </p>
+                        <RoomCapacityPricingNote room={room} size="compact" />
                       )}
                     </div>
 

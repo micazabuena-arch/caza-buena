@@ -72,6 +72,14 @@ export function resolveRoomType(room) {
   return 'queen';
 }
 
+/** Adults included in base rate — Admin → Rooms `included_adults`, else room-type default. */
+export function resolveIncludedAdults(room) {
+  const fromAdmin = Number(room?.included_adults);
+  if (fromAdmin > 0) return fromAdmin;
+  const roomType = resolveRoomType(room);
+  return ROOM_TYPE_CAPACITY[roomType]?.defaultIncludedAdults ?? 2;
+}
+
 /** Guest-facing capacity line from Admin → Rooms min/max (automated per room). */
 export function formatRoomCapacitySummary(room) {
   const max = Number(room?.max_guests) || Number(room?.capacity) || 0;
@@ -82,6 +90,13 @@ export function formatRoomCapacitySummary(room) {
   }
   const roomType = resolveRoomType(room);
   return ROOM_TYPE_CAPACITY[roomType]?.summary || null;
+}
+
+/** Guest-facing starting price — e.g. "Price starts at ₱3,000 / night". */
+export function formatRoomPricingSummary(room) {
+  const price = Number(room?.price_per_night);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  return `Price starts at ₱${price.toLocaleString()} / night`;
 }
 
 /** True when this room has an admin-configured guest cap (max_guests or capacity). */
@@ -165,17 +180,32 @@ export function getRoomLimits(room) {
   const maxGuests = adminMax > 0 ? Math.min(adminMax, policyMax) : policyMax;
   const capacitySummary = formatRoomCapacitySummary(room) || typeCap.summary;
 
+  const includedAdults = resolveIncludedAdults(room);
+
   return {
     minGuests: adminMin,
     maxGuests,
     adminMax: adminMax > 0 ? adminMax : null,
     adminMin,
     policyMax,
-    includedAdults: ROOM_TYPE_CAPACITY[roomType]?.defaultIncludedAdults ?? 2,
+    includedAdults,
     roomType,
     capacitySummary,
+    pricingSummary: formatRoomPricingSummary(room),
     capacityLabel: typeCap.label,
   };
+}
+
+/** Included adults for pricing — admin cap uses DB value; else package-tier logic. */
+export function getIncludedAdultsForRoom(room, occupancy) {
+  if (hasAdminGuestCap(room)) {
+    const includedAdults = resolveIncludedAdults(room);
+    return {
+      includedAdults,
+      packageLabel: `Base rate includes ${includedAdults} adult${includedAdults !== 1 ? 's' : ''}`,
+    };
+  }
+  return getIncludedAdultsForOccupancy(resolveRoomType(room), occupancy);
 }
 
 /**
@@ -251,12 +281,11 @@ export function calculateExtraPersonCharges(
   rates = EXTRA_PERSON_RATES
 ) {
   const limits = getRoomLimits(room);
-  const roomType = resolveRoomType(room);
   const a = Number(adults) || 0;
   const u6 = Number(childrenUnder6) || 0;
   const t712 = Number(children7_12) || 0;
 
-  const { includedAdults, packageLabel } = getIncludedAdultsForOccupancy(roomType, {
+  const { includedAdults, packageLabel } = getIncludedAdultsForRoom(room, {
     adults: a,
     childrenUnder6: u6,
     children7_12: t712,

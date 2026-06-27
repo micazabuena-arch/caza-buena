@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { Users, Check, BedDouble } from 'lucide-react';
 import { bedroomCountLabel, roomShortDescription } from '../data/resortRules';
+import RoomCapacityPricingNote from '../components/booking/RoomCapacityPricingNote';
 import api from '../api/client';
 import PageHero from '../components/ui/PageHero';
 import ImageDotSlider from '../components/ui/ImageDotSlider';
@@ -102,10 +103,7 @@ export default function RoomDetail() {
                   <BedDouble size={18} /> {bedroomCountLabel(room.room_type)}
                 </span>
               </p>
-              <p className="text-3xl font-serif text-aegean-700 mb-6">
-                ₱{Number(room.price_per_night).toLocaleString()}
-                <span className="text-base font-sans text-aegean-500"> / night</span>
-              </p>
+              <RoomCapacityPricingNote room={room} size="hero" className="mb-6" />
               <p className="text-aegean-700/90 leading-relaxed mb-8">{room.description}</p>
 
               {room.amenities?.length > 0 && (

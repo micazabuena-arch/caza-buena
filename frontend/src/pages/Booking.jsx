@@ -37,6 +37,10 @@ import {
   totalGuestsFromLines,
   usedRoomIds,
 } from '../utils/bookingRoomLines';
+import {
+  collectBookingExtraChargeLines,
+  quoteRoomDisplayAmount,
+} from '../utils/extraGuestLabels';
 
 
 export default function Booking() {
@@ -203,6 +207,11 @@ export default function Booking() {
       return quote?.available && !quote?.occupancy_error;
     });
   const roomTotal = subtotal;
+
+  const extraChargeLines = useMemo(
+    () => collectBookingExtraChargeLines(roomLines, lineQuotes, rooms),
+    [roomLines, lineQuotes, rooms]
+  );
 
   const islandQuote =
     islandHoppingEnabled && islandHopping.passengers?.length
@@ -783,7 +792,7 @@ export default function Booking() {
                               {(quote?.nights || nights) !== 1 ? 's' : ''})
                             </span>
                             <span className="shrink-0">
-                              ₱{Number(quote?.subtotal || 0).toLocaleString()}
+                              ₱{quoteRoomDisplayAmount(quote).toLocaleString()}
                             </span>
                           </div>
                         );
@@ -794,10 +803,22 @@ export default function Booking() {
                         <span>₱{Number(roomSubtotal).toLocaleString()}</span>
                       </div>
                     )}
-                    {extraCharges > 0 && (
-                      <div className="flex justify-between text-aegean-600 text-xs">
-                        <span>Includes extra guest charges</span>
-                        <span>₱{Number(extraCharges).toLocaleString()}</span>
+                    {extraChargeLines.length > 0 && (
+                      <div className="border-t border-aegean-200 pt-2 space-y-1.5">
+                        <p className="text-xs font-medium text-aegean-700">Extra guest charges</p>
+                        {extraChargeLines.map((item, idx) => (
+                          <div
+                            key={`${item.label}-${idx}`}
+                            className="flex justify-between gap-4 text-xs text-aegean-600"
+                          >
+                            <span className="min-w-0">{item.label}</span>
+                            <span className="shrink-0">₱{Number(item.amount).toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-medium text-aegean-700 pt-0.5">
+                          <span>Extra guest subtotal</span>
+                          <span>₱{Number(extraCharges).toLocaleString()}</span>
+                        </div>
                       </div>
                     )}
                   </div>

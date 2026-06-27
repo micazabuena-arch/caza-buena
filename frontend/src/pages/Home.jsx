@@ -7,6 +7,7 @@ import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import BookingSearchBar from '../components/booking/BookingSearchBar';
 import { pages, images, placeholderRooms, resort } from '../data/placeholders';
 import { roomShortDescription } from '../data/resortRules';
+import RoomCapacityPricingNote from '../components/booking/RoomCapacityPricingNote';
 import { getAssetUrl } from '../utils/assetUrl';
 import ImageDotSlider from '../components/ui/ImageDotSlider';
 
@@ -215,9 +216,7 @@ export default function Home() {
                         <p className="text-aegean-600/70 text-sm mt-1 line-clamp-2">
                           {roomShortDescription(room)}
                         </p>
-                        <p className="mt-4 text-aegean-600 font-medium">
-                          From ₱{Number(room.price_per_night).toLocaleString()} / night
-                        </p>
+                        <RoomCapacityPricingNote room={room} size="compact" className="mt-4" />
                       </Link>
                     </div>
                   </article>

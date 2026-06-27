@@ -62,15 +62,28 @@ export function roomShortDescription(room) {
   return floor ? `${type} - Floor ${floor}` : type;
 }
 
-/** Guest-facing capacity — always mirrors Admin → Rooms min/max for that room. */
-export function roomGuestCapacityLabel(room) {
+/** Short capacity line — e.g. "Up to 4 guests". */
+export function roomGuestCapacityShortLabel(room) {
   const max = Number(room?.max_guests) || Number(room?.capacity);
   const min = Number(room?.min_guests) || 1;
   if (max > 0) {
-    if (min > 1) return `${min}–${max} guests for this room.`;
-    return `Up to ${max} guests for this room.`;
+    if (min > 1) return `${min}–${max} guests`;
+    return `Up to ${max} guests`;
   }
   return null;
+}
+
+/** Guest-facing capacity — always mirrors Admin → Rooms min/max for that room. */
+export function roomGuestCapacityLabel(room) {
+  const short = roomGuestCapacityShortLabel(room);
+  return short ? `${short} for this room.` : null;
+}
+
+/** Weekday starting price — e.g. "Price starts at ₱3,000 / night". */
+export function roomPriceStartsAtLabel(room) {
+  const price = Number(room?.price_per_night);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  return `Price starts at ₱${price.toLocaleString()} / night`;
 }
 
 export const DISCOUNT_POLICY = [
