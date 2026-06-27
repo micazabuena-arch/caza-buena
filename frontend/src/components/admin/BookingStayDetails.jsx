@@ -76,7 +76,20 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
       <div className="min-h-[220px]">
         {activeTab === 'stay' && (
           <Panel>
-            <Row label="Room" value={booking.room_name} />
+            <Row
+              label={booking.room_lines?.length > 1 ? 'Rooms' : 'Room'}
+              value={
+                booking.room_lines?.length
+                  ? booking.room_lines.map((line) => {
+                      const guests =
+                        (line.adults || 0) +
+                        (line.children_under6 || 0) +
+                        (line.children_7_12 || 0);
+                      return `${line.room_name} (${guests} guest${guests !== 1 ? 's' : ''})`;
+                    }).join(' · ')
+                  : booking.room_name
+              }
+            />
             <Row
               label="Dates"
               value={`${booking.check_in} → ${booking.check_out} (${booking.nights} night${booking.nights !== 1 ? 's' : ''})`}
@@ -209,7 +222,13 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
             {Number(booking.discount_amount) > 0 && (
               <Row
                 label="Discount"
-                value={`−₱${Number(booking.discount_amount).toLocaleString()}${booking.discount_code ? ` (${booking.discount_code})` : ''}`}
+                value={`−₱${Number(booking.discount_amount).toLocaleString()}${
+                  booking.discount_code
+                    ? ` (${booking.discount_code})`
+                    : booking.discount_note
+                      ? ` (${booking.discount_note})`
+                      : ''
+                }`}
               />
             )}
             <Row label="Booking total" value={`₱${payment.total.toLocaleString()}`} />

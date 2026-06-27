@@ -29,6 +29,11 @@ export function bookingToEditState(booking) {
     payment_option: booking?.payment_option || 'deposit',
     custom_payment_amount:
       booking?.payment_option === 'custom' ? String(booking.amount_to_pay ?? '') : '',
+    admin_discount_amount:
+      booking?.discount_code || !(Number(booking?.discount_amount) > 0)
+        ? ''
+        : String(booking.discount_amount),
+    admin_discount_note: booking?.discount_code ? '' : booking?.discount_note || '',
     bookingExtras: {
       bringing_car: Boolean(booking?.bringing_car),
       car_count: booking?.car_count || 1,
@@ -89,6 +94,8 @@ export function editStateToPayload(state) {
       ? getManualOnlyPaymentMethodName(state.payment_method_id)
       : null,
     payment_option: state.payment_option,
+    admin_discount_amount: state.admin_discount_amount,
+    admin_discount_note: state.admin_discount_note,
     bringing_car: state.bookingExtras.bringing_car,
     car_count: state.bookingExtras.bringing_car
       ? parseInt(state.bookingExtras.car_count, 10) || 1

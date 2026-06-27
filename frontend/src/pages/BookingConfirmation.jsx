@@ -161,7 +161,12 @@ export default function BookingConfirmation() {
               </button>
             </div>
             <p><strong>Guest:</strong> {booking.guest_name} · {booking.guest_email} · {booking.guest_phone}</p>
-            <p><strong>Room:</strong> {booking.room_name}</p>
+            <p>
+              <strong>Room{booking.room_count > 1 ? 's' : ''}:</strong>{' '}
+              {booking.room_lines?.length
+                ? booking.room_lines.map((line) => line.room_name).join(', ')
+                : booking.room_name}
+            </p>
             <p><strong>Check-in / Check-out:</strong> {booking.check_in} → {booking.check_out} ({booking.nights} nights)</p>
             <p className="text-2xl font-serif text-aegean-700">
               <strong>Pay now:</strong> ₱{Number(booking.amount_to_pay ?? booking.total_amount).toLocaleString()}

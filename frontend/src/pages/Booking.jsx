@@ -9,16 +9,13 @@ import PaymentAmountSelect from '../components/booking/PaymentAmountSelect';
 import IslandHoppingSection from '../components/booking/IslandHoppingSection';
 import BookingExtrasSection from '../components/booking/BookingExtrasSection';
 import FormSection from '../components/booking/FormSection';
+import BookingRoomLinesSection from '../components/booking/BookingRoomLinesSection';
 import { CardSkeleton } from '../components/ui/ContentSkeleton';
 import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { pages, images } from '../data/placeholders';
-import { EXTRA_PERSON_RATES, ROOM_INVENTORY } from '../data/resortRules';
-import {
-  formatExtraChildrenLabel,
-  getExtraAdultsLines,
-} from '../utils/extraGuestLabels';
+import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
@@ -34,12 +31,13 @@ import {
 } from '../data/bookingAddOns';
 import { getStayDateError, minCheckOutDate, minCheckInDate } from '../utils/stayDates';
 import { digitsOnly } from '../utils/inputSanitizers';
+import {
+  createRoomLine,
+  roomLinesToPayload,
+  totalGuestsFromLines,
+  usedRoomIds,
+} from '../utils/bookingRoomLines';
 
-function capacityNoteForRoom(room) {
-  if (!room) return null;
-  const type = room.room_type === 'suite' ? 'suite' : 'queen';
-  return ROOM_INVENTORY[type]?.capacityNote;
-}
 
 export default function Booking() {
   const { booking: meta } = pages;
@@ -57,24 +55,26 @@ export default function Booking() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
-  const [availability, setAvailability] = useState(null);
-  const [availabilityChecking, setAvailabilityChecking] = useState(false);
   const [error, setError] = useState('');
   const [depositPercent, setDepositPercent] = useState(20);
   const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
+  const [roomLines, setRoomLines] = useState(() => [
+    createRoomLine({
+      room_id: preselectedRoom || '',
+      adults: paramGuests ? parseInt(paramGuests, 10) || 2 : 2,
+    }),
+  ]);
+  const [lineQuotes, setLineQuotes] = useState({});
+  const [lineQuotesLoading, setLineQuotesLoading] = useState(false);
   const [form, setForm] = useState({
-    room_id: preselectedRoom || '',
     guest_name: '',
     guest_email: '',
     guest_phone: '',
     valid_id: '',
     estimated_arrival: '',
-    adults: paramGuests ? parseInt(paramGuests, 10) : 2,
-    children_under6: 0,
-    children_7_12: 0,
     check_in: paramCheckIn || format(addDays(new Date(), 1), 'yyyy-MM-dd'),
     check_out: paramCheckOut || format(addDays(new Date(), 2), 'yyyy-MM-dd'),
     special_requests: '',
@@ -94,7 +94,14 @@ export default function Booking() {
         if (settingsRes.data?.extra_person_rates) {
           setExtraPersonRates(settingsRes.data.extra_person_rates);
         }
-        if (preselectedRoom) setForm((f) => ({ ...f, room_id: preselectedRoom }));
+        if (preselectedRoom) {
+          setRoomLines([
+            createRoomLine({
+              room_id: preselectedRoom,
+              adults: paramGuests ? parseInt(paramGuests, 10) || 2 : 2,
+            }),
+          ]);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -106,51 +113,66 @@ export default function Booking() {
   );
 
   useEffect(() => {
-    if (!form.room_id || !form.check_in || !form.check_out || dateError) {
-      setAvailability(null);
-      setAvailabilityChecking(false);
-      return;
+    if (!form.check_in || !form.check_out || dateError) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
     }
-    setAvailabilityChecking(true);
-    api
-      .get('/bookings/availability', {
-        params: {
-          room_id: form.room_id,
-          check_in: form.check_in,
-          check_out: form.check_out,
-          adults: form.adults,
-          children_under6: form.children_under6,
-          children_7_12: form.children_7_12,
-        },
+
+    const linesWithRoom = roomLines.filter((line) => line.room_id);
+    if (linesWithRoom.length === 0) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
+    }
+
+    setLineQuotesLoading(true);
+    let cancelled = false;
+
+    Promise.all(
+      linesWithRoom.map((line) =>
+        api
+          .get('/bookings/availability', {
+            params: {
+              room_id: line.room_id,
+              check_in: form.check_in,
+              check_out: form.check_out,
+              adults: line.adults,
+              children_under6: line.children_under6,
+              children_7_12: line.children_7_12,
+            },
+          })
+          .then((r) => ({ id: line.id, data: r.data }))
+          .catch(() => ({ id: line.id, data: null }))
+      )
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const next = {};
+        results.forEach(({ id, data }) => {
+          next[id] = data;
+        });
+        setLineQuotes(next);
       })
-      .then((r) => setAvailability(r.data))
-      .catch(() => setAvailability(null))
-      .finally(() => setAvailabilityChecking(false));
-  }, [
-    form.room_id,
-    form.check_in,
-    form.check_out,
-    form.adults,
-    form.children_under6,
-    form.children_7_12,
-    dateError,
-  ]);
+      .finally(() => {
+        if (!cancelled) setLineQuotesLoading(false);
+      });
 
-  const guestCount =
-    (parseInt(form.adults, 10) || 0) +
-    (parseInt(form.children_under6, 10) || 0) +
-    (parseInt(form.children_7_12, 10) || 0);
-  const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
+    return () => {
+      cancelled = true;
+    };
+  }, [roomLines, form.check_in, form.check_out, dateError]);
 
-  useEffect(() => {
-    if (!form.room_id) return;
-    const room = rooms.find((r) => String(r.id) === String(form.room_id));
-    const roomMax = room?.max_guests ?? room?.capacity ?? 1;
-    if (room && roomMax < guestCount && !roomLocked) {
-      setForm((f) => ({ ...f, room_id: '' }));
-      setAvailability(null);
-    }
-  }, [form.adults, form.children_under6, form.children_7_12, form.room_id, rooms, guestCount, roomLocked]);
+  const guestCount = totalGuestsFromLines(roomLines);
+  const primaryLine = roomLines[0];
+  const selectedRoom = primaryLine?.room_id
+    ? rooms.find((r) => String(r.id) === String(primaryLine.room_id))
+    : null;
+  const extrasRoomType = roomLines.some(
+    (line) => rooms.find((r) => String(r.id) === String(line.room_id))?.room_type === 'suite'
+  )
+    ? 'suite'
+    : 'queen';
 
   const roomsSearchUrl = () => {
     const params = new URLSearchParams();
@@ -160,21 +182,27 @@ export default function Booking() {
     return `/rooms?${params.toString()}`;
   };
 
-  const roomTypeLabel =
-    selectedRoom?.room_type === 'suite'
-      ? ROOM_INVENTORY.suite.label
-      : selectedRoom?.room_type === 'queen'
-        ? ROOM_INVENTORY.queen.label
-        : null;
-  const nights = availability?.nights || 0;
-  const subtotal =
-    availability?.available && availability.subtotal != null
-      ? Number(availability.subtotal)
-      : 0;
-  const priceBreakdown = availability?.breakdown || [];
+  const nights = Object.values(lineQuotes)[0]?.nights || 0;
+  const subtotal = roomLines.reduce((sum, line) => sum + (Number(lineQuotes[line.id]?.subtotal) || 0), 0);
+  const extraCharges = roomLines.reduce(
+    (sum, line) => sum + (Number(lineQuotes[line.id]?.extra_person_charges) || 0),
+    0
+  );
+  const roomSubtotal = roomLines.reduce(
+    (sum, line) =>
+      sum +
+      (Number(lineQuotes[line.id]?.room_subtotal) || Number(lineQuotes[line.id]?.subtotal) || 0),
+    0
+  );
+  const allLinesReady =
+    roomLines.length > 0 &&
+    roomLines.every((line) => line.room_id) &&
+    !lineQuotesLoading &&
+    roomLines.every((line) => {
+      const quote = lineQuotes[line.id];
+      return quote?.available && !quote?.occupancy_error;
+    });
   const roomTotal = subtotal;
-  const extraCharges = availability?.extra_person_charges || 0;
-  const roomSubtotal = availability?.room_subtotal ?? subtotal;
 
   const islandQuote =
     islandHoppingEnabled && islandHopping.passengers?.length
@@ -184,8 +212,8 @@ export default function Booking() {
     islandHoppingEnabled && islandQuote && !islandQuote.error && islandQuote.complete
       ? islandQuote.total
       : 0;
-  const extrasQuote = selectedRoom
-    ? validateBookingExtras(bookingExtras, selectedRoom.room_type)
+  const extrasQuote = roomLines.some((line) => line.room_id)
+    ? validateBookingExtras(bookingExtras, extrasRoomType)
     : null;
   const bilaoTotal = extrasQuote?.valid ? extrasQuote.bilao_amount : 0;
   const boodleTotal = extrasQuote?.valid ? extrasQuote.boodle_fight_amount : 0;
@@ -206,27 +234,38 @@ export default function Booking() {
 
   const submitBlockedReason = useMemo(() => {
     if (dateError) return dateError;
-    if (!form.room_id) {
+    if (!roomLines.every((line) => line.room_id)) {
       return roomLocked
         ? 'Room not found. Go back and select a room again.'
-        : 'Select a room before submitting.';
+        : 'Select a room for each line before submitting.';
     }
-    if (availabilityChecking) return 'Checking availability for your dates…';
-    if (!availability) {
+    if (lineQuotesLoading) return 'Checking availability for your dates…';
+    if (!allLinesReady) {
+      const badLine = roomLines.find((line) => {
+        const quote = lineQuotes[line.id];
+        return !quote || quote.occupancy_error || !quote.available;
+      });
+      if (badLine) {
+        const quote = lineQuotes[badLine.id];
+        if (quote?.occupancy_error) return quote.occupancy_error;
+        return 'One or more rooms are not available for these dates. Change dates or choose different rooms.';
+      }
       return 'Could not verify availability. Check that the backend is running and your dates are valid.';
     }
-    if (availability.occupancy_error) return availability.occupancy_error;
-    if (!availability.available) {
-      return 'These dates are not available for this room. Change check-in or check-out dates.';
-    }
-    if (selectedRoom) {
-      const maxG = selectedRoom.max_guests ?? selectedRoom.capacity ?? 1;
-      const minG = selectedRoom.min_guests ?? 1;
-      if (guestCount > maxG) {
-        return `This room allows up to ${maxG} guests. Lower guest count or choose another room.`;
+    for (const line of roomLines) {
+      const room = rooms.find((r) => String(r.id) === String(line.room_id));
+      if (!room) continue;
+      const lineGuests =
+        (parseInt(line.adults, 10) || 0) +
+        (parseInt(line.children_under6, 10) || 0) +
+        (parseInt(line.children_7_12, 10) || 0);
+      const maxG = room.max_guests ?? room.capacity ?? 1;
+      const minG = room.min_guests ?? 1;
+      if (lineGuests > maxG) {
+        return `${room.name} allows up to ${maxG} guests. Add another room or lower the guest count for that room.`;
       }
-      if (guestCount < minG) {
-        return `This room requires at least ${minG} guest(s).`;
+      if (lineGuests < minG) {
+        return `${room.name} requires at least ${minG} guest(s).`;
       }
     }
     if (totalAmount <= 0) {
@@ -283,15 +322,15 @@ export default function Booking() {
     if (extrasQuote && !extrasQuote.valid) return extrasQuote.message;
     return null;
   }, [
-    form.room_id,
     dateError,
     form.payment_method_id,
     form.valid_id,
     form.payment_option,
-    availabilityChecking,
-    availability,
-    selectedRoom,
-    guestCount,
+    lineQuotesLoading,
+    lineQuotes,
+    roomLines,
+    rooms,
+    allLinesReady,
     totalAmount,
     paymentMethods.length,
     customPay,
@@ -304,12 +343,8 @@ export default function Booking() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const numeric = ['adults', 'children_under6', 'children_7_12'];
     const nextValue = name === 'guest_phone' ? digitsOnly(value) : value;
-    const next = {
-      ...form,
-      [name]: numeric.includes(name) ? (nextValue === '' ? '' : parseInt(nextValue, 10)) : nextValue,
-    };
+    const next = { ...form, [name]: nextValue };
 
     if (name === 'check_in' && value) {
       const earliestOut = minCheckOutDate(value);
@@ -322,32 +357,31 @@ export default function Booking() {
     setError('');
   };
 
+  const updateRoomLine = (lineId, patch) => {
+    setRoomLines((lines) =>
+      lines.map((line) => (line.id === lineId ? { ...line, ...patch } : line))
+    );
+    setError('');
+  };
+
+  const addRoomLine = () => {
+    setRoomLines((lines) => [...lines, createRoomLine()]);
+    setError('');
+  };
+
+  const removeRoomLine = (lineId) => {
+    setRoomLines((lines) => (lines.length <= 1 ? lines : lines.filter((line) => line.id !== lineId)));
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (dateError) {
       setError(dateError);
       return;
     }
-    if (!form.room_id) {
-      setError('Please select a room from the available rooms list first.');
-      return;
-    }
-    const maxG = selectedRoom.max_guests ?? selectedRoom.capacity ?? 1;
-    const minG = selectedRoom.min_guests ?? 1;
-    if (selectedRoom && guestCount > maxG) {
-      setError(`This room allows up to ${maxG} guests. Adjust guest count or choose another room.`);
-      return;
-    }
-    if (selectedRoom && guestCount < minG) {
-      setError(`This room requires at least ${minG} guest(s).`);
-      return;
-    }
-    if (availability?.occupancy_error) {
-      setError(availability.occupancy_error);
-      return;
-    }
-    if (!availability?.available) {
-      setError('Selected dates are not available. Please choose different dates.');
+    if (!allLinesReady) {
+      setError(submitBlockedReason || 'Please complete all room details before submitting.');
       return;
     }
     if (!form.valid_id?.trim()) {
@@ -410,15 +444,12 @@ export default function Booking() {
     setError('');
     try {
       const { data } = await api.post('/bookings', {
-        room_id: parseInt(form.room_id, 10),
+        room_lines: roomLinesToPayload(roomLines),
         guest_name: form.guest_name,
         guest_email: form.guest_email,
         guest_phone: form.guest_phone,
         valid_id: form.valid_id.trim(),
         estimated_arrival: form.estimated_arrival.trim() || null,
-        adults: parseInt(form.adults, 10) || 1,
-        children_under6: parseInt(form.children_under6, 10) || 0,
-        children_7_12: parseInt(form.children_7_12, 10) || 0,
         guest_count: guestCount,
         check_in: form.check_in,
         check_out: form.check_out,
@@ -552,49 +583,8 @@ export default function Booking() {
               <FormSection
                 step={1}
                 title="Your stay"
-                description="Room, dates, and number of guests"
+                description="Dates and rooms — add more than one room if your group is large"
               >
-              {roomLocked && selectedRoom && (
-                <div className="rounded-xl border border-aegean-200 bg-aegean-50/60 overflow-hidden">
-                  <div className="flex flex-col sm:flex-row">
-                    {selectedRoom.images?.[0]?.image_url && (
-                      <div className="sm:w-40 h-36 sm:h-auto shrink-0">
-                        <img
-                          src={selectedRoom.images[0].image_url}
-                          alt={selectedRoom.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="p-5 flex-1">
-                      <p className="text-xs uppercase tracking-wider text-aegean-500 mb-1">Your room</p>
-                      <h3 className="text-xl font-serif text-aegean-800">{selectedRoom.name}</h3>
-                      {roomTypeLabel && (
-                        <p className="text-sm text-aegean-600 mt-0.5">{roomTypeLabel}</p>
-                      )}
-                      {capacityNoteForRoom(selectedRoom) && (
-                        <p className="text-sm text-aegean-600 mt-1">{capacityNoteForRoom(selectedRoom)}</p>
-                      )}
-                      {guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 1) && (
-                        <p className="text-sm text-red-600 mt-2">
-                          Too many guests for this room. Lower guest count or{' '}
-                          <Link to={roomsSearchUrl()} className="underline">
-                            pick another room
-                          </Link>
-                          .
-                        </p>
-                      )}
-                      <Link
-                        to={roomsSearchUrl()}
-                        className="inline-block text-sm text-aegean-500 hover:text-aegean-700 mt-3 underline"
-                      >
-                        Change room
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {roomLocked && !loading && !selectedRoom && (
                 <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm">
                   Room not found.{' '}
@@ -643,72 +633,30 @@ export default function Booking() {
                 )}
               </div>
 
-              {availability && !availability.available && !availability.occupancy_error && (
-                <p className="text-sm text-red-600">Not available for selected dates</p>
-              )}
-
               <div>
-                <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
-              {capacityNoteForRoom(selectedRoom) && (
-                <p className="text-xs text-aegean-600 mb-2">
-                  <span className="font-medium">Maximum: </span>
-                  {capacityNoteForRoom(selectedRoom)}
+                <p className="text-sm font-medium text-aegean-700 mb-2">Rooms & guests</p>
+                <p className="text-xs text-aegean-500 mb-4">
+                  Large group? Book one room first, then tap <strong>Add another room</strong> for a
+                  second suite or room (e.g. 10 guests in one suite + 6 in another).
                 </p>
-              )}
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-aegean-700 mb-1">Adults *</label>
-                  <input
-                    type="number"
-                    name="adults"
-                    min={1}
-                    value={form.adults}
-                    onChange={handleChange}
-                    required
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-aegean-700 mb-1">
-                    Children (6 & below)
-                  </label>
-                  <input
-                    type="number"
-                    name="children_under6"
-                    min={0}
-                    value={form.children_under6}
-                    onChange={handleChange}
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                  />
-                  <p className="text-xs text-aegean-500 mt-1">Free</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-aegean-700 mb-1">
-                    Children (7–12)
-                  </label>
-                  <input
-                    type="number"
-                    name="children_7_12"
-                    min={0}
-                    value={form.children_7_12}
-                    onChange={handleChange}
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-aegean-400 outline-none"
-                  />
-                  <p className="text-xs text-aegean-500 mt-1">₱{extraPersonRates.child_7_12}/night each</p>
-                </div>
-              </div>
+                <BookingRoomLinesSection
+                  lines={roomLines}
+                  rooms={rooms}
+                  roomLocked={roomLocked}
+                  lineQuotes={lineQuotes}
+                  quotesLoading={lineQuotesLoading}
+                  onLineChange={updateRoomLine}
+                  onAddLine={addRoomLine}
+                  onRemoveLine={removeRoomLine}
+                  roomsSearchUrl={roomsSearchUrl}
+                  usedRoomIds={usedRoomIds(roomLines)}
+                />
                 <p className="text-xs text-aegean-500 mt-3">
-                  {availability?.extra_breakdown?.packageLabel ? (
-                    <>Package: {availability.extra_breakdown.packageLabel}. </>
-                  ) : null}
-                  Extra adult ₱{extraPersonRates.adult_weekday}/night (Mon–Thu) or ₱{extraPersonRates.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
+                  Extra adult ₱{extraPersonRates.adult_weekday}/night (Mon–Thu) or ₱
+                  {extraPersonRates.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
                   ₱{extraPersonRates.child_7_12}/night · child 6 & below free.
                 </p>
               </div>
-
-              {availability?.occupancy_error && (
-                <p className="text-sm text-red-600">{availability.occupancy_error}</p>
-              )}
               </FormSection>
 
               <FormSection
@@ -793,7 +741,7 @@ export default function Booking() {
                 <BookingExtrasSection
                   data={bookingExtras}
                   onChange={setBookingExtras}
-                  roomType={selectedRoom?.room_type === 'suite' ? 'suite' : 'queen'}
+                  roomType={extrasRoomType}
                 />
                 <IslandHoppingSection
                   embedded
@@ -813,7 +761,7 @@ export default function Booking() {
                 />
               </FormSection>
 
-              {availability?.available && totalAmount > 0 && (
+              {allLinesReady && totalAmount > 0 && (
               <FormSection
                 step={4}
                 title="Review & payment"
@@ -822,61 +770,35 @@ export default function Booking() {
                 <div className="rounded-xl border border-aegean-200 bg-aegean-50/40 p-4 text-sm space-y-3">
                   <p className="font-serif text-aegean-800 font-medium">Price summary</p>
 
-                  <div className="space-y-1 text-aegean-700">
-                    <div className="flex justify-between">
-                      <span>Room rate ({nights} night{nights !== 1 ? 's' : ''})</span>
-                      <span>₱{Number(roomSubtotal).toLocaleString()}</span>
-                    </div>
-                    {priceBreakdown.length > 0 && (
-                      <ul className="text-xs text-aegean-500 pl-2 space-y-0.5">
-                        {priceBreakdown.map((n) => (
-                          <li key={n.date}>
-                            {n.date}: ₱{Number(n.rate).toLocaleString()}
-                            {n.type === 'holiday' && n.label ? ` (${n.label})` : ` (${n.type})`}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div className="border-t border-aegean-200 pt-3 space-y-1">
-                    <p className="font-medium text-aegean-800">Additional guests</p>
-                    {availability.extra_breakdown ? (
-                      extraCharges > 0 ? (
-                        <>
-                          <p className="text-xs text-aegean-600">
-                            Room rate includes {availability.extra_breakdown.includedAdults}{' '}
-                            adult(s) for this package.
-                          </p>
-                          {getExtraAdultsLines(availability.extra_breakdown).map((line) => (
-                            <div
-                              key={line.label}
-                              className="flex justify-between text-aegean-700 gap-4"
-                            >
-                              <span>{line.label}</span>
-                              <span className="shrink-0">₱{Number(line.amount).toLocaleString()}</span>
-                            </div>
-                          ))}
-                          {availability.extra_breakdown.extraChildren7_12 > 0 && (
-                            <div className="flex justify-between text-aegean-700 gap-4">
-                              <span>{formatExtraChildrenLabel(availability.extra_breakdown)}</span>
-                              <span className="shrink-0">
-                                ₱{Number(availability.extra_breakdown.childChargeTotal || 0).toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between font-medium pt-1">
-                            <span>Additional total</span>
-                            <span>₱{Number(extraCharges).toLocaleString()}</span>
+                  <div className="space-y-2 text-aegean-700">
+                    {roomLines
+                      .filter((line) => line.room_id)
+                      .map((line) => {
+                        const room = rooms.find((r) => String(r.id) === String(line.room_id));
+                        const quote = lineQuotes[line.id];
+                        return (
+                          <div key={line.id} className="flex justify-between gap-4">
+                            <span>
+                              {room?.name || 'Room'} ({quote?.nights || nights} night
+                              {(quote?.nights || nights) !== 1 ? 's' : ''})
+                            </span>
+                            <span className="shrink-0">
+                              ₱{Number(quote?.subtotal || 0).toLocaleString()}
+                            </span>
                           </div>
-                        </>
-                      ) : (
-                        <p className="text-xs text-aegean-600">
-                          {availability.extra_breakdown.note || 'No additional guest fees.'}
-                        </p>
-                      )
-                    ) : (
-                      <p className="text-xs text-aegean-500">Enter guests to see pricing.</p>
+                        );
+                      })}
+                    {roomLines.length > 1 && (
+                      <div className="flex justify-between font-medium pt-1 border-t border-aegean-200">
+                        <span>All rooms subtotal</span>
+                        <span>₱{Number(roomSubtotal).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {extraCharges > 0 && (
+                      <div className="flex justify-between text-aegean-600 text-xs">
+                        <span>Includes extra guest charges</span>
+                        <span>₱{Number(extraCharges).toLocaleString()}</span>
+                      </div>
                     )}
                   </div>
 
@@ -982,7 +904,7 @@ export default function Booking() {
                 loading={submitting}
                 loadingLabel="Submitting..."
                 className="w-full"
-                disabled={Boolean(submitBlockedReason) || availabilityChecking}
+                disabled={Boolean(submitBlockedReason) || lineQuotesLoading}
               >
                 Submit Booking Request
               </SubmitButton>

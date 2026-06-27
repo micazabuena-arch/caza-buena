@@ -21,6 +21,8 @@ export default function AdminModal({
   children,
   bodyClassName = '',
   padding = true,
+  /** When false, body does not scroll — child forms should use their own scroll region + pinned footer. */
+  bodyScroll = true,
 }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -39,6 +41,9 @@ export default function AdminModal({
   if (!open) return null;
 
   const widthClass = WIDTH_CLASS[size] || WIDTH_CLASS.sm;
+  const bodyClasses = bodyScroll
+    ? `flex-1 min-h-0 overflow-y-auto ${padding ? 'p-6' : ''} ${bodyClassName}`.trim()
+    : `flex-1 min-h-0 overflow-hidden flex flex-col ${padding ? 'p-6' : ''} ${bodyClassName}`.trim();
 
   return createPortal(
     <div
@@ -69,9 +74,7 @@ export default function AdminModal({
             <X size={20} />
           </button>
         </div>
-        <div className={`flex-1 min-h-0 overflow-y-auto ${padding ? 'p-6' : ''} ${bodyClassName}`.trim()}>
-          {children}
-        </div>
+        <div className={bodyClasses}>{children}</div>
       </div>
     </div>,
     document.body

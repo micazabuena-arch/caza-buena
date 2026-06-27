@@ -1,5 +1,6 @@
-import { applyDiscount, calculateNights } from './booking.js';
+import { calculateNights } from './booking.js';
 import { calculateStayTotal } from './pricing.js';
+import { resolveStoredBookingDiscount } from './adminBookingDiscount.js';
 import { getDepositPercent, resolveAmountToPay } from './paymentAmount.js';
 
 function bookingAddonsTotal(booking) {
@@ -61,9 +62,19 @@ export async function computeRebookPricing(pool, booking, options = {}) {
   const oldStay = await calculateStayTotal(pool, booking.room_id, oldCheckIn, oldCheckOut, occupancy);
   const newStay = await calculateStayTotal(pool, roomId, newCheckIn, newCheckOut, occupancy);
 
-  const oldDiscount = await applyDiscount(pool, booking.discount_code, oldNights, oldStay.subtotal);
-  const newDiscount = await applyDiscount(pool, booking.discount_code, newNights, newStay.subtotal);
-  if (booking.discount_code && newDiscount.error) {
+  const oldDiscount = await resolveStoredBookingDiscount(
+    pool,
+    booking,
+    oldNights,
+    oldStay.subtotal
+  );
+  const newDiscount = await resolveStoredBookingDiscount(
+    pool,
+    booking,
+    newNights,
+    newStay.subtotal
+  );
+  if (newDiscount.error) {
     return { error: newDiscount.error };
   }
 
@@ -99,6 +110,7 @@ export async function computeRebookPricing(pool, booking, options = {}) {
     previous_nights: oldNights,
     new_nights: newNights,
     previous_room_total: roundMoney(oldRoomTotal),
+    new_stay_subtotal: roundMoney(newStay.subtotal),
     new_room_total: roundMoney(newRoomTotal),
     addons_total: roundMoney(addons),
     previous_total_amount: previousTotal,

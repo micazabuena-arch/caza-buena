@@ -36,6 +36,8 @@ export async function createManualBooking(body) {
     bilao_package: bilaoPackageBody,
     boodle_fight_enabled: boodleFightEnabledFlag,
     boodle_fight_tier: boodleFightTierBody,
+    admin_discount_amount,
+    admin_discount_note,
   } = body;
 
   const adults = parseInt(adultsBody, 10) || 1;
@@ -67,7 +69,7 @@ export async function createManualBooking(body) {
     childrenUnder6,
     children7_12: children712,
   });
-  const { subtotal, extraPersonCharges } = stay;
+  const { subtotal, extraPersonCharges, roomSubtotal: stayRoomSubtotal } = stay;
   const avgNightlyRate = nights > 0 ? subtotal / nights : Number(room.price_per_night);
 
   let islandHopping = Boolean(islandHoppingFlag);
@@ -115,8 +117,19 @@ export async function createManualBooking(body) {
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
+  const { resolveAdminBookingDiscount } = await import('./adminBookingDiscount.js');
+  const discountResolved = await resolveAdminBookingDiscount(pool, {
+    staySubtotal: subtotal,
+    nights,
+    discount_code: null,
+    admin_discount_amount,
+    admin_discount_note,
+  });
+  if (discountResolved.error) return { error: discountResolved.error };
+
+  const roomTotal = Math.max(0, subtotal - (discountResolved.amount || 0));
   const total =
-    subtotal +
+    roomTotal +
     islandHoppingAmount +
     extrasValidation.bilao_amount +
     extrasValidation.boodle_fight_amount;
@@ -142,12 +155,12 @@ export async function createManualBooking(body) {
       reference_code, room_id, guest_name, guest_email, guest_phone,
       valid_id, estimated_arrival, guest_count, adults, children_under6, children_7_12,
       special_requests, check_in, check_out, nights,
-      room_rate, discount_amount, discount_code, total_amount, extra_person_charges,
+      room_rate, discount_amount, discount_code, discount_note, total_amount, extra_person_charges,
       island_hopping, island_hopping_amount, island_hopping_data,
       bringing_car, car_count, pet_count, pet_deposit_amount,
       bilao_package, bilao_amount, boodle_fight, boodle_fight_tier, boodle_fight_amount,
       status, admin_notes, payment_method_id, payment_option, amount_to_pay, confirmed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reference,
       room_id,
@@ -165,6 +178,9 @@ export async function createManualBooking(body) {
       checkOut,
       nights,
       avgNightlyRate,
+      discountResolved.amount || 0,
+      discountResolved.code,
+      discountResolved.note,
       total,
       extraPersonCharges || 0,
       islandHopping ? 1 : 0,
@@ -188,6 +204,23 @@ export async function createManualBooking(body) {
     ]
   );
 
+  const { insertBookingRooms } = await import('./bookingRooms.js');
+  await insertBookingRooms(pool, result.insertId, [
+    {
+      room_id,
+      adults,
+      children_under6: childrenUnder6,
+      children_7_12: children712,
+      guest_count,
+      nights,
+      room_rate: avgNightlyRate,
+      room_subtotal: stayRoomSubtotal ?? subtotal - (extraPersonCharges || 0),
+      extra_person_charges: extraPersonCharges || 0,
+      subtotal,
+      sort_order: 0,
+    },
+  ]);
+
   const bookingRow = {
     id: result.insertId,
     reference_code: reference,
@@ -198,9 +231,17 @@ export async function createManualBooking(body) {
     check_out: checkOut,
     nights,
     total_amount: total,
+    discount_amount: discountResolved.amount || 0,
+    discount_code: discountResolved.code,
+    discount_note: discountResolved.note,
     amount_to_pay: payResolved.amount,
     status,
     room_name: room.name,
+    island_hopping: islandHopping ? 1 : 0,
+    island_hopping_amount: islandHoppingAmount,
+    bilao_amount: extrasValidation.bilao_amount,
+    boodle_fight_amount: extrasValidation.boodle_fight_amount,
+    payment_option,
   };
 
   let emailResult = { sent: false };

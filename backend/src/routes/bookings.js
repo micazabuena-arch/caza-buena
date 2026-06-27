@@ -179,14 +179,21 @@ router.get('/reference/:code', async (req, res) => {
     [req.params.code.toUpperCase()]
   );
   if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
-  res.json(rows[0]);
+  const { attachBookingRooms } = await import('../utils/bookingRooms.js');
+  const booking = await attachBookingRooms(pool, rows[0]);
+  res.json(booking);
 });
 
 // Public: create booking request
 router.post(
   '/',
   [
-    body('room_id').toInt().isInt({ min: 1 }),
+    body('room_id').optional({ nullable: true }).toInt().isInt({ min: 1 }),
+    body('room_lines').optional().isArray({ min: 1 }),
+    body('room_lines.*.room_id').optional().toInt().isInt({ min: 1 }),
+    body('room_lines.*.adults').optional().toInt().isInt({ min: 1 }),
+    body('room_lines.*.children_under6').optional().toInt().isInt({ min: 0 }),
+    body('room_lines.*.children_7_12').optional().toInt().isInt({ min: 0 }),
     body('guest_name').trim().notEmpty(),
     body('guest_email').isEmail(),
     body('guest_phone').trim().notEmpty(),
@@ -213,6 +220,11 @@ router.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const hasRoomLines = Array.isArray(req.body.room_lines) && req.body.room_lines.length > 0;
+    if (!hasRoomLines && !req.body.room_id) {
+      return res.status(400).json({ message: 'Select at least one room' });
+    }
 
     try {
     const {
@@ -242,43 +254,48 @@ router.post(
       bilao_package: bilaoPackageBody,
       boodle_fight_enabled: boodleFightEnabledFlag,
       boodle_fight_tier: boodleFightTierBody,
+      room_lines: roomLinesBody,
     } = req.body;
-
-    const adults = adultsBody != null ? parseInt(adultsBody, 10) : parseInt(guestCountBody, 10) || 1;
-    const childrenUnder6 = parseInt(children_under6, 10) || 0;
-    const children712 = parseInt(children_7_12, 10) || 0;
-    const guest_count =
-      guestCountBody != null
-        ? parseInt(guestCountBody, 10)
-        : adults + childrenUnder6 + children712;
 
     const checkIn = String(check_in).slice(0, 10);
     const checkOut = String(check_out).slice(0, 10);
 
-    const nights = calculateNights(checkIn, checkOut);
-    if (nights < 1) return res.status(400).json({ message: 'Invalid date range' });
+    const {
+      normalizeRoomLines,
+      validateAndPriceRoomLines,
+      insertBookingRooms,
+      attachBookingRooms,
+    } = await import('../utils/bookingRooms.js');
 
-    const available = await isRoomAvailable(pool, room_id, checkIn, checkOut);
-    if (!available) return res.status(409).json({ message: 'Room not available for selected dates' });
-
-    const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ? AND is_active = 1', [room_id]);
-    if (rooms.length === 0) return res.status(404).json({ message: 'Room not found' });
-
-    const room = rooms[0];
-    const occupancy = { adults, childrenUnder6, children7_12: children712 };
-
-    const { validateOccupancy } = await import('../config/resortRules.js');
-    const occCheck = validateOccupancy(room, occupancy);
-    if (!occCheck.valid) return res.status(400).json({ message: occCheck.message });
-
-    const { calculateStayTotal } = await import('../utils/pricing.js');
-    const stay = await calculateStayTotal(pool, room_id, checkIn, checkOut, {
-      adults,
-      childrenUnder6,
-      children7_12: children712,
+    const rawLines = normalizeRoomLines({
+      room_id,
+      room_lines: roomLinesBody,
+      adults: adultsBody,
+      children_under6,
+      children_7_12,
+      guest_count: guestCountBody,
     });
-    const { subtotal, breakdown, extraPersonCharges, roomSubtotal } = stay;
+
+    const priced = await validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines);
+    if (priced.error) return res.status(400).json({ message: priced.error });
+
+    const {
+      nights,
+      lines: pricedLines,
+      combinedSubtotal: subtotal,
+      combinedExtraCharges: extraPersonCharges,
+      totalAdults: adults,
+      totalUnder6: childrenUnder6,
+      total712: children712,
+      totalGuests: guest_count,
+      primaryRoom: room,
+    } = priced;
+
     const avgNightlyRate = nights > 0 ? subtotal / nights : Number(room.price_per_night);
+    const breakdown = pricedLines.flatMap((line) =>
+      (line.breakdown || []).map((night) => ({ ...night, room_name: line.room.name }))
+    );
+
     const { amount: discountAmount, code: appliedCode, error: discountError } =
       await applyDiscount(pool, discount_code, nights, subtotal);
 
@@ -331,7 +348,7 @@ router.post(
         boodle_fight_enabled: boodleFightEnabledFlag,
         boodle_fight_tier: boodleFightTierBody,
       },
-      room.room_type
+      priced.hasSuite ? 'suite' : room.room_type
     );
     if (!extrasValidation.valid) {
       return res.status(400).json({ message: extrasValidation.message });
@@ -375,7 +392,7 @@ router.post(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
       [
         reference,
-        room_id,
+        pricedLines[0].room_id,
         guest_name,
         guest_email,
         guest_phone,
@@ -412,6 +429,8 @@ router.post(
       ]
     );
 
+    await insertBookingRooms(pool, result.insertId, pricedLines);
+
     const booking = {
       id: result.insertId,
       reference_code: reference,
@@ -426,12 +445,18 @@ router.post(
       island_hopping: islandHopping,
       island_hopping_amount: islandHoppingAmount,
       status: 'awaiting_payment',
+      room_id: pricedLines[0].room_id,
     };
+
+    const bookingWithRooms = await attachBookingRooms(pool, {
+      ...booking,
+      room_name: pricedLines.map((l) => l.room.name).join(', '),
+    });
 
     res.status(201).json({
       message: 'Booking request submitted',
       payment_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/booking/confirm/${reference}`,
-      booking: { ...booking, room_name: room.name, price_breakdown: breakdown },
+      booking: { ...bookingWithRooms, price_breakdown: breakdown },
     });
     } catch (err) {
       console.error('Create booking error:', err);
@@ -474,6 +499,8 @@ router.post(
     body('bilao_package').optional().trim(),
     body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('boodle_fight_tier').optional().trim(),
+    body('admin_discount_amount').optional().isFloat({ min: 0 }),
+    body('admin_discount_note').optional().trim().isLength({ max: 255 }),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -525,7 +552,8 @@ router.get('/admin/all', authenticateAdmin, async (req, res) => {
   }
   query += ' ORDER BY b.created_at DESC';
   const [bookings] = await pool.query(query, params);
-  res.json(bookings);
+  const { attachBookingRoomsToList } = await import('../utils/bookingRooms.js');
+  res.json(await attachBookingRoomsToList(pool, bookings));
 });
 
 router.get('/admin/calendar', authenticateAdmin, async (req, res) => {
@@ -569,7 +597,7 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
         valid_id = ?, estimated_arrival = ?, guest_count = ?, adults = ?,
         children_under6 = ?, children_7_12 = ?, special_requests = ?, admin_notes = ?,
         check_in = ?, check_out = ?, nights = ?, room_rate = ?, discount_amount = ?,
-        total_amount = ?, extra_person_charges = ?,
+        discount_code = ?, discount_note = ?, total_amount = ?, extra_person_charges = ?,
         island_hopping = ?, island_hopping_amount = ?, island_hopping_data = ?,
         bringing_car = ?, car_count = ?, pet_count = ?, pet_deposit_amount = ?,
         bilao_package = ?, bilao_amount = ?, boodle_fight = ?, boodle_fight_tier = ?,
@@ -593,6 +621,8 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
         v.nights,
         v.room_rate,
         v.discount_amount,
+        v.discount_code,
+        v.discount_note,
         v.total_amount,
         v.extra_person_charges,
         v.island_hopping,
@@ -623,7 +653,10 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ message: 'Booking updated', booking: updated[0] });
+    const { attachBookingRooms } = await import('../utils/bookingRooms.js');
+    const booking = await attachBookingRooms(pool, updated[0]);
+
+    res.json({ message: 'Booking updated', booking });
   } catch (err) {
     console.error('Admin update booking error:', err);
     res.status(500).json({ message: 'Unable to update booking' });
@@ -834,7 +867,8 @@ router.get('/admin/:id', authenticateAdmin, async (req, res) => {
     [req.params.id]
   );
   if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
-  res.json(rows[0]);
+  const { attachBookingRooms } = await import('../utils/bookingRooms.js');
+  res.json(await attachBookingRooms(pool, rows[0]));
 });
 
 // Public: upload payment proof

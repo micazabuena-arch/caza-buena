@@ -38,7 +38,23 @@ export async function isRoomAvailable(pool, roomId, checkIn, checkOut, excludeBo
     params.push(excludeBookingId);
   }
   const [bookings] = await pool.query(query, params);
-  return bookings.length === 0;
+  if (bookings.length > 0) return false;
+
+  // Additional rooms on multi-room bookings
+  let extraQuery = `
+    SELECT br.id FROM booking_rooms br
+    INNER JOIN bookings b ON b.id = br.booking_id
+    WHERE br.room_id = ?
+      AND b.status IN ('pending', 'awaiting_payment', 'payment_submitted', 'confirmed')
+      AND b.check_in < ? AND b.check_out > ?
+  `;
+  const extraParams = [roomId, checkOut, checkIn];
+  if (excludeBookingId) {
+    extraQuery += ' AND b.id != ?';
+    extraParams.push(excludeBookingId);
+  }
+  const [extraBookings] = await pool.query(extraQuery, extraParams);
+  return extraBookings.length === 0;
 }
 
 /** Single-night stay starting on date (check-in that day, check-out next day) */
@@ -124,8 +140,14 @@ export async function getRateCalendarDays(pool, from, to, guestCount = 1) {
       `SELECT room_id, check_in, check_out FROM bookings
        WHERE room_id IN (${placeholders})
          AND status IN ('pending', 'awaiting_payment', 'payment_submitted', 'confirmed')
-         AND check_in < ? AND check_out > ?`,
-      [...roomIds, rangeEndExclusive, from]
+         AND check_in < ? AND check_out > ?
+       UNION ALL
+       SELECT br.room_id, b.check_in, b.check_out FROM booking_rooms br
+       INNER JOIN bookings b ON b.id = br.booking_id
+       WHERE br.room_id IN (${placeholders})
+         AND b.status IN ('pending', 'awaiting_payment', 'payment_submitted', 'confirmed')
+         AND b.check_in < ? AND b.check_out > ?`,
+      [...roomIds, rangeEndExclusive, from, ...roomIds, rangeEndExclusive, from]
     ),
     pool.query(
       `SELECT room_id, start_date, end_date, price_per_night FROM room_holiday_rates

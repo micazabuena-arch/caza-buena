@@ -23,6 +23,7 @@ import {
   validateManualBookingFields,
   minCheckOutDate,
 } from '../../utils/manualBookingValidation';
+import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import { minCheckInDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
 
@@ -89,6 +90,8 @@ const emptyForm = () => ({
   payment_method_id: '',
   payment_option: 'full',
   custom_payment_amount: '',
+  admin_discount_amount: '',
+  admin_discount_note: '',
 });
 
 export default function ManualBookingForm({ onSuccess, onCancel }) {
@@ -174,7 +177,12 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       ? islandQuote.total
       : 0;
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
-  const totalAmount = roomSubtotal + islandTotal + addOnsTotal;
+  const manualDiscountRaw = parseFloat(form.admin_discount_amount);
+  const manualDiscount =
+    Number.isFinite(manualDiscountRaw) && manualDiscountRaw > 0
+      ? Math.min(manualDiscountRaw, roomSubtotal)
+      : 0;
+  const totalAmount = Math.max(0, roomSubtotal - manualDiscount) + islandTotal + addOnsTotal;
 
   const customPay = parseFloat(form.custom_payment_amount);
   const amountToPay =
@@ -213,6 +221,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       islandQuote,
       islandHopping,
       totalAmount,
+      roomSubtotal,
       customPay,
     }),
     [
@@ -226,6 +235,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       islandQuote,
       islandHopping,
       totalAmount,
+      roomSubtotal,
       customPay,
     ]
   );
@@ -300,6 +310,8 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     boodle_fight_tier: bookingExtras.boodle_fight_enabled
       ? bookingExtras.boodle_fight_tier
       : undefined,
+    admin_discount_amount: form.admin_discount_amount,
+    admin_discount_note: form.admin_discount_note.trim() || undefined,
   });
 
   const uploadIslandHoppingIds = async (reference) => {
@@ -644,6 +656,14 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                 </select>
               </Field>
             )}
+            <AdminBookingDiscountFields
+              amount={form.admin_discount_amount}
+              note={form.admin_discount_note}
+              onAmountChange={(val) => update({ admin_discount_amount: val })}
+              onNoteChange={(val) => update({ admin_discount_note: val })}
+              maxAmount={roomSubtotal}
+              error={fieldErrors.admin_discount_amount}
+            />
             <PaymentAmountSelect
               totalAmount={totalAmount > 0 ? totalAmount : 0}
               depositPercent={depositPercent}

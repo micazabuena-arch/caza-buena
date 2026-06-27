@@ -61,7 +61,7 @@ export function buildBookingSoaLineItems(booking) {
   return lines;
 }
 
-/** Format amounts like the resort SOA sample (commas, decimals only when needed). */
+/** Format amounts like the printed SOA (commas, decimals only when needed). */
 export function formatSoaAmount(value) {
   const num = Number(value) || 0;
   const rounded = Math.round(num * 100) / 100;
@@ -69,4 +69,25 @@ export function formatSoaAmount(value) {
     return rounded.toLocaleString('en-US', { maximumFractionDigits: 0 });
   }
   return rounded.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+}
+
+const PAID_STATUSES = new Set(['confirmed', 'payment_submitted']);
+
+/** Upfront amount + balance for SOA / payment summaries. */
+export function getBookingPaymentSummary(booking) {
+  const total = Number(booking?.total_amount) || 0;
+  const payNow = Number(booking?.amount_to_pay ?? booking?.total_amount) || 0;
+  const balance = Math.max(0, Math.round((total - payNow) * 100) / 100);
+
+  return {
+    total,
+    payNow,
+    balance,
+    upfrontLabel: PAID_STATUSES.has(booking?.status) ? 'Amount Paid' : 'Pay now',
+  };
+}
+
+export function soaAttachmentFilename(referenceCode) {
+  const safe = String(referenceCode || 'booking').replace(/[^\w-]+/g, '-');
+  return `Caza-Buena-SOA-${safe}.pdf`;
 }

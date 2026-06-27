@@ -10,6 +10,7 @@ import { validateBookingExtras } from '../../data/bookingAddOns';
 import { MANUAL_ONLY_PAYMENT_METHODS } from '../../data/manualBookingPayment';
 import { calculateIslandHopping } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
+import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
 import { minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
@@ -135,6 +136,24 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const estimatedAddOns = islandTotal + addOnsTotal;
 
+  const grossRoomSubtotal = useMemo(() => {
+    if (rebookQuote?.new_stay_subtotal != null) {
+      return Number(rebookQuote.new_stay_subtotal);
+    }
+    const addonsOnBooking =
+      Number(booking?.island_hopping_amount || 0) +
+      Number(booking?.bilao_amount || 0) +
+      Number(booking?.boodle_fight_amount || 0);
+    const roomNet = Number(booking?.total_amount || 0) - addonsOnBooking;
+    return roomNet + Number(booking?.discount_amount || 0);
+  }, [booking, rebookQuote]);
+
+  const manualDiscountRaw = parseFloat(form.admin_discount_amount);
+  const manualDiscount =
+    booking?.discount_code || !Number.isFinite(manualDiscountRaw) || manualDiscountRaw <= 0
+      ? 0
+      : Math.min(manualDiscountRaw, grossRoomSubtotal);
+
   const update = (patch) => {
     const cleanPatch = { ...patch };
     if (Object.prototype.hasOwnProperty.call(cleanPatch, 'guest_phone')) {
@@ -173,6 +192,15 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     if (form.payment_option === 'custom') {
       const custom = parseFloat(form.custom_payment_amount);
       if (!Number.isFinite(custom) || custom <= 0) return 'Enter a valid custom amount (tab 4).';
+    }
+    if (!booking.discount_code && form.admin_discount_amount !== '' && form.admin_discount_amount != null) {
+      const discount = parseFloat(form.admin_discount_amount);
+      if (!Number.isFinite(discount) || discount < 0) {
+        return 'Enter a valid discount amount (tab 4).';
+      }
+      if (discount > 0 && grossRoomSubtotal > 0 && discount > grossRoomSubtotal) {
+        return `Discount cannot exceed room stay total (₱${Math.round(grossRoomSubtotal).toLocaleString()}) (tab 4).`;
+      }
     }
     return null;
   };
@@ -216,42 +244,39 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   };
 
   const paymentPreviewTotal = useMemo(() => {
-    const roomPart =
-      rebookQuote?.new_room_total != null
-        ? Number(rebookQuote.new_room_total)
-        : Number(booking?.total_amount) -
-          Number(booking?.island_hopping_amount || 0) -
-          Number(booking?.bilao_amount || 0) -
-          Number(booking?.boodle_fight_amount || 0);
+    const roomPart = Math.max(0, grossRoomSubtotal - manualDiscount);
     return roomPart + estimatedAddOns;
-  }, [booking, estimatedAddOns, rebookQuote]);
+  }, [estimatedAddOns, grossRoomSubtotal, manualDiscount]);
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col">
-      <div className="flex gap-1 p-1 bg-aegean-50 rounded-xl mb-5">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 text-xs sm:text-sm py-2.5 px-2 rounded-lg transition-colors ${
-              activeTab === tab.id
-                ? 'bg-white text-aegean-800 font-medium shadow-sm'
-                : 'text-aegean-600 hover:text-aegean-800'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+      <div className="shrink-0 px-6 pt-6 pb-4">
+        <div className="flex gap-1 p-1 bg-aegean-50 rounded-xl">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 text-xs sm:text-sm py-2.5 px-2 rounded-lg transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-white text-aegean-800 font-medium shadow-sm'
+                  : 'text-aegean-600 hover:text-aegean-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-4">
+            {error}
+          </p>
+        )}
       </div>
 
-      {error && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
-          {error}
-        </p>
-      )}
-
-      <div className="min-h-[280px]">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
+        <div className="min-h-[280px]">
         {activeTab === 'stay' && (
           <Panel
             title="Room & dates"
@@ -440,6 +465,15 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 </select>
               </Field>
             )}
+            <AdminBookingDiscountFields
+              amount={form.admin_discount_amount}
+              note={form.admin_discount_note}
+              onAmountChange={(val) => update({ admin_discount_amount: val })}
+              onNoteChange={(val) => update({ admin_discount_note: val })}
+              maxAmount={grossRoomSubtotal}
+              promoCode={booking.discount_code}
+              promoAmount={booking.discount_amount}
+            />
             <PaymentAmountSelect
               totalAmount={
                 paymentPreviewTotal > 0 ? paymentPreviewTotal : Number(booking.total_amount)
@@ -486,9 +520,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
             </div>
           </Panel>
         )}
+        </div>
       </div>
 
-      <div className="sticky bottom-0 bg-white border-t border-aegean-100 pt-4 pb-6 mt-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="shrink-0 border-t border-aegean-100 px-6 py-4 bg-white flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-aegean-500">
           Tab {TABS.findIndex((t) => t.id === activeTab) + 1} of {TABS.length}
         </p>

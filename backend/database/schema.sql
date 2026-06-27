@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   room_rate DECIMAL(10, 2) NOT NULL,
   discount_amount DECIMAL(10, 2) DEFAULT 0,
   discount_code VARCHAR(50),
+  discount_note VARCHAR(255) NULL COMMENT 'Admin manual discount reason',
   total_amount DECIMAL(10, 2) NOT NULL,
   extra_person_charges DECIMAL(10, 2) NOT NULL DEFAULT 0,
   island_hopping TINYINT(1) NOT NULL DEFAULT 0,
@@ -175,6 +176,25 @@ CREATE TABLE IF NOT EXISTS bookings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (room_id) REFERENCES rooms(id),
   FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS booking_rooms (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  room_id INT NOT NULL,
+  adults INT NOT NULL DEFAULT 1,
+  children_under6 INT NOT NULL DEFAULT 0,
+  children_7_12 INT NOT NULL DEFAULT 0,
+  guest_count INT NOT NULL DEFAULT 1,
+  nights INT NOT NULL,
+  room_rate DECIMAL(10, 2) NOT NULL,
+  room_subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  extra_person_charges DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  subtotal DECIMAL(10, 2) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  FOREIGN KEY (room_id) REFERENCES rooms(id),
+  UNIQUE KEY uq_booking_room (booking_id, room_id)
 );
 
 -- FAQ entries

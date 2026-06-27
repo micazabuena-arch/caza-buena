@@ -117,6 +117,11 @@ async function run() {
   await addColumn('bookings', 'pet_count', 'INT NOT NULL DEFAULT 0 AFTER `car_count`');
   await addColumn(
     'bookings',
+    'discount_note',
+    "VARCHAR(255) NULL COMMENT 'Admin manual discount reason' AFTER `discount_code`"
+  );
+  await addColumn(
+    'bookings',
     'pet_deposit_amount',
     'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `pet_count`'
   );
@@ -137,6 +142,56 @@ async function run() {
     'boodle_fight_amount',
     'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `boodle_fight_tier`'
   );
+
+  console.log('\nbooking_rooms table:');
+  const [bookingRoomsTable] = await pool.query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'booking_rooms'`
+  );
+  if (Number(bookingRoomsTable[0].c) === 0) {
+    await pool.query(`
+      CREATE TABLE booking_rooms (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        booking_id INT NOT NULL,
+        room_id INT NOT NULL,
+        adults INT NOT NULL DEFAULT 1,
+        children_under6 INT NOT NULL DEFAULT 0,
+        children_7_12 INT NOT NULL DEFAULT 0,
+        guest_count INT NOT NULL DEFAULT 1,
+        nights INT NOT NULL,
+        room_rate DECIMAL(10, 2) NOT NULL,
+        room_subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        extra_person_charges DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        subtotal DECIMAL(10, 2) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        UNIQUE KEY uq_booking_room (booking_id, room_id)
+      )
+    `);
+    console.log('  + created booking_rooms');
+    const [backfill] = await pool.query(`
+      INSERT INTO booking_rooms (
+        booking_id, room_id, adults, children_under6, children_7_12, guest_count,
+        nights, room_rate, room_subtotal, extra_person_charges, subtotal, sort_order
+      )
+      SELECT
+        id, room_id,
+        COALESCE(adults, guest_count, 1),
+        COALESCE(children_under6, 0),
+        COALESCE(children_7_12, 0),
+        guest_count,
+        nights, room_rate,
+        GREATEST(0, total_amount - island_hopping_amount - bilao_amount - boodle_fight_amount + COALESCE(discount_amount, 0) - COALESCE(extra_person_charges, 0)),
+        COALESCE(extra_person_charges, 0),
+        GREATEST(0, total_amount - island_hopping_amount - bilao_amount - boodle_fight_amount + COALESCE(discount_amount, 0)),
+        0
+      FROM bookings
+    `);
+    console.log(`  backfilled ${backfill.affectedRows} booking room line(s)`);
+  } else {
+    console.log('  ✓ booking_rooms (already exists)');
+  }
 
   const [holidayTable] = await pool.query(
     `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES

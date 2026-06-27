@@ -242,6 +242,8 @@ export default function AdminGuests() {
             : undefined
         }
         size="xl"
+        bodyScroll={panelMode !== 'edit'}
+        padding={panelMode !== 'edit'}
       >
         {selected && panelMode && (
           <>

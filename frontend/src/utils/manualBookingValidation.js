@@ -30,6 +30,7 @@ export function validateManualBookingFields(form, context = {}) {
     islandHopping,
     totalAmount,
     customPay,
+    roomSubtotal,
   } = context;
 
   const fieldErrors = {};
@@ -162,6 +163,16 @@ export function validateManualBookingFields(form, context = {}) {
         markTab('payment');
       } else if (customPay > totalAmount) {
         fieldErrors.custom_payment_amount = 'Amount cannot exceed the booking total.';
+        markTab('payment');
+      }
+    }
+    const discountRaw = parseFloat(form.admin_discount_amount);
+    if (form.admin_discount_amount !== '' && form.admin_discount_amount != null) {
+      if (!Number.isFinite(discountRaw) || discountRaw < 0) {
+        fieldErrors.admin_discount_amount = 'Enter a valid discount amount (zero or greater).';
+        markTab('payment');
+      } else if (discountRaw > 0 && roomSubtotal > 0 && discountRaw > roomSubtotal) {
+        fieldErrors.admin_discount_amount = `Discount cannot exceed room stay total (₱${Math.round(roomSubtotal).toLocaleString()}).`;
         markTab('payment');
       }
     }

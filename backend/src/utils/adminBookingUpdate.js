@@ -1,4 +1,5 @@
-import { applyDiscount, calculateNights, isRoomAvailable } from './booking.js';
+import { calculateNights, isRoomAvailable } from './booking.js';
+import { resolveAdminBookingDiscount } from './adminBookingDiscount.js';
 import {
   buildAdminNotesWithManualPayment,
   resolveStoredManualPayment,
@@ -37,6 +38,8 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     boodle_fight_tier,
     island_hopping: islandHoppingFlag,
     island_hopping_data: islandHoppingData,
+    admin_discount_amount,
+    admin_discount_note,
   } = body;
 
   const roomId = parseInt(room_id ?? existingBooking.room_id, 10);
@@ -77,14 +80,24 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     children7_12: children712,
   });
 
-  const discountCode = existingBooking.discount_code;
-  const { amount: discountAmount, error: discountError } = await applyDiscount(
-    pool,
-    discountCode,
+  const discountResolved = await resolveAdminBookingDiscount(pool, {
+    staySubtotal: stay.subtotal,
     nights,
-    stay.subtotal
-  );
-  if (discountCode && discountError) return { error: discountError };
+    discount_code: existingBooking.discount_code || null,
+    admin_discount_amount:
+      admin_discount_amount !== undefined
+        ? admin_discount_amount
+        : existingBooking.discount_code
+          ? undefined
+          : existingBooking.discount_amount,
+    admin_discount_note:
+      admin_discount_note !== undefined
+        ? admin_discount_note
+        : existingBooking.discount_code
+          ? undefined
+          : existingBooking.discount_note,
+  });
+  if (discountResolved.error) return { error: discountResolved.error };
 
   let islandHopping = Boolean(islandHoppingFlag);
   let islandHoppingAmount = 0;
@@ -145,7 +158,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
-  const roomTotal = Math.max(0, stay.subtotal - (discountAmount || 0));
+  const roomTotal = Math.max(0, stay.subtotal - (discountResolved.amount || 0));
   const total =
     roomTotal +
     islandHoppingAmount +
@@ -204,7 +217,9 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       check_out: checkOut,
       nights,
       room_rate: avgNightlyRate,
-      discount_amount: discountAmount || 0,
+      discount_amount: discountResolved.amount || 0,
+      discount_code: discountResolved.code,
+      discount_note: discountResolved.note,
       total_amount: total,
       extra_person_charges: stay.extraPersonCharges || 0,
       island_hopping: islandHopping ? 1 : 0,
