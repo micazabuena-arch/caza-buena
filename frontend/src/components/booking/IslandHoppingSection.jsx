@@ -233,7 +233,8 @@ export default function IslandHoppingSection({
                       </p>
                     ) : (
                       renderIdUpload(index, p, {
-                        label: 'PWD guest — upload a valid PWD ID *',
+                        label:
+                          'PWD entrance rate (₱108) applies. Upload a valid PWD ID *',
                         fileField: 'pwd_id_file',
                         file: p.pwd_id_file,
                       })

@@ -1,11 +1,20 @@
 import axios from 'axios';
 import { getAdminToken, clearAdminToken } from '../utils/adminAuth';
 import { hasIslandHoppingPrintPrefetch } from '../utils/islandHoppingPrintCache';
+import { hasQuotationPrintCache } from '../utils/quotationPrintCache';
 
 function isPrintIslandWithPrefetch() {
   const match = window.location.pathname.match(/\/admin\/bookings\/(\d+)\/print-island$/);
   if (!match) return false;
   return hasIslandHoppingPrintPrefetch(match[1]);
+}
+
+function shouldSkipLoginRedirectOn401() {
+  if (isPrintIslandWithPrefetch()) return true;
+  if (window.location.pathname === '/admin/quotation/print' && hasQuotationPrintCache()) {
+    return true;
+  }
+  return false;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -33,7 +42,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401 && getAdminToken()) {
       clearAdminToken();
-      const skipLoginRedirect = isPrintIslandWithPrefetch();
+      const skipLoginRedirect = shouldSkipLoginRedirectOn401();
       if (
         !skipLoginRedirect &&
         window.location.pathname.startsWith('/admin') &&

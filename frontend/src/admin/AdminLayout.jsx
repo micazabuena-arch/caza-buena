@@ -14,6 +14,7 @@ import {
   FileText,
   UtensilsCrossed,
   Sparkles,
+  ClipboardList,
   Menu,
   X,
   BadgeDollarSign,
@@ -25,6 +26,7 @@ import Loading from '../components/ui/Loading';
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/bookings', icon: Calendar, label: 'Bookings' },
+  { to: '/admin/quotation', icon: ClipboardList, label: 'Quotation' },
   { to: '/admin/calendar', icon: Calendar, label: 'Calendar' },
   { to: '/admin/rooms', icon: Bed, label: 'Rooms' },
   { to: '/admin/availability', icon: Ban, label: 'Availability' },
@@ -119,18 +121,25 @@ export default function AdminLayout() {
   const closeNav = () => setNavOpen(false);
 
   return (
-    <div className="min-h-screen bg-aegean-50 lg:flex">
+    <div className="admin-shell min-h-screen bg-aegean-50 lg:flex print:block print:bg-white print:min-h-0">
+      <style>{`
+        @media print {
+          .admin-shell aside,
+          .admin-shell .admin-mobile-bar { display: none !important; }
+          .admin-shell main { padding: 0 !important; }
+        }
+      `}</style>
       {navOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden print:hidden"
           aria-label="Close menu"
           onClick={closeNav}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[min(100%,280px)] bg-aegean-500 text-white flex flex-col shadow-xl transform transition-transform duration-200 ease-out lg:static lg:translate-x-0 lg:shadow-none lg:w-64 lg:shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[min(100%,280px)] bg-aegean-500 text-white flex flex-col shadow-xl transform transition-transform duration-200 ease-out lg:static lg:translate-x-0 lg:shadow-none lg:w-64 lg:shrink-0 print:hidden ${
           navOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -138,7 +147,7 @@ export default function AdminLayout() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 lg:min-h-screen">
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-white border-b border-aegean-100 shadow-sm lg:hidden">
+        <header className="admin-mobile-bar sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-white border-b border-aegean-100 shadow-sm lg:hidden">
           <button
             type="button"
             onClick={() => setNavOpen(true)}
@@ -151,7 +160,7 @@ export default function AdminLayout() {
           <span className="text-sm font-medium text-aegean-800 truncate">Admin</span>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden print:p-0 print:overflow-visible">
           <Outlet />
         </main>
       </div>

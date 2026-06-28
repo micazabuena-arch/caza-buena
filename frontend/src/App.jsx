@@ -38,6 +38,8 @@ const AdminPolicies = lazy(() => import('./admin/PoliciesAdmin'));
 const WhatsNewAdmin = lazy(() => import('./admin/WhatsNewAdmin'));
 const AdminSettings = lazy(() => import('./admin/Settings'));
 const AdminPricing = lazy(() => import('./admin/Pricing'));
+const AdminQuotation = lazy(() => import('./admin/Quotation'));
+const QuotationPrint = lazy(() => import('./admin/QuotationPrint'));
 const IslandHoppingPrint = lazy(() => import('./admin/IslandHoppingPrint'));
 const BookingSoaPrint = lazy(() => import('./admin/BookingSoaPrint'));
 
@@ -86,6 +88,14 @@ export default function App() {
             }
           />
           <Route
+            path="admin/quotation/print"
+            element={
+              <Lazy>
+                <QuotationPrint />
+              </Lazy>
+            }
+          />
+          <Route
             path="admin/bookings/:bookingId/print-island"
             element={
               <Lazy>
@@ -116,6 +126,7 @@ export default function App() {
             <Route path="availability" element={<AdminAvailability />} />
             <Route path="payments" element={<AdminPaymentMethods />} />
             <Route path="pricing" element={<AdminPricing />} />
+            <Route path="quotation" element={<AdminQuotation />} />
             <Route path="guests" element={<AdminGuests />} />
             <Route path="inquiries" element={<AdminInquiries />} />
             <Route path="gallery" element={<AdminGallery />} />

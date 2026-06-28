@@ -5,6 +5,7 @@ export const ISLAND_HOPPING_RATES = {
     infant: { maxAge: 4, label: 'Entrance fee (0–4 years old)', rate: 20 },
     regular: { minAge: 5, maxAge: 59, label: 'Entrance fee (5–59 years old)', rate: 130 },
     senior: { label: 'Senior citizen (with 20% discount)', rate: 108 },
+    pwd: { label: 'PWD (with 20% discount)', rate: 108 },
   },
   boat: [
     { id: 'small', label: 'SMALL (1–5 PAX)', min: 1, max: 5, rate: 1600 },
@@ -13,9 +14,19 @@ export const ISLAND_HOPPING_RATES = {
     { id: 'deluxe', label: 'DELUXE (16–20 PAX)', min: 16, max: 20, rate: 2800 },
   ],
   facilitationFee: 300,
+  /** Facilitation fee for Deluxe boat tier (16–20 pax); other tiers use facilitationFee. */
+  deluxeFacilitationFee: 500,
   garbageFee: 200,
   maxPassengers: 20,
 };
+
+/** Facilitation fee for a boat tier — Deluxe uses deluxeFacilitationFee (₱500). */
+export function getFacilitationFee(boatTierId) {
+  if (boatTierId === 'deluxe') {
+    return ISLAND_HOPPING_RATES.deluxeFacilitationFee;
+  }
+  return ISLAND_HOPPING_RATES.facilitationFee;
+}
 
 function entranceForPassenger(passenger) {
   const age = parseInt(passenger.age, 10);
@@ -23,6 +34,9 @@ function entranceForPassenger(passenger) {
 
   if (age <= ISLAND_HOPPING_RATES.entrance.infant.maxAge) {
     return { ...ISLAND_HOPPING_RATES.entrance.infant, age };
+  }
+  if (passenger.is_pwd) {
+    return { ...ISLAND_HOPPING_RATES.entrance.pwd, age };
   }
   if (passenger.is_senior || age >= 60) {
     return { ...ISLAND_HOPPING_RATES.entrance.senior, age };
@@ -135,12 +149,14 @@ export function calculateIslandHopping(passengers) {
     subtotal: boat.rate,
   });
 
+  const facilitation = getFacilitationFee(boat.id);
+
   breakdown.push({
     category: 'fee',
-    description: 'Facilitation fee',
+    description: boat.id === 'deluxe' ? 'Facilitation fee (Deluxe)' : 'Facilitation fee',
     quantity: 1,
-    unit_price: ISLAND_HOPPING_RATES.facilitationFee,
-    subtotal: ISLAND_HOPPING_RATES.facilitationFee,
+    unit_price: facilitation,
+    subtotal: facilitation,
   });
 
   breakdown.push({
@@ -152,10 +168,7 @@ export function calculateIslandHopping(passengers) {
   });
 
   const total =
-    entranceTotal +
-    boat.rate +
-    ISLAND_HOPPING_RATES.facilitationFee +
-    ISLAND_HOPPING_RATES.garbageFee;
+    entranceTotal + boat.rate + facilitation + ISLAND_HOPPING_RATES.garbageFee;
 
   return {
     total: Math.round(total * 100) / 100,
