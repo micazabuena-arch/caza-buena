@@ -5,6 +5,18 @@ export function emptyQuotationRoom() {
   return { roomType: '', occupants: 2, rate: '', nights: 1 };
 }
 
+export function emptyQuotationBoat() {
+  return { boatTierId: 'small' };
+}
+
+export function emptyQuotationBilaoLine() {
+  return { packageId: '', qty: 1 };
+}
+
+export function emptyQuotationBoodleLine() {
+  return { tierId: '', qty: 1 };
+}
+
 export function emptyQuotation() {
   return {
     rmNo: '',
@@ -23,9 +35,9 @@ export function emptyQuotation() {
     tourRegularQty: 0,
     tourSeniorPwdQty: 0,
     tourInfantQty: 0,
-    boatTierId: 'small',
-    bilaoPackageId: '',
-    boodleFightTierId: '',
+    boats: [emptyQuotationBoat()],
+    bilaoLines: [],
+    boodleLines: [],
   };
 }
 
@@ -39,8 +51,67 @@ function parseIntSafe(value) {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+const BOAT_TIER_ORDER = ['small', 'medium', 'large', 'deluxe'];
+
+function facilitationLabel(boatId) {
+  const names = { small: 'Small', medium: 'Medium', large: 'Large', deluxe: 'Deluxe' };
+  return `Facilitation fee (${names[boatId] || boatId})`;
+}
+
+/** Group facilitation fees by boat tier (Small/Medium/Large ₱300, Deluxe ₱500). */
+function buildFacilitationLines(boatLines) {
+  const buckets = new Map();
+
+  boatLines.forEach((line) => {
+    const id = line.boat?.id || 'small';
+    if (!buckets.has(id)) {
+      buckets.set(id, {
+        label: facilitationLabel(id),
+        rate: line.facilitation,
+        qty: 0,
+        total: 0,
+        sortOrder: BOAT_TIER_ORDER.indexOf(id),
+      });
+    }
+    const bucket = buckets.get(id);
+    bucket.qty += 1;
+    bucket.total += line.facilitation;
+  });
+
+  return Array.from(buckets.values())
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(({ label, rate, qty, total }) => ({ label, rate, qty, total }));
+}
+
+/** Support quotes saved before multi-boat / multi-add-on fields. */
+export function normalizeQuotation(quote) {
+  if (!quote) return emptyQuotation();
+
+  const boats =
+    quote.boats?.length > 0
+      ? quote.boats.map((b) => ({ boatTierId: b.boatTierId || 'small' }))
+      : [{ boatTierId: quote.boatTierId || 'small' }];
+
+  let bilaoLines = quote.bilaoLines;
+  if (!Array.isArray(bilaoLines)) {
+    bilaoLines = quote.bilaoPackageId
+      ? [{ packageId: quote.bilaoPackageId, qty: 1 }]
+      : [];
+  }
+
+  let boodleLines = quote.boodleLines;
+  if (!Array.isArray(boodleLines)) {
+    boodleLines = quote.boodleFightTierId
+      ? [{ tierId: quote.boodleFightTierId, qty: 1 }]
+      : [];
+  }
+
+  return { ...quote, boats, bilaoLines, boodleLines };
+}
+
 export function computeAccommodation(quote) {
-  const roomLines = (quote.rooms || []).map((row) => {
+  const q = normalizeQuotation(quote);
+  const roomLines = (q.rooms || []).map((row) => {
     const rate = parseMoney(row.rate);
     const nights = Math.max(1, parseIntSafe(row.nights) || 1);
     const occupants = Math.max(1, parseIntSafe(row.occupants) || 1);
@@ -55,9 +126,9 @@ export function computeAccommodation(quote) {
   });
 
   const roomSubtotal = roomLines.reduce((s, r) => s + r.total, 0);
-  const discount = parseMoney(quote.discountAmount);
+  const discount = parseMoney(q.discountAmount);
   const afterDiscount = Math.max(0, roomSubtotal - discount);
-  const downPayment = parseMoney(quote.downPaymentAmount);
+  const downPayment = parseMoney(q.downPaymentAmount);
   const balance = Math.max(0, afterDiscount - downPayment);
 
   return {
@@ -71,7 +142,8 @@ export function computeAccommodation(quote) {
 }
 
 export function computeTour(quote) {
-  if (!quote.tourEnabled) {
+  const q = normalizeQuotation(quote);
+  if (!q.tourEnabled) {
     return {
       regularQty: 0,
       seniorPwdQty: 0,
@@ -79,29 +151,48 @@ export function computeTour(quote) {
       regularTotal: 0,
       seniorPwdTotal: 0,
       infantTotal: 0,
-      boat: null,
+      boatLines: [],
       boatTotal: 0,
       facilitation: 0,
+      facilitationLines: [],
+      garbageQty: 0,
       garbage: 0,
       total: 0,
     };
   }
 
-  const regularQty = parseIntSafe(quote.tourRegularQty);
-  const seniorPwdQty = parseIntSafe(quote.tourSeniorPwdQty);
-  const infantQty = parseIntSafe(quote.tourInfantQty);
+  const regularQty = parseIntSafe(q.tourRegularQty);
+  const seniorPwdQty = parseIntSafe(q.tourSeniorPwdQty);
+  const infantQty = parseIntSafe(q.tourInfantQty);
   const { entrance, boat, garbageFee } = ISLAND_HOPPING_RATES;
-  const facilitation = getFacilitationFee(quote.boatTierId);
 
   const regularTotal = regularQty * entrance.regular.rate;
   const seniorPwdTotal = seniorPwdQty * entrance.senior.rate;
   const infantTotal = infantQty * entrance.infant.rate;
-  const selectedBoat =
-    boat.find((b) => b.id === quote.boatTierId) || boat.find((b) => b.id === 'small');
-  const boatTotal = selectedBoat?.rate || 0;
+
+  const boatLines = (q.boats || [])
+    .map((entry) => {
+      const selectedBoat =
+        boat.find((b) => b.id === entry.boatTierId) || boat.find((b) => b.id === 'small');
+      if (!selectedBoat) return null;
+      const facilitation = getFacilitationFee(selectedBoat.id);
+      return {
+        boat: selectedBoat,
+        rate: selectedBoat.rate,
+        facilitation,
+        lineTotal: selectedBoat.rate,
+      };
+    })
+    .filter(Boolean);
+
+  const boatTotal = boatLines.reduce((s, line) => s + line.lineTotal, 0);
+  const facilitation = boatLines.reduce((s, line) => s + line.facilitation, 0);
+  const facilitationLines = buildFacilitationLines(boatLines);
+  const garbageQty = boatLines.length;
+  const garbage = garbageQty * garbageFee;
 
   const total =
-    regularTotal + seniorPwdTotal + infantTotal + boatTotal + facilitation + garbageFee;
+    regularTotal + seniorPwdTotal + infantTotal + boatTotal + facilitation + garbage;
 
   return {
     regularQty,
@@ -110,22 +201,68 @@ export function computeTour(quote) {
     regularTotal,
     seniorPwdTotal,
     infantTotal,
-    boat: selectedBoat,
+    boatLines,
     boatTotal,
     facilitation,
-    garbage: garbageFee,
+    facilitationLines,
+    garbageQty,
+    garbage,
     total,
   };
 }
 
 export function computeBilao(quote) {
-  const pkg = BILAO_PACKAGES.find((p) => p.id === quote.bilaoPackageId) || null;
-  return { package: pkg, total: pkg?.price || 0 };
+  const q = normalizeQuotation(quote);
+  const aggregated = {};
+
+  (q.bilaoLines || []).forEach((line) => {
+    if (!line.packageId) return;
+    const pkg = BILAO_PACKAGES.find((p) => p.id === line.packageId);
+    if (!pkg) return;
+    const qty = Math.max(1, parseIntSafe(line.qty) || 1);
+    if (!aggregated[pkg.id]) {
+      aggregated[pkg.id] = { package: pkg, qty: 0 };
+    }
+    aggregated[pkg.id].qty += qty;
+  });
+
+  const lines = Object.values(aggregated).map(({ package: pkg, qty }) => ({
+    package: pkg,
+    qty,
+    total: pkg.price * qty,
+  }));
+
+  return {
+    lines,
+    total: lines.reduce((s, l) => s + l.total, 0),
+  };
 }
 
 export function computeBoodleFight(quote) {
-  const pkg = BOODLE_FIGHT_PACKAGES.find((p) => p.id === quote.boodleFightTierId) || null;
-  return { package: pkg, total: pkg?.price || 0 };
+  const q = normalizeQuotation(quote);
+  const aggregated = {};
+
+  (q.boodleLines || []).forEach((line) => {
+    if (!line.tierId) return;
+    const pkg = BOODLE_FIGHT_PACKAGES.find((p) => p.id === line.tierId);
+    if (!pkg) return;
+    const qty = Math.max(1, parseIntSafe(line.qty) || 1);
+    if (!aggregated[pkg.id]) {
+      aggregated[pkg.id] = { package: pkg, qty: 0 };
+    }
+    aggregated[pkg.id].qty += qty;
+  });
+
+  const lines = Object.values(aggregated).map(({ package: pkg, qty }) => ({
+    package: pkg,
+    qty,
+    total: pkg.price * qty,
+  }));
+
+  return {
+    lines,
+    total: lines.reduce((s, l) => s + l.total, 0),
+  };
 }
 
 export function computeQuotationTotals(quote) {

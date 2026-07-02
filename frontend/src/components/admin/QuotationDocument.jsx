@@ -17,6 +17,7 @@ const th =
   'border border-gray-400 px-2 py-1 text-left text-[9pt] font-bold uppercase tracking-wide';
 const td = 'border border-gray-400 px-2 py-1 text-[9pt]';
 const tdRight = `${td} text-right`;
+const tdCenter = `${td} text-center`;
 
 /** Section colors — inline in print stylesheet so PDF keeps backgrounds. */
 const PRINT_COLORS = `
@@ -28,8 +29,10 @@ const PRINT_COLORS = `
   .q-tour-h2 th, .q-tour-h2 td { background-color: #fce4d6 !important; }
   .q-tour-total th, .q-tour-total td { background-color: #ed7d31 !important; color: #fff !important; }
   .q-bilao-h1 th, .q-bilao-h1 td { background-color: #a9d18e !important; }
+  .q-bilao-h2 th, .q-bilao-h2 td { background-color: #c5e0b4 !important; }
   .q-bilao-total th, .q-bilao-total td { background-color: #548235 !important; color: #fff !important; }
   .q-boodle-h1 th, .q-boodle-h1 td { background-color: #dae8fc !important; }
+  .q-boodle-h2 th, .q-boodle-h2 td { background-color: #e8f0fe !important; }
   .q-boodle-total th, .q-boodle-total td { background-color: #6d9eeb !important; color: #fff !important; }
   .q-grand-total th, .q-grand-total td { background-color: #ffd966 !important; }
 `;
@@ -47,8 +50,11 @@ export default function QuotationDocument({ quote }) {
   if (!quote) return null;
 
   const { accommodation, tour, bilao, boodleFight, grandTotal } = computeQuotationTotals(quote);
-  const { entrance, boat, garbageFee } = ISLAND_HOPPING_RATES;
+  const { entrance, garbageFee } = ISLAND_HOPPING_RATES;
   const pax = quote.pax || accommodation.roomLines.reduce((s, r) => s + r.occupants, 0) || '—';
+
+  const bilaoById = Object.fromEntries(bilao.lines.map((l) => [l.package.id, l]));
+  const boodleById = Object.fromEntries(boodleFight.lines.map((l) => [l.package.id, l]));
 
   return (
     <article className="quotation-doc text-black max-w-[8.5in] mx-auto font-sans bg-white">
@@ -77,7 +83,7 @@ export default function QuotationDocument({ quote }) {
       </header>
 
       <h1 className="text-center text-[12pt] font-bold uppercase tracking-wider m-0 mb-4">
-        Booking Quotation
+        Quotation
       </h1>
 
       <section className="grid sm:grid-cols-2 gap-x-8 gap-y-1 mb-4 uppercase">
@@ -110,9 +116,9 @@ export default function QuotationDocument({ quote }) {
           {accommodation.roomLines.map((row, i) => (
             <tr key={`room-${i}`}>
               <td className={td}>{row.roomType}</td>
-              <td className={`${td} text-center`}>{row.occupants}</td>
+              <td className={tdCenter}>{row.occupants}</td>
               <td className={tdRight}>{formatQuoteAmount(row.rate)}</td>
-              <td className={`${td} text-center`}>{row.nights}</td>
+              <td className={tdCenter}>{row.nights}</td>
               <td className={tdRight}>{formatQuoteAmount(row.total)}</td>
             </tr>
           ))}
@@ -157,7 +163,7 @@ export default function QuotationDocument({ quote }) {
         <table className="w-full border-collapse mb-3">
           <thead>
             <tr className="q-tour-h1">
-              <th className={th} colSpan={4}>
+              <th className={th} colSpan={5}>
                 Hundred islands hopping rates
               </th>
             </tr>
@@ -166,6 +172,7 @@ export default function QuotationDocument({ quote }) {
                 Item
               </th>
               <th className={th}>Rate</th>
+              <th className={`${th} text-center`}>Qty</th>
               <th className={`${th} text-right`}>Total</th>
             </tr>
           </thead>
@@ -175,6 +182,7 @@ export default function QuotationDocument({ quote }) {
                 Entrance fee (5–59 years old)
               </td>
               <td className={tdRight}>{formatQuoteAmount(entrance.regular.rate)}</td>
+              <td className={tdCenter}>{tour.regularQty > 0 ? tour.regularQty : ''}</td>
               <td className={tdRight}>
                 {tour.regularQty > 0 ? formatQuoteAmount(tour.regularTotal) : ''}
               </td>
@@ -184,6 +192,7 @@ export default function QuotationDocument({ quote }) {
                 Senior citizen / PWD (with 20% discount)
               </td>
               <td className={tdRight}>{formatQuoteAmount(entrance.senior.rate)}</td>
+              <td className={tdCenter}>{tour.seniorPwdQty > 0 ? tour.seniorPwdQty : ''}</td>
               <td className={tdRight}>
                 {tour.seniorPwdQty > 0 ? formatQuoteAmount(tour.seniorPwdTotal) : ''}
               </td>
@@ -193,46 +202,48 @@ export default function QuotationDocument({ quote }) {
                 Entrance fee (0–4 years old)
               </td>
               <td className={tdRight}>{formatQuoteAmount(entrance.infant.rate)}</td>
+              <td className={tdCenter}>{tour.infantQty > 0 ? tour.infantQty : ''}</td>
               <td className={tdRight}>
                 {tour.infantQty > 0 ? formatQuoteAmount(tour.infantTotal) : ''}
               </td>
             </tr>
             <tr>
-              <td className={`${td} font-bold`} colSpan={4}>
+              <td className={`${td} font-bold`} colSpan={5}>
                 Motorboat rental
               </td>
             </tr>
-            {boat
-              .slice()
-              .reverse()
-              .map((tier) => (
-                <tr key={tier.id}>
-                  <td className={td} colSpan={2}>
-                    {tier.label}
-                  </td>
-                  <td className={tdRight}>{formatQuoteAmount(tier.rate)}</td>
-                  <td className={tdRight}>
-                    {tour.boat?.id === tier.id ? formatQuoteAmount(tour.boatTotal) : ''}
-                  </td>
-                </tr>
-              ))}
-            <tr>
-              <td className={td} colSpan={2}>
-                Facilitation fee
-                {tour.boat?.id === 'deluxe' ? ' (Deluxe)' : ''}
-              </td>
-              <td className={tdRight}>{formatQuoteAmount(tour.facilitation)}</td>
-              <td className={tdRight}>{formatQuoteAmount(tour.facilitation)}</td>
-            </tr>
+            {tour.boatLines?.map((line, i) => (
+              <tr key={`boat-${i}`}>
+                <td className={td} colSpan={2}>
+                  {line.boat.label}
+                </td>
+                <td className={tdRight}>{formatQuoteAmount(line.rate)}</td>
+                <td className={tdCenter}>1</td>
+                <td className={tdRight}>{formatQuoteAmount(line.lineTotal)}</td>
+              </tr>
+            ))}
+            {tour.facilitationLines?.map((line, i) => (
+              <tr key={`facilitation-${i}`}>
+                <td className={td} colSpan={2}>
+                  {line.label}
+                </td>
+                <td className={tdRight}>{formatQuoteAmount(line.rate)}</td>
+                <td className={tdCenter}>{line.qty}</td>
+                <td className={tdRight}>{formatQuoteAmount(line.total)}</td>
+              </tr>
+            ))}
             <tr>
               <td className={td} colSpan={2}>
                 Garbage fee (refundable)
               </td>
               <td className={tdRight}>{formatQuoteAmount(garbageFee)}</td>
-              <td className={tdRight}>{formatQuoteAmount(tour.garbage)}</td>
+              <td className={tdCenter}>{tour.garbageQty > 0 ? tour.garbageQty : ''}</td>
+              <td className={tdRight}>
+                {tour.garbage > 0 ? formatQuoteAmount(tour.garbage) : ''}
+              </td>
             </tr>
             <tr className="q-tour-total font-bold">
-              <td className={`${td} border-gray-400`} colSpan={3}>
+              <td className={`${td} border-gray-400`} colSpan={4}>
                 Total tour
               </td>
               <td className={`${tdRight} border-gray-400`}>{formatQuoteAmount(tour.total)}</td>
@@ -245,26 +256,35 @@ export default function QuotationDocument({ quote }) {
       <table className="w-full border-collapse mb-3">
         <thead>
           <tr className="q-bilao-h1">
-            <th className={th} colSpan={2}>
+            <th className={th} colSpan={5}>
               Seafood bilao (optional)
             </th>
           </tr>
+          <tr className="q-bilao-h2">
+            <th className={th}>Description</th>
+            <th className={th}>Size</th>
+            <th className={th}>Rate</th>
+            <th className={`${th} text-center`}>Qty</th>
+            <th className={`${th} text-right`}>Total</th>
+          </tr>
         </thead>
         <tbody>
-          {BILAO_PACKAGES.map((pkg) => (
-            <tr key={pkg.id}>
-              <td className={td}>
-                Good for {pkg.pax}pax ({pkg.label.toUpperCase()})
-              </td>
-              <td className={`${tdRight} w-[120px]`}>
-                {bilao.package?.id === pkg.id
-                  ? formatQuoteAmount(pkg.price)
-                  : formatQuoteAmount(pkg.price)}
-              </td>
-            </tr>
-          ))}
+          {BILAO_PACKAGES.map((pkg) => {
+            const selected = bilaoById[pkg.id];
+            return (
+              <tr key={pkg.id}>
+                <td className={td}>Good for {pkg.pax}pax</td>
+                <td className={td}>{pkg.label.toUpperCase()}</td>
+                <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
+                <td className={tdCenter}>{selected ? selected.qty : ''}</td>
+                <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
+              </tr>
+            );
+          })}
           <tr className="q-bilao-total font-bold">
-            <td className={`${td} border-gray-400`}>Seafood bilao (optional)</td>
+            <td className={`${td} border-gray-400`} colSpan={4}>
+              Seafood bilao (optional)
+            </td>
             <td className={`${tdRight} border-gray-400`}>{formatQuoteAmount(bilao.total)}</td>
           </tr>
         </tbody>
@@ -274,20 +294,37 @@ export default function QuotationDocument({ quote }) {
       <table className="w-full border-collapse mb-3">
         <thead>
           <tr className="q-boodle-h1">
-            <th className={th} colSpan={2}>
+            <th className={th} colSpan={5}>
               Boodle fight (optional)
             </th>
           </tr>
+          <tr className="q-boodle-h2">
+            <th className={th} colSpan={2}>
+              Description
+            </th>
+            <th className={th}>Rate</th>
+            <th className={`${th} text-center`}>Qty</th>
+            <th className={`${th} text-right`}>Total</th>
+          </tr>
         </thead>
         <tbody>
-          {BOODLE_FIGHT_PACKAGES.map((pkg) => (
-            <tr key={pkg.id}>
-              <td className={td}>Good for {pkg.label}</td>
-              <td className={`${tdRight} w-[120px]`}>{formatQuoteAmount(pkg.price)}</td>
-            </tr>
-          ))}
+          {BOODLE_FIGHT_PACKAGES.map((pkg) => {
+            const selected = boodleById[pkg.id];
+            return (
+              <tr key={pkg.id}>
+                <td className={td} colSpan={2}>
+                  Good for {pkg.label}
+                </td>
+                <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
+                <td className={tdCenter}>{selected ? selected.qty : ''}</td>
+                <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
+              </tr>
+            );
+          })}
           <tr className="q-boodle-total font-bold">
-            <td className={`${td} border-gray-400`}>Boodle fight (optional)</td>
+            <td className={`${td} border-gray-400`} colSpan={4}>
+              Boodle fight (optional)
+            </td>
             <td className={`${tdRight} border-gray-400`}>
               {formatQuoteAmount(boodleFight.total)}
             </td>
@@ -299,10 +336,10 @@ export default function QuotationDocument({ quote }) {
       <table className="w-full border-collapse">
         <tbody>
           <tr className="q-grand-total font-bold">
-            <td className={`${td} border-gray-400 text-[10pt]`}>
+            <td className={`${td} border-gray-400 text-[10pt]`} colSpan={4}>
               Total (accommodation + tour + seafood bilao + boodle fight)
             </td>
-            <td className={`${tdRight} border-gray-400 text-[10pt] w-[140px]`}>
+            <td className={`${tdRight} border-gray-400 text-[10pt]`}>
               {formatQuoteAmount(grandTotal)}
             </td>
           </tr>
