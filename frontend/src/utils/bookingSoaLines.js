@@ -58,6 +58,17 @@ export function buildBookingSoaLineItems(booking) {
     });
   }
 
+  // Add custom add-ons that should appear in SOA
+  const addons = Array.isArray(booking.addons) ? booking.addons : [];
+  for (const addon of addons) {
+    if (addon.show_in_soa && Number(addon.amount) > 0) {
+      lines.push({
+        label: addon.label || 'Add-on',
+        amount: Number(addon.amount),
+      });
+    }
+  }
+
   return lines;
 }
 
