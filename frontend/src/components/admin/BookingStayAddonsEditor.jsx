@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
@@ -10,6 +10,10 @@ export default function BookingStayAddonsEditor({ booking, onUpdated }) {
   const [description, setDescription] = useState(STAY_ADDON_PRESETS[0].description);
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setAddons(parseStayAddons(booking?.stay_addons));
+  }, [booking?.id, booking?.stay_addons]);
 
   const handleAdd = () => {
     const parsedAmount = Math.round((Number(amount) || 0) * 100) / 100;
