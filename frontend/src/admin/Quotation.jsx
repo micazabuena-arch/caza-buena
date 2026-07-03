@@ -209,6 +209,8 @@ export default function AdminQuotation() {
         bookingPlatform: '',
         pax: detail.guest_count || 2,
         rooms: roomLines,
+        additionalPaxOccupants: '',
+        additionalPaxAmount: detail.extra_person_charges > 0 ? detail.extra_person_charges : '',
         discountAmount: detail.discount_amount || '',
         discountLabel: detail.discount_code || detail.discount_note || '',
         downPaymentAmount: detail.amount_to_pay < detail.total_amount ? detail.amount_to_pay : '',
@@ -446,6 +448,31 @@ export default function AdminQuotation() {
                 </p>
               </div>
             ))}
+            <div className="rounded-lg border border-aegean-100 p-3 space-y-3">
+              <p className="text-xs font-medium text-aegean-600">Additional pax</p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="No. of additional pax">
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={quote.additionalPaxOccupants}
+                    onChange={(e) => patch({ additionalPaxOccupants: e.target.value })}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="Amount (₱)">
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={quote.additionalPaxAmount}
+                    onChange={(e) => patch({ additionalPaxAmount: e.target.value })}
+                    placeholder="Manual total"
+                  />
+                </Field>
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-aegean-100">
               <Field label="Discount label">
                 <input
@@ -572,17 +599,6 @@ export default function AdminQuotation() {
                       </Field>
                     </div>
                   ))}
-                  <p className="text-xs text-aegean-500">
-                    Facilitation fee: ₱{formatQuoteAmount(totals.tour.facilitation)} (
-                    {totals.tour.facilitationLines?.[0]?.label || 'one flat fee per tour'}). 2+
-                    boats or any Deluxe boat = ₱500; 1 standard boat = ₱300.
-                  </p>
-                  <p className="text-xs text-aegean-500">
-                    Garbage fee: ₱{ISLAND_HOPPING_RATES.garbageFee.toLocaleString()} ×{' '}
-                    {(quote.boats || []).length} boat
-                    {(quote.boats || []).length !== 1 ? 's' : ''} = ₱
-                    {formatQuoteAmount(totals.tour.garbage)}
-                  </p>
                 </div>
               </>
             )}

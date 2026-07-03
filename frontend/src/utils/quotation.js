@@ -27,6 +27,8 @@ export function emptyQuotation() {
     checkInTime: '1:00 PM',
     checkOutTime: '11:00 AM',
     rooms: [emptyQuotationRoom()],
+    additionalPaxOccupants: '',
+    additionalPaxAmount: '',
     discountLabel: '',
     discountAmount: '',
     downPaymentLabel: '',
@@ -93,14 +95,31 @@ export function computeAccommodation(quote) {
     };
   });
 
-  const roomSubtotal = roomLines.reduce((s, r) => s + r.total, 0);
+  const additionalPaxAmount = parseMoney(q.additionalPaxAmount);
+  const additionalPaxOccupants = parseIntSafe(q.additionalPaxOccupants);
+  const additionalPaxLine =
+    additionalPaxAmount > 0
+      ? {
+          roomType: 'Additional pax',
+          occupants: additionalPaxOccupants > 0 ? additionalPaxOccupants : '—',
+          rate: additionalPaxAmount,
+          nights: 1,
+          total: additionalPaxAmount,
+        }
+      : null;
+
+  const accommodationLines = additionalPaxLine
+    ? [...roomLines, additionalPaxLine]
+    : roomLines;
+
+  const roomSubtotal = accommodationLines.reduce((s, r) => s + r.total, 0);
   const discount = parseMoney(q.discountAmount);
   const afterDiscount = Math.max(0, roomSubtotal - discount);
   const downPayment = parseMoney(q.downPaymentAmount);
   const balance = Math.max(0, afterDiscount - downPayment);
 
   return {
-    roomLines,
+    roomLines: accommodationLines,
     roomSubtotal,
     discount,
     afterDiscount,
