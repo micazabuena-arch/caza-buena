@@ -21,20 +21,21 @@ router.get('/booking/:bookingId', authenticateAdmin, async (req, res) => {
 // Create a new add-on for a booking
 router.post('/booking/:bookingId', authenticateAdmin, async (req, res) => {
   try {
-    const { label, description, amount, show_in_soa, sort_order } = req.body;
+    const { label, description, amount, include_in_soa, include_in_confirmation, sort_order } = req.body;
     
     if (!label || !label.trim()) {
       return res.status(400).json({ message: 'Label is required' });
     }
     
     const addonAmount = parseFloat(amount) || 0;
-    const showInSoa = show_in_soa !== undefined ? (show_in_soa ? 1 : 0) : 1;
+    const includeInSoa = include_in_soa !== undefined ? (include_in_soa ? 1 : 0) : 1;
+    const includeInConfirmation = include_in_confirmation !== undefined ? (include_in_confirmation ? 1 : 0) : 1;
     const sortOrder = parseInt(sort_order) || 0;
     
     const [result] = await pool.query(
-      `INSERT INTO booking_addons (booking_id, label, description, amount, show_in_soa, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.params.bookingId, label.trim(), description?.trim() || null, addonAmount, showInSoa, sortOrder]
+      `INSERT INTO booking_addons (booking_id, label, description, amount, include_in_soa, include_in_confirmation, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.bookingId, label.trim(), description?.trim() || null, addonAmount, includeInSoa, includeInConfirmation, sortOrder]
     );
     
     const [newAddon] = await pool.query('SELECT * FROM booking_addons WHERE id = ?', [result.insertId]);
@@ -48,21 +49,22 @@ router.post('/booking/:bookingId', authenticateAdmin, async (req, res) => {
 // Update an add-on
 router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
-    const { label, description, amount, show_in_soa, sort_order } = req.body;
+    const { label, description, amount, include_in_soa, include_in_confirmation, sort_order } = req.body;
     
     if (!label || !label.trim()) {
       return res.status(400).json({ message: 'Label is required' });
     }
     
     const addonAmount = parseFloat(amount) || 0;
-    const showInSoa = show_in_soa !== undefined ? (show_in_soa ? 1 : 0) : 1;
+    const includeInSoa = include_in_soa !== undefined ? (include_in_soa ? 1 : 0) : 1;
+    const includeInConfirmation = include_in_confirmation !== undefined ? (include_in_confirmation ? 1 : 0) : 1;
     const sortOrder = parseInt(sort_order) || 0;
     
     await pool.query(
       `UPDATE booking_addons 
-       SET label = ?, description = ?, amount = ?, show_in_soa = ?, sort_order = ?
+       SET label = ?, description = ?, amount = ?, include_in_soa = ?, include_in_confirmation = ?, sort_order = ?
        WHERE id = ?`,
-      [label.trim(), description?.trim() || null, addonAmount, showInSoa, sortOrder, req.params.id]
+      [label.trim(), description?.trim() || null, addonAmount, includeInSoa, includeInConfirmation, sortOrder, req.params.id]
     );
     
     const [updated] = await pool.query('SELECT * FROM booking_addons WHERE id = ?', [req.params.id]);

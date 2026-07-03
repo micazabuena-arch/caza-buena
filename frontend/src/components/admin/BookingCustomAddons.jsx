@@ -10,7 +10,7 @@ const inputClass =
 export default function BookingCustomAddons({ bookingId, addons = [], onChange }) {
   const [localAddons, setLocalAddons] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ label: '', description: '', amount: '', show_in_soa: true });
+  const [editForm, setEditForm] = useState({ label: '', description: '', amount: '', include_in_soa: true, include_in_confirmation: true });
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
@@ -37,7 +37,7 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
 
   const startAdd = () => {
     setEditingId('new');
-    setEditForm({ label: '', description: '', amount: '', show_in_soa: true });
+    setEditForm({ label: '', description: '', amount: '', include_in_soa: true, include_in_confirmation: true });
   };
 
   const startEdit = (addon) => {
@@ -46,13 +46,14 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
       label: addon.label || '',
       description: addon.description || '',
       amount: String(addon.amount || ''),
-      show_in_soa: Boolean(addon.show_in_soa),
+      include_in_soa: Boolean(addon.include_in_soa ?? addon.show_in_soa),
+      include_in_confirmation: Boolean(addon.include_in_confirmation ?? addon.show_in_soa),
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ label: '', description: '', amount: '', show_in_soa: true });
+    setEditForm({ label: '', description: '', amount: '', include_in_soa: true, include_in_confirmation: true });
   };
 
   const saveAddon = async () => {
@@ -67,7 +68,8 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
         label: editForm.label.trim(),
         description: editForm.description?.trim() || '',
         amount: parseFloat(editForm.amount) || 0,
-        show_in_soa: editForm.show_in_soa ? 1 : 0,
+        include_in_soa: editForm.include_in_soa ? 1 : 0,
+        include_in_confirmation: editForm.include_in_confirmation ? 1 : 0,
       };
 
       if (editingId === 'new') {
@@ -156,15 +158,26 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
               placeholder="Optional details"
             />
           </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={editForm.show_in_soa}
-              onChange={(e) => setEditForm(f => ({ ...f, show_in_soa: e.target.checked }))}
-              className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
-            />
-            <span className="text-sm text-aegean-700">Show in SOA / Confirmation</span>
-          </label>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={editForm.include_in_soa}
+                onChange={(e) => setEditForm(f => ({ ...f, include_in_soa: e.target.checked }))}
+                className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
+              />
+              <span className="text-sm text-aegean-700">Include in SOA</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={editForm.include_in_confirmation}
+                onChange={(e) => setEditForm(f => ({ ...f, include_in_confirmation: e.target.checked }))}
+                className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
+              />
+              <span className="text-sm text-aegean-700">Include in Confirmation</span>
+            </label>
+          </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={saveAddon} disabled={loading} className="btn-primary text-sm">
               {loading ? 'Saving...' : 'Save'}
@@ -220,18 +233,29 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
                       className={inputClass}
                     />
                   </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={editForm.show_in_soa}
-                      onChange={(e) => setEditForm(f => ({ ...f, show_in_soa: e.target.checked }))}
-                      className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
-                    />
-                    <span className="text-sm text-aegean-700">Show in SOA / Confirmation</span>
-                  </label>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.include_in_soa}
+                        onChange={(e) => setEditForm(f => ({ ...f, include_in_soa: e.target.checked }))}
+                        className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
+                      />
+                      <span className="text-sm text-aegean-700">Include in SOA</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.include_in_confirmation}
+                        onChange={(e) => setEditForm(f => ({ ...f, include_in_confirmation: e.target.checked }))}
+                        className="rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
+                      />
+                      <span className="text-sm text-aegean-700">Include in Confirmation</span>
+                    </label>
+                  </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={saveAddon} disabled={loading} className="btn-primary text-sm">
-                      {loading ? 'Saving...' : 'Update'}
+                      {loading ? 'Updating...' : 'Update'}
                     </button>
                     <button type="button" onClick={cancelEdit} className="btn-outline text-sm">
                       Cancel
@@ -241,10 +265,13 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
               ) : (
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-aegean-800">{addon.label}</p>
-                      {!addon.show_in_soa && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Hidden</span>
+                      {!addon.include_in_soa && !(addon.show_in_soa ?? true) && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Not in SOA</span>
+                      )}
+                      {!addon.include_in_confirmation && !(addon.show_in_soa ?? true) && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Not in Confirmation</span>
                       )}
                     </div>
                     {addon.description && (
@@ -264,7 +291,7 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange }
           {totalAmount > 0 && (
             <div className="border-t border-aegean-100 pt-3 mt-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-aege-700">Total Add-ons:</span>
+                <span className="text-sm font-medium text-aegean-700">Total Add-ons:</span>
                 <span className="text-lg font-bold text-aegean-800">₱{totalAmount.toLocaleString()}</span>
               </div>
             </div>
