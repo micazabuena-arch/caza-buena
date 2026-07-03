@@ -61,11 +61,28 @@ export function buildBookingSoaLineItems(booking) {
     });
   }
 
+  for (const addon of customAddonsForSoa(booking.addons)) {
+    lines.push({ label: addon.label, amount: addon.amount });
+  }
+
   for (const addon of parseStayAddons(booking.stay_addons)) {
     lines.push({ label: addon.description, amount: addon.amount });
   }
 
   return lines;
+}
+
+function customAddonsForSoa(addons) {
+  if (!Array.isArray(addons)) return [];
+  return addons
+    .filter((addon) => {
+      const showInSoa = Boolean(addon.include_in_soa ?? addon.show_in_soa ?? true);
+      return showInSoa && Number(addon.amount) > 0;
+    })
+    .map((addon) => ({
+      label: addon.label || 'Add-on',
+      amount: Number(addon.amount),
+    }));
 }
 
 /** Format amounts like the printed SOA (commas, decimals only when needed). */
