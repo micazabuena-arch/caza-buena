@@ -28,6 +28,7 @@ import policiesRoutes from './routes/policies.js';
 import settingsRoutes from './routes/settings.js';
 import whatsNewRoutes from './routes/whatsNew.js';
 import adminRoutes from './routes/admin.js';
+import bookingAddonsRoutes from './routes/bookingAddons.js';
 
 dotenv.config();
 
@@ -78,6 +79,7 @@ app.use('/api/policies', policiesRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/whats-new', whatsNewRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/booking-addons', bookingAddonsRoutes);
 
 mountFrontend(app);
 

@@ -14,6 +14,7 @@ import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
 import { minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
+import BookingCustomAddons from './BookingCustomAddons';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -22,7 +23,8 @@ const TABS = [
   { id: 'stay', label: '1. Stay' },
   { id: 'guest', label: '2. Guest' },
   { id: 'addons', label: '3. Add-ons' },
-  { id: 'payment', label: '4. Payment' },
+  { id: 'custom-addons', label: '4. Custom Add-ons' },
+  { id: 'payment', label: '5. Payment' },
 ];
 
 function Field({ label, required, children, className = '' }) {
@@ -61,6 +63,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const [error, setError] = useState('');
   const [rebookQuote, setRebookQuote] = useState(null);
   const [rebookQuoteLoading, setRebookQuoteLoading] = useState(false);
+  const [customAddons, setCustomAddons] = useState([]);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -439,6 +442,18 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 onChange={(islandHopping) => update({ islandHopping })}
               />
             </div>
+          </Panel>
+        )}
+
+        {activeTab === 'custom-addons' && (
+          <Panel title="Custom add-ons" hint="Admin-only charges like room extensions, ordered food, etc.">
+            <BookingCustomAddons
+              bookingId={booking.id}
+              addons={booking.addons || []}
+              onChange={(addons) => {
+                setCustomAddons(addons);
+              }}
+            />
           </Panel>
         )}
 
