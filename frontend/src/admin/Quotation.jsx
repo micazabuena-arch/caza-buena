@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Printer, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../api/client';
+import AdminModal from '../components/admin/AdminModal';
 import QuotationDocument from '../components/admin/QuotationDocument';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
@@ -31,6 +32,10 @@ function Field({ label, children }) {
 export default function AdminQuotation() {
   const [quote, setQuote] = useState(emptyQuotation);
   const [rooms, setRooms] = useState([]);
+  const [loadModalOpen, setLoadModalOpen] = useState(false);
+  const [loadRef, setLoadRef] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loadLoading, setLoadLoading] = useState(false);
 
   useEffect(() => {
     api
@@ -138,16 +143,22 @@ export default function AdminQuotation() {
     });
   };
 
-  const loadFromBooking = async () => {
-    const ref = window.prompt('Enter booking reference code (e.g. CB-20260627-8B0C):');
-    if (!ref?.trim()) return;
+  const loadFromBooking = async (ref) => {
+    const code = ref?.trim();
+    if (!code) {
+      setLoadError('Enter a booking reference code.');
+      return;
+    }
+
+    setLoadLoading(true);
+    setLoadError('');
     try {
       const { data: list } = await api.get('/bookings/admin/all');
       const booking = list.find(
-        (b) => b.reference_code?.toUpperCase() === ref.trim().toUpperCase()
+        (b) => b.reference_code?.toUpperCase() === code.toUpperCase()
       );
       if (!booking) {
-        window.alert('Booking not found.');
+        setLoadError('Booking not found. Check the reference code and try again.');
         return;
       }
       const detail = (await api.get(`/bookings/admin/${booking.id}`)).data;
@@ -215,9 +226,20 @@ export default function AdminQuotation() {
           ? [{ tierId: detail.boodle_fight_tier, qty: 1 }]
           : [],
       });
+      setLoadModalOpen(false);
+      setLoadRef('');
+      setLoadError('');
     } catch (err) {
-      window.alert(getApiError(err));
+      setLoadError(getApiError(err));
+    } finally {
+      setLoadLoading(false);
     }
+  };
+
+  const openLoadModal = () => {
+    setLoadRef('');
+    setLoadError('');
+    setLoadModalOpen(true);
   };
 
   const openPrint = () => openQuotationPrint(quote);
@@ -253,7 +275,7 @@ export default function AdminQuotation() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={loadFromBooking}
+            onClick={openLoadModal}
             className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
           >
             Load from booking
@@ -551,6 +573,11 @@ export default function AdminQuotation() {
                     </div>
                   ))}
                   <p className="text-xs text-aegean-500">
+                    Facilitation fee: ₱{formatQuoteAmount(totals.tour.facilitation)} (
+                    {totals.tour.facilitationLines?.[0]?.label || 'one flat fee per tour'}). 2+
+                    boats or any Deluxe boat = ₱500; 1 standard boat = ₱300.
+                  </p>
+                  <p className="text-xs text-aegean-500">
                     Garbage fee: ₱{ISLAND_HOPPING_RATES.garbageFee.toLocaleString()} ×{' '}
                     {(quote.boats || []).length} boat
                     {(quote.boats || []).length !== 1 ? 's' : ''} = ₱
@@ -703,6 +730,65 @@ export default function AdminQuotation() {
           Back to bookings
         </Link>
       </p>
+
+      <AdminModal
+        open={loadModalOpen}
+        onClose={() => {
+          if (!loadLoading) setLoadModalOpen(false);
+        }}
+        title="Load from booking"
+        description="Enter the guest's booking reference code to pre-fill this quotation."
+        size="sm"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            loadFromBooking(loadRef);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label htmlFor="load-booking-ref" className="block text-sm font-medium text-aegean-800 mb-1">
+              Reference code
+            </label>
+            <input
+              id="load-booking-ref"
+              type="text"
+              className={inputClass}
+              value={loadRef}
+              onChange={(e) => {
+                setLoadRef(e.target.value);
+                if (loadError) setLoadError('');
+              }}
+              placeholder="CB-20260627-8B0C"
+              autoFocus
+              disabled={loadLoading}
+            />
+          </div>
+          {loadError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {loadError}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setLoadModalOpen(false)}
+              disabled={loadLoading}
+              className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loadLoading || !loadRef.trim()}
+              className="px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700 disabled:opacity-50"
+            >
+              {loadLoading ? 'Loading…' : 'Load booking'}
+            </button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 }

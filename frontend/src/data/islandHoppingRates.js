@@ -20,12 +20,49 @@ export const ISLAND_HOPPING_RATES = {
   maxPassengers: 20,
 };
 
-/** Facilitation fee for a boat tier — Deluxe uses deluxeFacilitationFee (₱500). */
-export function getFacilitationFee(boatTierId) {
-  if (boatTierId === 'deluxe') {
-    return ISLAND_HOPPING_RATES.deluxeFacilitationFee;
+const BOAT_TIER_NAMES = { small: 'Small', medium: 'Medium', large: 'Large', deluxe: 'Deluxe' };
+
+/**
+ * One flat facilitation fee per tour (not per boat).
+ * - 1 standard boat (Small/Medium/Large): ₱300
+ * - Deluxe boat OR 2+ boats: ₱500
+ */
+export function resolveFacilitationFee(boatTierIds) {
+  const ids = (Array.isArray(boatTierIds) ? boatTierIds : [boatTierIds]).filter(Boolean);
+  if (ids.length === 0) return { amount: 0, label: 'Facilitation fee' };
+
+  const hasDeluxe = ids.some((id) => id === 'deluxe');
+  const multiBoat = ids.length >= 2;
+
+  if (multiBoat || hasDeluxe) {
+    if (hasDeluxe && ids.length === 1) {
+      return {
+        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        label: 'Facilitation fee (Deluxe)',
+      };
+    }
+    if (multiBoat && !hasDeluxe) {
+      return {
+        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        label: 'Facilitation fee (Multiple boats)',
+      };
+    }
+    return {
+      amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+      label: 'Facilitation fee',
+    };
   }
-  return ISLAND_HOPPING_RATES.facilitationFee;
+
+  const size = BOAT_TIER_NAMES[ids[0]];
+  return {
+    amount: ISLAND_HOPPING_RATES.facilitationFee,
+    label: size ? `Facilitation fee (${size})` : 'Facilitation fee',
+  };
+}
+
+/** @deprecated Prefer resolveFacilitationFee — kept for single-boat callers. */
+export function getFacilitationFee(boatTierId) {
+  return resolveFacilitationFee([boatTierId]).amount;
 }
 
 function entranceForPassenger(passenger) {
@@ -95,13 +132,13 @@ export function calculateIslandHopping(passengers) {
     subtotal: boat.rate,
   });
 
-  const facilitation = getFacilitationFee(boat.id);
+  const facilitation = resolveFacilitationFee([boat.id]);
 
   breakdown.push({
-    description: boat.id === 'deluxe' ? 'Facilitation fee (Deluxe)' : 'Facilitation fee',
+    description: facilitation.label,
     quantity: 1,
-    unit_price: facilitation,
-    subtotal: facilitation,
+    unit_price: facilitation.amount,
+    subtotal: facilitation.amount,
   });
   breakdown.push({
     description: 'Garbage fee (refundable)',
@@ -110,7 +147,7 @@ export function calculateIslandHopping(passengers) {
     subtotal: ISLAND_HOPPING_RATES.garbageFee,
   });
 
-  const total = entranceTotal + boat.rate + facilitation + ISLAND_HOPPING_RATES.garbageFee;
+  const total = entranceTotal + boat.rate + facilitation.amount + ISLAND_HOPPING_RATES.garbageFee;
 
   return {
     total,

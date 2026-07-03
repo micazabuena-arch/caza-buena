@@ -1,5 +1,5 @@
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
-import { ISLAND_HOPPING_RATES, getFacilitationFee } from '../data/islandHoppingRates';
+import { ISLAND_HOPPING_RATES, resolveFacilitationFee } from '../data/islandHoppingRates';
 
 export function emptyQuotationRoom() {
   return { roomType: '', occupants: 2, rate: '', nights: 1 };
@@ -49,38 +49,6 @@ function parseMoney(value) {
 function parseIntSafe(value) {
   const n = parseInt(value, 10);
   return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-
-const BOAT_TIER_ORDER = ['small', 'medium', 'large', 'deluxe'];
-
-function facilitationLabel(boatId) {
-  const names = { small: 'Small', medium: 'Medium', large: 'Large', deluxe: 'Deluxe' };
-  return `Facilitation fee (${names[boatId] || boatId})`;
-}
-
-/** Group facilitation fees by boat tier (Small/Medium/Large ₱300, Deluxe ₱500). */
-function buildFacilitationLines(boatLines) {
-  const buckets = new Map();
-
-  boatLines.forEach((line) => {
-    const id = line.boat?.id || 'small';
-    if (!buckets.has(id)) {
-      buckets.set(id, {
-        label: facilitationLabel(id),
-        rate: line.facilitation,
-        qty: 0,
-        total: 0,
-        sortOrder: BOAT_TIER_ORDER.indexOf(id),
-      });
-    }
-    const bucket = buckets.get(id);
-    bucket.qty += 1;
-    bucket.total += line.facilitation;
-  });
-
-  return Array.from(buckets.values())
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ label, rate, qty, total }) => ({ label, rate, qty, total }));
 }
 
 /** Support quotes saved before multi-boat / multi-add-on fields. */
@@ -175,19 +143,21 @@ export function computeTour(quote) {
       const selectedBoat =
         boat.find((b) => b.id === entry.boatTierId) || boat.find((b) => b.id === 'small');
       if (!selectedBoat) return null;
-      const facilitation = getFacilitationFee(selectedBoat.id);
       return {
         boat: selectedBoat,
         rate: selectedBoat.rate,
-        facilitation,
         lineTotal: selectedBoat.rate,
       };
     })
     .filter(Boolean);
 
   const boatTotal = boatLines.reduce((s, line) => s + line.lineTotal, 0);
-  const facilitation = boatLines.reduce((s, line) => s + line.facilitation, 0);
-  const facilitationLines = buildFacilitationLines(boatLines);
+  const boatTierIds = boatLines.map((line) => line.boat.id);
+  const { amount: facilitation, label: facilitationLabel } = resolveFacilitationFee(boatTierIds);
+  const facilitationLines =
+    facilitation > 0
+      ? [{ label: facilitationLabel, rate: facilitation, qty: 1, total: facilitation }]
+      : [];
   const garbageQty = boatLines.length;
   const garbage = garbageQty * garbageFee;
 
