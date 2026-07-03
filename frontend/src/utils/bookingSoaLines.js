@@ -1,11 +1,14 @@
-/** Room stay total (excludes island hopping and food add-ons). */
+import { parseStayAddons, stayAddonsTotal } from './stayAddons.js';
+
+/** Room stay total (excludes island hopping, food add-ons, and during-stay charges). */
 export function bookingRoomStayTotal(booking) {
   if (!booking) return 0;
   return (
     Number(booking.total_amount) -
     Number(booking.island_hopping_amount || 0) -
     Number(booking.bilao_amount || 0) -
-    Number(booking.boodle_fight_amount || 0)
+    Number(booking.boodle_fight_amount || 0) -
+    stayAddonsTotal(booking.stay_addons)
   );
 }
 
@@ -58,15 +61,19 @@ export function buildBookingSoaLineItems(booking) {
     });
   }
 
-  // Add custom add-ons that should appear in SOA
-  const addons = Array.isArray(booking.addons) ? booking.addons : [];
-  for (const addon of addons) {
-    if (addon.show_in_soa && Number(addon.amount) > 0) {
+  const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
+  for (const addon of customAddons) {
+    const showInSoa = Boolean(addon.include_in_soa ?? addon.show_in_soa ?? true);
+    if (showInSoa && Number(addon.amount) > 0) {
       lines.push({
         label: addon.label || 'Add-on',
         amount: Number(addon.amount),
       });
     }
+  }
+
+  for (const addon of parseStayAddons(booking.stay_addons)) {
+    lines.push({ label: addon.description, amount: addon.amount });
   }
 
   return lines;

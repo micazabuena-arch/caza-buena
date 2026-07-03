@@ -16,6 +16,9 @@ import {
 import { getBookingPaymentMethodLabel } from '../../data/manualBookingPayment';
 import { openBookingSoaPrint } from '../../utils/openBookingSoaPrint';
 import { bookingRoomStayTotal } from '../../utils/bookingSoaLines';
+import { parseStayAddons } from '../../utils/stayAddons';
+import { SOA_DOCUMENT_TYPES } from '../../utils/soaDocumentTitle';
+import BookingStayAddonsEditor from './BookingStayAddonsEditor';
 import { useToast } from '../../context/ToastContext';
 
 const TABS = [
@@ -41,7 +44,7 @@ function Row({ label, value, children }) {
 }
 
 /** Read-only booking summary with the same tabs as the edit form */
-export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit }) {
+export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit, onBookingUpdated }) {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('stay');
   const [printLoading, setPrintLoading] = useState(false);
@@ -53,6 +56,8 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
     : null;
   const roomStayTotal = bookingRoomStayTotal(booking);
   const payment = getBookingPaymentSummary(booking);
+  const stayAddons = parseStayAddons(booking.stay_addons);
+  const stayAddonsTotal = stayAddons.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <div className="flex flex-col">
@@ -198,6 +203,8 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
                 )}
               </div>
             )}
+
+            <BookingStayAddonsEditor booking={booking} onUpdated={onBookingUpdated} />
           </Panel>
         )}
 
@@ -218,6 +225,16 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
                 label="Boodle fight"
                 value={`₱${Number(booking.boodle_fight_amount).toLocaleString()}`}
               />
+            )}
+            {stayAddons.map((item) => (
+              <Row
+                key={item.id}
+                label={item.description}
+                value={`₱${item.amount.toLocaleString()}`}
+              />
+            ))}
+            {stayAddonsTotal > 0 && stayAddons.length > 1 && (
+              <Row label="During-stay subtotal" value={`₱${stayAddonsTotal.toLocaleString()}`} />
             )}
             {Number(booking.discount_amount) > 0 && (
               <Row
@@ -276,19 +293,34 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
       {(onEdit || Boolean(booking.island_hopping) || Boolean(booking.reference_code)) && (
         <div className="border-t border-aegean-100 pt-4 mt-6 flex flex-wrap gap-3">
           {booking.reference_code && (
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  openBookingSoaPrint(booking.id);
-                } catch (err) {
-                  toast.error(err.message || 'Could not open printable SOA.');
-                }
-              }}
-              className="btn-outline text-sm inline-flex items-center gap-2"
-            >
-              <Printer size={16} /> Print SOA / confirmation
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    openBookingSoaPrint(booking.id, 'soa');
+                  } catch (err) {
+                    toast.error(err.message || 'Could not open printable SOA.');
+                  }
+                }}
+                className="btn-outline text-sm inline-flex items-center gap-2"
+              >
+                <Printer size={16} /> {SOA_DOCUMENT_TYPES.soa.printLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    openBookingSoaPrint(booking.id, 'confirmation');
+                  } catch (err) {
+                    toast.error(err.message || 'Could not open printable document.');
+                  }
+                }}
+                className="btn-outline text-sm inline-flex items-center gap-2"
+              >
+                <Printer size={16} /> {SOA_DOCUMENT_TYPES.confirmation.printLabel}
+              </button>
+            </>
           )}
           {Boolean(booking.island_hopping) && (
             <button

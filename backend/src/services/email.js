@@ -230,10 +230,13 @@ export async function sendBookingConfirmation(booking, room) {
   let soaPdf = null;
   try {
     const { generateBookingSoaPdf } = await import('../utils/bookingSoaPdf.js');
-    soaPdf = await generateBookingSoaPdf({
-      ...booking,
-      room_name: formatBookingRoomsPlainLabel(booking, room),
-    });
+    soaPdf = await generateBookingSoaPdf(
+      {
+        ...booking,
+        room_name: formatBookingRoomsPlainLabel(booking, room),
+      },
+      { docType: 'confirmation' }
+    );
   } catch (err) {
     console.warn('[Email] SOA PDF generation failed:', err.message);
   }

@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   boodle_fight TINYINT(1) NOT NULL DEFAULT 0,
   boodle_fight_tier VARCHAR(20),
   boodle_fight_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  stay_addons JSON NULL COMMENT 'During-stay charges (room extension, food, etc.)',
   status ENUM(
     'pending',
     'awaiting_payment',

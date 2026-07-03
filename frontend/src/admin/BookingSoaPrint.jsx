@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { Printer, X } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import BookingSoaDocument from '../components/admin/BookingSoaDocument';
 import Loading from '../components/ui/Loading';
 import { clearMirroredAdminToken } from '../utils/islandHoppingPrintCache';
+import { resolveSoaDocumentTitle } from '../utils/soaDocumentTitle';
 
 export default function BookingSoaPrint() {
   const { bookingId } = useParams();
+  const [searchParams] = useSearchParams();
+  const docType = searchParams.get('doc') === 'confirmation' ? 'confirmation' : 'soa';
+  const documentTitle = resolveSoaDocumentTitle(docType);
   const { user, loading: authLoading } = useAuth();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +78,9 @@ export default function BookingSoaPrint() {
       {loading && <Loading />}
       {error && <p className="text-red-600 max-w-[8.5in] mx-auto">{error}</p>}
 
-      {!loading && !error && booking && <BookingSoaDocument booking={booking} />}
+      {!loading && !error && booking && (
+        <BookingSoaDocument booking={booking} documentTitle={documentTitle} />
+      )}
     </div>
   );
 }

@@ -14,7 +14,7 @@ const SOA_CONTACT = {
 
 const BRAND_BLUE = '#498bc3';
 
-export default function BookingSoaDocument({ booking }) {
+export default function BookingSoaDocument({ booking, documentTitle = 'Statement of Account' }) {
   if (!booking) return null;
 
   const lineItems = buildBookingSoaLineItems(booking);
@@ -57,7 +57,7 @@ export default function BookingSoaDocument({ booking }) {
       </header>
 
       <h1 className="text-center text-[13pt] font-bold uppercase tracking-wide m-0 mb-6">
-        Booking Confirmation/ Statement of Account
+        {documentTitle}
       </h1>
 
       <section className="mb-6 space-y-1 text-[11pt]">
@@ -86,8 +86,8 @@ export default function BookingSoaDocument({ booking }) {
 
       <table className="w-full border-collapse text-[11pt] mb-6">
         <tbody>
-          {lineItems.map((item) => (
-            <tr key={item.label}>
+          {lineItems.map((item, index) => (
+            <tr key={`${item.label}-${index}`}>
               <td className="border border-black px-3 py-1.5">{item.label}</td>
               <td className="border border-black px-3 py-1.5 text-right w-[140px]">
                 {formatSoaAmount(item.amount)}

@@ -142,6 +142,11 @@ async function run() {
     'boodle_fight_amount',
     'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `boodle_fight_tier`'
   );
+  await addColumn(
+    'bookings',
+    'stay_addons',
+    "JSON NULL COMMENT 'During-stay charges (room extension, food, etc.)' AFTER `boodle_fight_amount`"
+  );
 
   console.log('\nbooking_rooms table:');
   const [bookingRoomsTable] = await pool.query(

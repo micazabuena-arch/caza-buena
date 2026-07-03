@@ -271,6 +271,7 @@ export default function AdminCalendar() {
                   ? () => window.open(getAssetUrl(selectedBooking.payment_proof_url), '_blank', 'noopener,noreferrer')
                   : undefined
               }
+              onBookingUpdated={(updated) => setSelectedBooking(updated)}
             />
             <div className="mt-6 pt-4 border-t border-aegean-100">
               <Link

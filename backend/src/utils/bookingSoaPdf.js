@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import {  buildBookingSoaLineItems,
   formatSoaAmount,
   getBookingPaymentSummary,
+  resolveSoaDocumentTitle,
 } from './bookingSoa.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,7 +45,7 @@ function drawTableRow(doc, y, label, amount, { bold = false, width, colAmount = 
  * Generate booking confirmation / SOA PDF (matches admin print layout).
  * @returns {Promise<Buffer|null>}
  */
-export async function generateBookingSoaPdf(booking) {
+export async function generateBookingSoaPdf(booking, options = {}) {
   if (!booking) return null;
 
   let PDFDocument;
@@ -55,10 +56,11 @@ export async function generateBookingSoaPdf(booking) {
     return null;
   }
 
-  return generateBookingSoaPdfWithDoc(booking, PDFDocument);
+  return generateBookingSoaPdfWithDoc(booking, PDFDocument, options);
 }
 
-function generateBookingSoaPdfWithDoc(booking, PDFDocument) {
+function generateBookingSoaPdfWithDoc(booking, PDFDocument, options = {}) {
+  const documentTitle = resolveSoaDocumentTitle(options.docType);
 
   return new Promise((resolve, reject) => {
     try {
@@ -109,7 +111,7 @@ function generateBookingSoaPdfWithDoc(booking, PDFDocument) {
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#000000')
-        .text('BOOKING CONFIRMATION/ STATEMENT OF ACCOUNT', doc.page.margins.left, y, {
+        .text(documentTitle, doc.page.margins.left, y, {
           width: pageWidth,
           align: 'center',
         });

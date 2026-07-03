@@ -742,7 +742,9 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
   const islandAmount = booking.island_hopping ? Number(booking.island_hopping_amount) || 0 : 0;
   const bilaoAmount = Number(booking.bilao_amount) || 0;
   const boodleAmount = Number(booking.boodle_fight_amount) || 0;
-  const total = roomTotal + islandAmount + bilaoAmount + boodleAmount;
+  const { stayAddonsTotal } = await import('../utils/stayAddons.js');
+  const duringStayAmount = stayAddonsTotal(booking.stay_addons);
+  const total = roomTotal + islandAmount + bilaoAmount + boodleAmount + duringStayAmount;
   const avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(booking.room_rate);
 
   const [settingRows] = await pool.query(
@@ -794,6 +796,58 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
     price_breakdown: stay.breakdown,
     pricing_adjustment: pricingAdjustment.error ? null : pricingAdjustment,
   });
+});
+
+router.patch('/admin/:id/stay-addons', authenticateAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT b.*, r.name AS room_name FROM bookings b
+       JOIN rooms r ON b.room_id = r.id WHERE b.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+    const booking = rows[0];
+    const { normalizeStayAddonsInput, stayAddonsTotal } = await import('../utils/stayAddons.js');
+    const parsed = normalizeStayAddonsInput(req.body?.stay_addons);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+
+    const oldAddonsTotal = stayAddonsTotal(booking.stay_addons);
+    const newAddonsTotal = parsed.total;
+    const baseTotal = Number(booking.total_amount) - oldAddonsTotal;
+    const total = Math.round((baseTotal + newAddonsTotal) * 100) / 100;
+
+    const [settingRows] = await pool.query(
+      "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
+    );
+    const { resolveAmountToPay, getDepositPercent } = await import('../utils/paymentAmount.js');
+    const depositPercent = getDepositPercent(settingRows[0]?.setting_value);
+    const customAmount =
+      booking.payment_option === 'custom' ? booking.amount_to_pay : undefined;
+    const payResolved = resolveAmountToPay(total, booking.payment_option, customAmount, depositPercent);
+    if (payResolved.error) return res.status(400).json({ message: payResolved.error });
+
+    await pool.query(
+      `UPDATE bookings SET stay_addons = ?, total_amount = ?, amount_to_pay = ? WHERE id = ?`,
+      [JSON.stringify(parsed.addons), total, payResolved.amount, booking.id]
+    );
+
+    const [updated] = await pool.query(
+      `SELECT b.*, r.name AS room_name, pm.name AS payment_method_name, pm.type AS payment_method_type
+       FROM bookings b
+       JOIN rooms r ON b.room_id = r.id
+       LEFT JOIN payment_methods pm ON b.payment_method_id = pm.id
+       WHERE b.id = ?`,
+      [booking.id]
+    );
+
+    const { attachBookingRooms } = await import('../utils/bookingRooms.js');
+    const updatedBooking = await attachBookingRooms(pool, updated[0]);
+    res.json({ message: 'During-stay add-ons updated', booking: updatedBooking });
+  } catch (err) {
+    console.error('Admin stay add-ons error:', err);
+    res.status(500).json({ message: 'Unable to update during-stay add-ons' });
+  }
 });
 
 router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {

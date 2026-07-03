@@ -1,4 +1,5 @@
 import { calculateNights, isRoomAvailable } from './booking.js';
+import { stayAddonsTotal } from './stayAddons.js';
 import { resolveAdminBookingDiscount } from './adminBookingDiscount.js';
 import {
   buildAdminNotesWithManualPayment,
@@ -159,11 +160,13 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
   const roomTotal = Math.max(0, stay.subtotal - (discountResolved.amount || 0));
+  const duringStayTotal = stayAddonsTotal(existingBooking.stay_addons);
   const total =
     roomTotal +
     islandHoppingAmount +
     extrasValidation.bilao_amount +
-    extrasValidation.boodle_fight_amount;
+    extrasValidation.boodle_fight_amount +
+    duringStayTotal;
 
   const payOption = payment_option ?? existingBooking.payment_option ?? 'deposit';
   const [settingRows] = await pool.query(

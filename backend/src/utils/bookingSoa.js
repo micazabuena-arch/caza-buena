@@ -1,11 +1,14 @@
-/** Room stay total (excludes island hopping and food add-ons). */
+import { parseStayAddons, stayAddonsTotal } from './stayAddons.js';
+
+/** Room stay total (excludes island hopping, food add-ons, and during-stay charges). */
 export function bookingRoomStayTotal(booking) {
   if (!booking) return 0;
   return (
     Number(booking.total_amount) -
     Number(booking.island_hopping_amount || 0) -
     Number(booking.bilao_amount || 0) -
-    Number(booking.boodle_fight_amount || 0)
+    Number(booking.boodle_fight_amount || 0) -
+    stayAddonsTotal(booking.stay_addons)
   );
 }
 
@@ -58,6 +61,10 @@ export function buildBookingSoaLineItems(booking) {
     });
   }
 
+  for (const addon of parseStayAddons(booking.stay_addons)) {
+    lines.push({ label: addon.description, amount: addon.amount });
+  }
+
   return lines;
 }
 
@@ -90,4 +97,13 @@ export function getBookingPaymentSummary(booking) {
 export function soaAttachmentFilename(referenceCode) {
   const safe = String(referenceCode || 'booking').replace(/[^\w-]+/g, '-');
   return `Caza-Buena-SOA-${safe}.pdf`;
+}
+
+const SOA_DOCUMENT_TITLES = {
+  soa: 'STATEMENT OF ACCOUNT',
+  confirmation: 'BOOKING CONFIRMATION',
+};
+
+export function resolveSoaDocumentTitle(docType) {
+  return SOA_DOCUMENT_TITLES[docType] || SOA_DOCUMENT_TITLES.confirmation;
 }
