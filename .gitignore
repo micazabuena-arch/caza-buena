@@ -1,10 +1,44 @@
-node_modules/
-dist/
+```
+# Database migrations backup
+*.sql.bak
+*.sql~
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
 .env
 .env.local
-frontend/.vite/
-backend/uploads/*
-!backend/uploads/.gitkeep
-backend/test-*.json
-backend/test-*.png
-*.log
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+target/
+.gradle/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Compression files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+```
