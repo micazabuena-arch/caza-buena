@@ -935,14 +935,19 @@ router.get('/admin/:id', authenticateAdmin, async (req, res) => {
   if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
   const { attachBookingRooms } = await import('../utils/bookingRooms.js');
   const booking = await attachBookingRooms(pool, rows[0]);
-  
-  // Attach add-ons
-  const [addons] = await pool.query(
-    'SELECT * FROM booking_addons WHERE booking_id = ? ORDER BY sort_order, created_at',
-    [req.params.id]
-  );
-  booking.addons = addons || [];
-  
+
+  // Attach custom add-ons (table may be missing before migrate — don't block booking view)
+  try {
+    const [addons] = await pool.query(
+      'SELECT * FROM booking_addons WHERE booking_id = ? ORDER BY sort_order, created_at',
+      [req.params.id]
+    );
+    booking.addons = addons || [];
+  } catch (err) {
+    console.warn('[Booking detail] booking_addons unavailable:', err.message);
+    booking.addons = [];
+  }
+
   res.json(booking);
 });
 

@@ -198,6 +198,22 @@ CREATE TABLE IF NOT EXISTS booking_rooms (
   UNIQUE KEY uq_booking_room (booking_id, room_id)
 );
 
+-- Custom booking add-ons (room extension, food, etc.) for SOA / confirmation
+CREATE TABLE IF NOT EXISTS booking_addons (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  label VARCHAR(150) NOT NULL COMMENT 'Display label e.g., Room Extension, Ordered Food',
+  description VARCHAR(500) NULL,
+  amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  include_in_soa TINYINT(1) DEFAULT 1 COMMENT 'Include in SOA',
+  include_in_confirmation TINYINT(1) DEFAULT 1 COMMENT 'Include in booking confirmation',
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+  INDEX idx_booking_id (booking_id)
+);
+
 -- FAQ entries
 CREATE TABLE IF NOT EXISTS faqs (
   id INT AUTO_INCREMENT PRIMARY KEY,
