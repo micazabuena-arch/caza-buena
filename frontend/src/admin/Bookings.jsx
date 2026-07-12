@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Settings2, Image, CircleCheck, CircleX, Printer, Plus } from 'lucide-react';
+import { Settings2, Image, CircleCheck, CircleX, Printer, Plus, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
 import { isSeniorPassenger, isPwdPassenger } from '../data/islandHoppingRates';
@@ -21,6 +21,8 @@ import AdminModal from '../components/admin/AdminModal';
 import AdminBookingCard from '../components/admin/AdminBookingCard';
 import ManualBookingForm from '../components/admin/ManualBookingForm';
 import AdminTableShell from '../components/ui/AdminTableShell';
+import { openBookingSoaPrint } from '../utils/openBookingSoaPrint';
+import { SOA_DOCUMENT_TYPES } from '../utils/soaDocumentTitle';
 
 const statuses = [
   'pending',
@@ -258,6 +260,28 @@ export default function AdminBookings() {
     }
   };
 
+  const deleteBooking = async (booking) => {
+    const ok = await confirm({
+      title: 'Delete booking?',
+      message: `"${booking.reference_code}" for ${booking.guest_name} will be permanently deleted. This cannot be undone.`,
+      confirmLabel: 'Yes, delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    setActionLoading(`${booking.id}-delete`);
+    try {
+      await api.delete(`/bookings/admin/${booking.id}`);
+      toast.success('Booking deleted.');
+      if (selected === booking.id) closeDetail();
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-4 mb-6">
@@ -367,6 +391,14 @@ export default function AdminBookings() {
                           />
                         </>
                       )}
+                      <IconActionButton
+                        icon={Trash2}
+                        label="Delete booking"
+                        loading={actionLoading === `${b.id}-delete`}
+                        disabled={Boolean(actionLoading)}
+                        className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                        onClick={() => deleteBooking(b)}
+                      />
                     </IconActionGroup>
                   }
                 />
@@ -450,6 +482,14 @@ export default function AdminBookings() {
                             />
                           </>
                         )}
+                        <IconActionButton
+                          icon={Trash2}
+                          label="Delete booking"
+                          loading={actionLoading === `${b.id}-delete`}
+                          disabled={Boolean(actionLoading)}
+                          className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                          onClick={() => deleteBooking(b)}
+                        />
                       </IconActionGroup>
                     </td>
                   </tr>
@@ -740,6 +780,34 @@ export default function AdminBookings() {
             )}
 
             <div className="space-y-4 border-t border-aegean-100 pt-4">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      openBookingSoaPrint(detail.id, 'soa');
+                    } catch (err) {
+                      toast.error(err.message || 'Could not open printable statement of account.');
+                    }
+                  }}
+                  className="btn-outline text-sm inline-flex items-center gap-2"
+                >
+                  <Printer size={16} /> {SOA_DOCUMENT_TYPES.soa.printLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      openBookingSoaPrint(detail.id, 'confirmation');
+                    } catch (err) {
+                      toast.error(err.message || 'Could not open printable confirmation.');
+                    }
+                  }}
+                  className="btn-outline text-sm inline-flex items-center gap-2"
+                >
+                  <Printer size={16} /> {SOA_DOCUMENT_TYPES.confirmation.printLabel}
+                </button>
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Booking status</label>
                 <select

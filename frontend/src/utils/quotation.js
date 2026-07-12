@@ -38,7 +38,9 @@ export function emptyQuotation() {
     tourSeniorPwdQty: 0,
     tourInfantQty: 0,
     boats: [emptyQuotationBoat()],
+    bilaoEnabled: false,
     bilaoLines: [],
+    boodleEnabled: false,
     boodleLines: [],
   };
 }
@@ -76,7 +78,12 @@ export function normalizeQuotation(quote) {
       : [];
   }
 
-  return { ...quote, boats, bilaoLines, boodleLines };
+  const bilaoEnabled =
+    quote.bilaoEnabled != null ? Boolean(quote.bilaoEnabled) : bilaoLines.length > 0;
+  const boodleEnabled =
+    quote.boodleEnabled != null ? Boolean(quote.boodleEnabled) : boodleLines.length > 0;
+
+  return { ...quote, boats, bilaoEnabled, bilaoLines, boodleEnabled, boodleLines };
 }
 
 export function computeAccommodation(quote) {
@@ -202,6 +209,9 @@ export function computeTour(quote) {
 
 export function computeBilao(quote) {
   const q = normalizeQuotation(quote);
+  if (!q.bilaoEnabled) {
+    return { lines: [], total: 0 };
+  }
   const aggregated = {};
 
   (q.bilaoLines || []).forEach((line) => {
@@ -229,6 +239,9 @@ export function computeBilao(quote) {
 
 export function computeBoodleFight(quote) {
   const q = normalizeQuotation(quote);
+  if (!q.boodleEnabled) {
+    return { lines: [], total: 0 };
+  }
   const aggregated = {};
 
   (q.boodleLines || []).forEach((line) => {

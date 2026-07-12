@@ -8,6 +8,7 @@ import SubmitButton from '../components/ui/SubmitButton';
 import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useAuth } from '../context/AuthContext';
 import { ROOM_INVENTORY } from '../data/resortRules';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
@@ -48,6 +49,8 @@ function slugify(text) {
 
 export default function AdminRooms() {
   const [rooms, setRooms] = useState([]);
+  const { isFullAdmin } = useAuth();
+  const canEditPrices = isFullAdmin;
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -77,6 +80,10 @@ export default function AdminRooms() {
   }, []);
 
   const openAdd = () => {
+    if (!canEditPrices) {
+      toast.error('Only admins can create rooms and set rates.');
+      return;
+    }
     setEditingId('new');
     setForm(emptyForm());
     setImages([]);
@@ -141,6 +148,12 @@ export default function AdminRooms() {
     let includedAdults = parseInt(form.included_adults, 10) || 2;
     if (includedAdults > maxGuests) includedAdults = maxGuests;
 
+    if (editingId === 'new' && !canEditPrices) {
+      setError('Only admins can create rooms and set rates.');
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       room_type: form.room_type === 'suite' ? 'suite' : 'queen',
@@ -151,12 +164,16 @@ export default function AdminRooms() {
       max_guests: maxGuests,
       capacity: maxGuests,
       included_adults: includedAdults,
-      price_per_night: parseFloat(form.price_per_night),
-      price_weekend: parseFloat(form.price_weekend || form.price_per_night),
       sort_order: parseInt(form.sort_order, 10) || 0,
       is_active: form.is_active,
       amenities: parseAmenities(),
     };
+
+    // Nightly rates are admin-only; staff updates omit price fields (API also strips them).
+    if (canEditPrices) {
+      payload.price_per_night = parseFloat(form.price_per_night);
+      payload.price_weekend = parseFloat(form.price_weekend || form.price_per_night);
+    }
 
     if (!payload.name || !payload.slug) {
       setError('Name and slug are required');
@@ -175,15 +192,17 @@ export default function AdminRooms() {
       setSaving(false);
       return;
     }
-    if (Number.isNaN(payload.price_per_night) || payload.price_per_night < 0) {
-      setError('Enter a valid weekday price');
-      setSaving(false);
-      return;
-    }
-    if (Number.isNaN(payload.price_weekend) || payload.price_weekend < 0) {
-      setError('Enter a valid weekend price');
-      setSaving(false);
-      return;
+    if (canEditPrices) {
+      if (Number.isNaN(payload.price_per_night) || payload.price_per_night < 0) {
+        setError('Enter a valid weekday price');
+        setSaving(false);
+        return;
+      }
+      if (Number.isNaN(payload.price_weekend) || payload.price_weekend < 0) {
+        setError('Enter a valid weekend price');
+        setSaving(false);
+        return;
+      }
     }
 
     const ok = await askConfirm({
@@ -275,6 +294,10 @@ export default function AdminRooms() {
 
   const addHolidayRate = async (e) => {
     e.preventDefault();
+    if (!canEditPrices) {
+      setError('Only admins can change holiday pricing.');
+      return;
+    }
     if (editingId === 'new') {
       setError('Save the room first, then add holiday pricing.');
       return;
@@ -345,6 +368,10 @@ export default function AdminRooms() {
   };
 
   const removeHolidayRate = async (holidayId) => {
+    if (!canEditPrices) {
+      toast.error('Only admins can change holiday pricing.');
+      return;
+    }
     const ok = await askConfirm({
       title: 'Remove holiday pricing?',
       message: 'This special rate period will be deleted.',
@@ -364,10 +391,19 @@ export default function AdminRooms() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <h1 className="text-3xl font-serif text-aegean-800">Rooms</h1>
-        <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
-          <Plus size={18} /> Add Room
-        </button>
+        <div>
+          <h1 className="text-3xl font-serif text-aegean-800">Rooms</h1>
+          {!canEditPrices && (
+            <p className="text-sm text-aegean-600 mt-1">
+              You can edit room details. Nightly and holiday rates can only be changed by admins.
+            </p>
+          )}
+        </div>
+        {canEditPrices && (
+          <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
+            <Plus size={18} /> Add Room
+          </button>
+        )}
       </div>
 
       <AdminModal
@@ -431,7 +467,9 @@ export default function AdminRooms() {
             <div className="rounded-xl border border-aegean-100 bg-aegean-50/40 p-4">
               <p className="text-sm font-medium text-aegean-800 mb-3">Nightly rates</p>
               <p className="text-xs text-aegean-600 mb-4">
-                Weekday = Mon–Thu · Weekend = Fri–Sun · Holiday periods override both for those dates
+                {canEditPrices
+                  ? 'Weekday = Mon–Thu · Weekend = Fri–Sun · Holiday periods override both for those dates'
+                  : 'Rates are view-only for staff. Ask an admin to change prices.'}
               </p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -440,10 +478,11 @@ export default function AdminRooms() {
                     type="number"
                     min={0}
                     step={0.01}
-                    required
+                    required={canEditPrices}
+                    disabled={!canEditPrices}
                     value={form.price_per_night}
                     onChange={(e) => setForm((f) => ({ ...f, price_per_night: e.target.value }))}
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white"
+                    className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white disabled:bg-aegean-50 disabled:text-aegean-500"
                   />
                 </div>
                 <div>
@@ -452,10 +491,11 @@ export default function AdminRooms() {
                     type="number"
                     min={0}
                     step={0.01}
-                    required
+                    required={canEditPrices}
+                    disabled={!canEditPrices}
                     value={form.price_weekend}
                     onChange={(e) => setForm((f) => ({ ...f, price_weekend: e.target.value }))}
-                    className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white"
+                    className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white disabled:bg-aegean-50 disabled:text-aegean-500"
                   />
                 </div>
               </div>
@@ -592,19 +632,22 @@ export default function AdminRooms() {
                           {h.start_date} → {h.end_date} · {formatPeso(h.price_per_night)}/night
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeHolidayRate(h.id)}
-                        className="text-red-600 hover:underline text-xs"
-                      >
-                        Remove
-                      </button>
+                      {canEditPrices && (
+                        <button
+                          type="button"
+                          onClick={() => removeHolidayRate(h.id)}
+                          className="text-red-600 hover:underline text-xs"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="text-sm text-aegean-500 mb-4">No holiday periods yet.</p>
               )}
+              {canEditPrices && (
               <form onSubmit={addHolidayRate} className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-aegean-700 mb-1">Label</label>
@@ -653,6 +696,7 @@ export default function AdminRooms() {
                   Add period
                 </SubmitButton>
               </form>
+              )}
             </div>
           )}
 

@@ -40,8 +40,11 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Full admin (not staff) — can change site-wide prices and manage accounts.
+  const isFullAdmin = user?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: !!user, isFullAdmin }}>
       {children}
     </AuthContext.Provider>
   );

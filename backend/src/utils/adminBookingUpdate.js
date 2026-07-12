@@ -1,5 +1,4 @@
-import { calculateNights, isRoomAvailable } from './booking.js';
-import { stayAddonsTotal } from './stayAddons.js';
+import { calculateNights, isRoomAvailable, isAnteDateCheckIn } from './booking.js';
 import { resolveAdminBookingDiscount } from './adminBookingDiscount.js';
 import {
   buildAdminNotesWithManualPayment,
@@ -61,7 +60,8 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   const blocksAvailability = ['pending', 'awaiting_payment', 'payment_submitted', 'confirmed'].includes(
     existingBooking.status
   );
-  if (blocksAvailability) {
+  // Past check-in = ante-date recording; do not block on overlapping calendar holds.
+  if (blocksAvailability && !isAnteDateCheckIn(checkIn)) {
     const available = await isRoomAvailable(pool, roomId, checkIn, checkOut, existingBooking.id);
     if (!available) return { error: 'Room is not available for the selected dates' };
   }
@@ -137,7 +137,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
         breakdown: computed.breakdown,
         boat_tier: computed.boat_tier,
         boat_label: computed.boat_label,
-        total: computed.total,
+        total: computed.total,  
       };
     } catch (e) {
       return { error: e.message || 'Invalid island hopping details' };
@@ -160,13 +160,24 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
   const roomTotal = Math.max(0, stay.subtotal - (discountResolved.amount || 0));
+
+  // Keep during-stay JSON charges and custom booking_addons rows in the total
+  const { stayAddonsTotal } = await import('./stayAddons.js');
   const duringStayTotal = stayAddonsTotal(existingBooking.stay_addons);
+
+  const [addonRows] = await pool.query(
+    'SELECT COALESCE(SUM(amount), 0) AS total FROM booking_addons WHERE booking_id = ?',
+    [existingBooking.id]
+  );
+  const customAddonsTotal = Number(addonRows[0]?.total || 0);
+
   const total =
     roomTotal +
     islandHoppingAmount +
     extrasValidation.bilao_amount +
     extrasValidation.boodle_fight_amount +
-    duringStayTotal;
+    duringStayTotal +
+    customAddonsTotal;
 
   const payOption = payment_option ?? existingBooking.payment_option ?? 'deposit';
   const [settingRows] = await pool.query(

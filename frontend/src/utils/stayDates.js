@@ -3,13 +3,14 @@ import { addDays, format, isBefore, isSameDay, isValid, parseISO } from 'date-fn
 export const STAY_DATE_ERROR =
   'Check-out must be after check-in. Please choose a later check-out date.';
 
-/** Earliest selectable check-in (today, local). */
+/** Earliest selectable check-in (today, local). Used on the public guest booking form. */
 export function minCheckInDate(referenceDate = new Date()) {
   const d = new Date(referenceDate);
   d.setHours(0, 0, 0, 0);
   return format(d, 'yyyy-MM-dd');
 }
 
+/** True when the date is before today (admin ante-date / late recording). */
 export function isPastStayDate(dateStr, referenceDate = new Date()) {
   if (!dateStr) return false;
   const day = parseISO(dateStr);

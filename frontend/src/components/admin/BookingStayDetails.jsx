@@ -300,7 +300,7 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
                   try {
                     openBookingSoaPrint(booking.id, 'soa');
                   } catch (err) {
-                    toast.error(err.message || 'Could not open printable SOA.');
+                    toast.error(err.message || 'Could not open printable statement of account.');
                   }
                 }}
                 className="btn-outline text-sm inline-flex items-center gap-2"

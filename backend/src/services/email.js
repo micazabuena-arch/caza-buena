@@ -214,7 +214,7 @@ export async function sendBookingConfirmation(booking, room) {
       <strong>Check-in:</strong> 1:00 PM &nbsp;·&nbsp; <strong>Check-out:</strong> 11:00 AM
     </p>
     <p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:#214566;">
-      Your booking confirmation/statement of account (SOA) is attached to this email for your reference.
+      Your booking confirmation is attached to this email for your reference.
     </p>
     <p style="margin:0;font-size:15px;line-height:1.65;color:#214566;">
       Please bring a valid ID upon arrival. If your plans change, contact us as soon as possible.
@@ -238,13 +238,13 @@ export async function sendBookingConfirmation(booking, room) {
       { docType: 'confirmation' }
     );
   } catch (err) {
-    console.warn('[Email] SOA PDF generation failed:', err.message);
+    console.warn('[Email] Booking confirmation PDF generation failed:', err.message);
   }
 
   const attachments = [...getEmailLogoAttachment()];
   if (soaPdf?.length) {
     attachments.push({
-      filename: soaAttachmentFilename(booking.reference_code),
+      filename: soaAttachmentFilename(booking.reference_code, 'confirmation'),
       content: soaPdf,
       contentType: 'application/pdf',
     });

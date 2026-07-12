@@ -50,4 +50,12 @@ router.patch('/admin/:id/read', authenticateAdmin, async (req, res) => {
   res.json({ message: 'Marked as read' });
 });
 
+router.delete('/admin/:id', authenticateAdmin, async (req, res) => {
+  const [result] = await pool.query('DELETE FROM contact_inquiries WHERE id = ?', [req.params.id]);
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ message: 'Inquiry not found' });
+  }
+  res.json({ message: 'Inquiry deleted' });
+});
+
 export default router;

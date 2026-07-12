@@ -1,5 +1,10 @@
 import { parseStayAddons, stayAddonsTotal } from './stayAddons.js';
 
+function customAddonsTotal(addons) {
+  if (!Array.isArray(addons)) return 0;
+  return addons.reduce((sum, addon) => sum + (Number(addon.amount) || 0), 0);
+}
+
 /** Room stay total (excludes island hopping, food add-ons, and during-stay charges). */
 export function bookingRoomStayTotal(booking) {
   if (!booking) return 0;
@@ -8,12 +13,13 @@ export function bookingRoomStayTotal(booking) {
     Number(booking.island_hopping_amount || 0) -
     Number(booking.bilao_amount || 0) -
     Number(booking.boodle_fight_amount || 0) -
-    stayAddonsTotal(booking.stay_addons)
+    stayAddonsTotal(booking.stay_addons) -
+    customAddonsTotal(booking.addons)
   );
 }
 
-/** Line items for the SOA charges table. */
-export function buildBookingSoaLineItems(booking) {
+/** Line items for the SOA / confirmation charges table. */
+export function buildBookingSoaLineItems(booking, docType = 'soa') {
   if (!booking) return [];
 
   const lines = [];
@@ -63,8 +69,11 @@ export function buildBookingSoaLineItems(booking) {
 
   const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
   for (const addon of customAddons) {
-    const showInSoa = Boolean(addon.include_in_soa ?? addon.show_in_soa ?? true);
-    if (showInSoa && Number(addon.amount) > 0) {
+    const show =
+      docType === 'confirmation'
+        ? Boolean(Number(addon.include_in_confirmation ?? 1))
+        : Boolean(Number(addon.include_in_soa ?? addon.show_in_soa ?? 1));
+    if (show && Number(addon.amount) > 0) {
       lines.push({
         label: addon.label || 'Add-on',
         amount: Number(addon.amount),

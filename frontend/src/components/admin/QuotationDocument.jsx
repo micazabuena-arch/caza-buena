@@ -252,85 +252,89 @@ export default function QuotationDocument({ quote }) {
         </table>
       )}
 
-      {/* Seafood bilao */}
-      <table className="w-full border-collapse mb-3">
-        <thead>
-          <tr className="q-bilao-h1">
-            <th className={th} colSpan={5}>
-              Seafood bilao (optional)
-            </th>
-          </tr>
-          <tr className="q-bilao-h2">
-            <th className={th}>Description</th>
-            <th className={th}>Size</th>
-            <th className={th}>Rate</th>
-            <th className={`${th} text-center`}>Qty</th>
-            <th className={`${th} text-right`}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {BILAO_PACKAGES.map((pkg) => {
-            const selected = bilaoById[pkg.id];
-            return (
-              <tr key={pkg.id}>
-                <td className={td}>Good for {pkg.pax}pax</td>
-                <td className={td}>{pkg.label.toUpperCase()}</td>
-                <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
-                <td className={tdCenter}>{selected ? selected.qty : ''}</td>
-                <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
-              </tr>
-            );
-          })}
-          <tr className="q-bilao-total font-bold">
-            <td className={`${td} border-gray-400`} colSpan={4}>
-              Seafood bilao (optional)
-            </td>
-            <td className={`${tdRight} border-gray-400`}>{formatQuoteAmount(bilao.total)}</td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Seafood bilao — only when included */}
+      {quote.bilaoEnabled && (
+        <table className="w-full border-collapse mb-3">
+          <thead>
+            <tr className="q-bilao-h1">
+              <th className={th} colSpan={5}>
+                Seafood bilao (optional)
+              </th>
+            </tr>
+            <tr className="q-bilao-h2">
+              <th className={th}>Description</th>
+              <th className={th}>Size</th>
+              <th className={th}>Rate</th>
+              <th className={`${th} text-center`}>Qty</th>
+              <th className={`${th} text-right`}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {BILAO_PACKAGES.map((pkg) => {
+              const selected = bilaoById[pkg.id];
+              return (
+                <tr key={pkg.id}>
+                  <td className={td}>Good for {pkg.pax}pax</td>
+                  <td className={td}>{pkg.label.toUpperCase()}</td>
+                  <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
+                  <td className={tdCenter}>{selected ? selected.qty : ''}</td>
+                  <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
+                </tr>
+              );
+            })}
+            <tr className="q-bilao-total font-bold">
+              <td className={`${td} border-gray-400`} colSpan={4}>
+                Seafood bilao (optional)
+              </td>
+              <td className={`${tdRight} border-gray-400`}>{formatQuoteAmount(bilao.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
-      {/* Boodle fight */}
-      <table className="w-full border-collapse mb-3">
-        <thead>
-          <tr className="q-boodle-h1">
-            <th className={th} colSpan={5}>
-              Boodle fight (optional)
-            </th>
-          </tr>
-          <tr className="q-boodle-h2">
-            <th className={th} colSpan={2}>
-              Description
-            </th>
-            <th className={th}>Rate</th>
-            <th className={`${th} text-center`}>Qty</th>
-            <th className={`${th} text-right`}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {BOODLE_FIGHT_PACKAGES.map((pkg) => {
-            const selected = boodleById[pkg.id];
-            return (
-              <tr key={pkg.id}>
-                <td className={td} colSpan={2}>
-                  Good for {pkg.label}
-                </td>
-                <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
-                <td className={tdCenter}>{selected ? selected.qty : ''}</td>
-                <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
-              </tr>
-            );
-          })}
-          <tr className="q-boodle-total font-bold">
-            <td className={`${td} border-gray-400`} colSpan={4}>
-              Boodle fight (optional)
-            </td>
-            <td className={`${tdRight} border-gray-400`}>
-              {formatQuoteAmount(boodleFight.total)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      {/* Boodle fight — only when included */}
+      {quote.boodleEnabled && (
+        <table className="w-full border-collapse mb-3">
+          <thead>
+            <tr className="q-boodle-h1">
+              <th className={th} colSpan={5}>
+                Boodle fight (optional)
+              </th>
+            </tr>
+            <tr className="q-boodle-h2">
+              <th className={th} colSpan={2}>
+                Description
+              </th>
+              <th className={th}>Rate</th>
+              <th className={`${th} text-center`}>Qty</th>
+              <th className={`${th} text-right`}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {BOODLE_FIGHT_PACKAGES.map((pkg) => {
+              const selected = boodleById[pkg.id];
+              return (
+                <tr key={pkg.id}>
+                  <td className={td} colSpan={2}>
+                    Good for {pkg.label}
+                  </td>
+                  <td className={tdRight}>{formatQuoteAmount(pkg.price)}</td>
+                  <td className={tdCenter}>{selected ? selected.qty : ''}</td>
+                  <td className={tdRight}>{selected ? formatQuoteAmount(selected.total) : ''}</td>
+                </tr>
+              );
+            })}
+            <tr className="q-boodle-total font-bold">
+              <td className={`${td} border-gray-400`} colSpan={4}>
+                Boodle fight (optional)
+              </td>
+              <td className={`${tdRight} border-gray-400`}>
+                {formatQuoteAmount(boodleFight.total)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       {/* Grand total */}
       <table className="w-full border-collapse">

@@ -330,6 +330,13 @@ async function run() {
     console.log('  ✓ Online Booking Platform not in payment_methods');
   }
 
+  console.log('\nusers table:');
+  await addColumn(
+    'users',
+    'is_active',
+    'TINYINT(1) NOT NULL DEFAULT 1 AFTER `role`'
+  );
+
   console.log('\nDone. Restart the API (npm run dev) and try saving the room again.');
   await pool.end();
 }

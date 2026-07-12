@@ -136,7 +136,7 @@ function generateBookingSoaPdfWithDoc(booking, PDFDocument, options = {}) {
       });
 
       y += 8;
-      const lineItems = buildBookingSoaLineItems(booking);
+      const lineItems = buildBookingSoaLineItems(booking, options.docType || 'confirmation');
       const payment = getBookingPaymentSummary(booking);
 
       lineItems.forEach((item) => {

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import AdminTableShell from '../components/ui/AdminTableShell';
 import { usePagination } from '../hooks/usePagination';
@@ -17,6 +18,7 @@ export default function AdminInquiries() {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  const confirm = useConfirm();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(inquiries);
 
   useEffect(() => {
@@ -33,17 +35,35 @@ export default function AdminInquiries() {
     }
   };
 
+  const deleteInquiry = async (inq) => {
+    const ok = await confirm({
+      title: 'Delete inquiry?',
+      message: `Remove the message from ${inq.name}? This cannot be undone.`,
+      confirmLabel: 'Yes, delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      await api.delete(`/contact/admin/${inq.id}`);
+      setInquiries((prev) => prev.filter((i) => i.id !== inq.id));
+      toast.success('Inquiry deleted.');
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
+  if (loading) return <Loading />;
+
   return (
     <div>
       <h1 className="text-2xl sm:text-3xl font-serif text-aegean-800 mb-8">Contact Inquiries</h1>
 
-      {loading ? (
-        <Loading />
+      {inquiries.length === 0 ? (
+        <p className="text-aegean-600">No inquiries yet.</p>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm">
-          {inquiries.length === 0 ? (
-            <p className="p-8 text-center text-aegean-500">No inquiries yet.</p>
-          ) : (
+        <div className="bg-white rounded-2xl border border-aegean-100 overflow-hidden">
+          {inquiries.length === 0 ? null : (
             <div className="lg:hidden p-4 space-y-3">
               {pageItems.map((inq) => (
                 <article
@@ -73,15 +93,21 @@ export default function AdminInquiries() {
                     </p>
                   )}
                   <p className="text-sm text-aegean-700 whitespace-pre-line">{inq.message}</p>
-                  {!inq.is_read && (
-                    <IconActionGroup>
+                  <IconActionGroup>
+                    {!inq.is_read && (
                       <IconActionButton
                         icon={Check}
                         label="Mark as read"
                         onClick={() => markRead(inq.id)}
                       />
-                    </IconActionGroup>
-                  )}
+                    )}
+                    <IconActionButton
+                      icon={Trash2}
+                      label="Delete inquiry"
+                      className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                      onClick={() => deleteInquiry(inq)}
+                    />
+                  </IconActionGroup>
                 </article>
               ))}
             </div>
@@ -132,17 +158,21 @@ export default function AdminInquiries() {
                       </span>
                     </td>
                     <td className="p-4">
-                      {!inq.is_read ? (
-                        <IconActionGroup>
+                      <IconActionGroup>
+                        {!inq.is_read && (
                           <IconActionButton
                             icon={Check}
                             label="Mark as read"
                             onClick={() => markRead(inq.id)}
                           />
-                        </IconActionGroup>
-                      ) : (
-                        <span className="text-xs text-aegean-400">—</span>
-                      )}
+                        )}
+                        <IconActionButton
+                          icon={Trash2}
+                          label="Delete inquiry"
+                          className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                          onClick={() => deleteInquiry(inq)}
+                        />
+                      </IconActionGroup>
                     </td>
                   </tr>
                 ))}

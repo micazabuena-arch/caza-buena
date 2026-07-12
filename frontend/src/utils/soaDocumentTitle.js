@@ -1,12 +1,12 @@
 export const SOA_DOCUMENT_TYPES = {
   soa: {
     id: 'soa',
-    label: 'Statement of Account',
-    printLabel: 'Print SOA',
+    label: 'STATEMENT OF ACCOUNT',
+    printLabel: 'Print statement of account',
   },
   confirmation: {
     id: 'confirmation',
-    label: 'Booking Confirmation',
+    label: 'BOOKING CONFIRMATION',
     printLabel: 'Print booking confirmation',
   },
 };

@@ -14,10 +14,14 @@ const SOA_CONTACT = {
 
 const BRAND_BLUE = '#498bc3';
 
-export default function BookingSoaDocument({ booking, documentTitle = 'Statement of Account' }) {
+export default function BookingSoaDocument({
+  booking,
+  documentTitle = 'STATEMENT OF ACCOUNT',
+  docType = 'soa',
+}) {
   if (!booking) return null;
 
-  const lineItems = buildBookingSoaLineItems(booking);
+  const lineItems = buildBookingSoaLineItems(booking, docType);
   const payment = getBookingPaymentSummary(booking);
   const nightsLabel = `${booking.nights} NIGHT${booking.nights === 1 ? '' : 'S'}`;
 

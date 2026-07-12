@@ -6,11 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import BookingSoaDocument from '../components/admin/BookingSoaDocument';
 import Loading from '../components/ui/Loading';
 import { clearMirroredAdminToken } from '../utils/islandHoppingPrintCache';
-import { resolveSoaDocumentTitle } from '../utils/soaDocumentTitle';
+import { resolveSoaDocumentTitle, SOA_DOCUMENT_TYPES } from '../utils/soaDocumentTitle';
 
 export default function BookingSoaPrint() {
   const { bookingId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const docType = searchParams.get('doc') === 'confirmation' ? 'confirmation' : 'soa';
   const documentTitle = resolveSoaDocumentTitle(docType);
   const { user, loading: authLoading } = useAuth();
@@ -59,7 +59,18 @@ export default function BookingSoaPrint() {
         }
       `}</style>
 
-      <div className="no-print max-w-[8.5in] mx-auto mb-6 flex flex-wrap gap-3">
+      <div className="no-print max-w-[8.5in] mx-auto mb-6 flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-2 text-sm text-aegean-700">
+          <span className="font-medium">Document type</span>
+          <select
+            value={docType}
+            onChange={(e) => setSearchParams({ doc: e.target.value })}
+            className="border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="soa">{SOA_DOCUMENT_TYPES.soa.label}</option>
+            <option value="confirmation">{SOA_DOCUMENT_TYPES.confirmation.label}</option>
+          </select>
+        </label>
         <button
           type="button"
           onClick={() => window.print()}
@@ -79,7 +90,11 @@ export default function BookingSoaPrint() {
       {error && <p className="text-red-600 max-w-[8.5in] mx-auto">{error}</p>}
 
       {!loading && !error && booking && (
-        <BookingSoaDocument booking={booking} documentTitle={documentTitle} />
+        <BookingSoaDocument
+          booking={booking}
+          documentTitle={documentTitle}
+          docType={docType}
+        />
       )}
     </div>
   );

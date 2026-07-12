@@ -7,6 +7,7 @@ import IconActionButton, { IconActionGroup } from '../components/ui/IconActionBu
 import AdminModal from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useAuth } from '../context/AuthContext';
 import { groupMenuByCategory } from '../utils/menuGrouping';
 
 const DEFAULT_CATEGORIES = ['All Day Breakfast', 'Rice Meals', 'Snacks & Extras', 'Drinks'];
@@ -144,6 +145,8 @@ export default function AdminMenu() {
   const [error, setError] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
+  const { isFullAdmin } = useAuth();
+  const canEditPrices = isFullAdmin;
 
   const categoryOptions = useMemo(() => {
     const fromItems = items.map((i) => i.category?.trim()).filter(Boolean);
@@ -169,6 +172,10 @@ export default function AdminMenu() {
   }, []);
 
   const openAdd = () => {
+    if (!canEditPrices) {
+      toast.error('Only admins can change menu prices.');
+      return;
+    }
     setEditingId(null);
     setForm(emptyForm());
     setError('');
@@ -176,6 +183,10 @@ export default function AdminMenu() {
   };
 
   const openEdit = (item) => {
+    if (!canEditPrices) {
+      toast.error('Only admins can change menu prices.');
+      return;
+    }
     setEditingId(item.id);
     setForm({
       name: item.name || '',
@@ -245,6 +256,10 @@ export default function AdminMenu() {
   };
 
   const removeItem = async (item) => {
+    if (!canEditPrices) {
+      toast.error('Only admins can change menu prices.');
+      return;
+    }
     const ok = await confirm({
       title: 'Remove menu item?',
       message: `"${item.name}" will be hidden from the public Meals page.`,
@@ -270,14 +285,23 @@ export default function AdminMenu() {
         <div>
           <h1 className="text-3xl font-serif text-aegean-800 mb-2">Meals & Menu</h1>
           <p className="text-aegean-600 text-sm max-w-3xl">
-            Manage café items on the public Meals page.{' '}
-            <strong className="font-medium text-aegean-700">Sort:</strong> lower numbers appear first
-            inside each category. Category sections are ordered by their lowest sort number.
+            {canEditPrices ? (
+              <>
+                Manage café items on the public Meals page.{' '}
+                <strong className="font-medium text-aegean-700">Sort:</strong> lower numbers appear
+                first inside each category. Category sections are ordered by their lowest sort
+                number.
+              </>
+            ) : (
+              <>Menu prices are view-only for staff. Ask an admin to add or change items.</>
+            )}
           </p>
         </div>
-        <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2 shrink-0">
-          <Plus size={18} /> Add menu item
-        </button>
+        {canEditPrices && (
+          <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2 shrink-0">
+            <Plus size={18} /> Add menu item
+          </button>
+        )}
       </div>
 
       {error && !modalOpen && <p className="text-red-600 text-sm mb-4">{error}</p>}
@@ -298,7 +322,9 @@ export default function AdminMenu() {
                       <th className="px-4 py-3 font-medium w-16">Sort</th>
                       <th className="px-4 py-3 font-medium">Name</th>
                       <th className="px-4 py-3 font-medium w-28">Price</th>
-                      <th className="px-4 py-3 font-medium w-28 text-right">Actions</th>
+                      {canEditPrices && (
+                        <th className="px-4 py-3 font-medium w-28 text-right">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -311,21 +337,23 @@ export default function AdminMenu() {
                         <td className="px-4 py-3 text-aegean-600 tabular-nums">
                           {formatPrice(item.price)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <IconActionGroup className="justify-end">
-                            <IconActionButton
-                              icon={Pencil}
-                              label="Edit item"
-                              onClick={() => openEdit(item)}
-                            />
-                            <IconActionButton
-                              icon={Trash2}
-                              label="Remove item"
-                              className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
-                              onClick={() => removeItem(item)}
-                            />
-                          </IconActionGroup>
-                        </td>
+                        {canEditPrices && (
+                          <td className="px-4 py-3 text-right">
+                            <IconActionGroup className="justify-end">
+                              <IconActionButton
+                                icon={Pencil}
+                                label="Edit item"
+                                onClick={() => openEdit(item)}
+                              />
+                              <IconActionButton
+                                icon={Trash2}
+                                label="Remove item"
+                                className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                                onClick={() => removeItem(item)}
+                              />
+                            </IconActionGroup>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

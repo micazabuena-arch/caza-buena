@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/database.js';
-import { authenticateAdmin } from '../middleware/auth.js';
+import { authenticateAdmin, requireAdminRole } from '../middleware/auth.js';
 import { uploadImage } from '../middleware/upload.js';
 import { uploadFile } from '../utils/fileUpload.js';
 
@@ -47,7 +47,7 @@ router.get('/discounts', authenticateAdmin, async (_req, res) => {
   res.json(rows);
 });
 
-router.post('/discounts', authenticateAdmin, async (req, res) => {
+router.post('/discounts', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { code, description, type, value, min_nights, valid_from, valid_until, max_uses } = req.body;
   const [r] = await pool.query(
     `INSERT INTO discounts (code, description, type, value, min_nights, valid_from, valid_until, max_uses)
@@ -57,7 +57,7 @@ router.post('/discounts', authenticateAdmin, async (req, res) => {
   res.status(201).json({ id: r.insertId });
 });
 
-router.patch('/discounts/:id', authenticateAdmin, async (req, res) => {
+router.patch('/discounts/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { is_active } = req.body;
   await pool.query('UPDATE discounts SET is_active = ? WHERE id = ?', [is_active ? 1 : 0, req.params.id]);
   res.json({ message: 'Updated' });
@@ -110,7 +110,7 @@ router.get('/rooms/:id', authenticateAdmin, async (req, res) => {
   res.json(room);
 });
 
-router.post('/rooms', authenticateAdmin, async (req, res) => {
+router.post('/rooms', authenticateAdmin, requireAdminRole, async (req, res) => {
   const {
     name,
     slug,
@@ -161,7 +161,12 @@ router.post('/rooms', authenticateAdmin, async (req, res) => {
 });
 
 router.put('/rooms/:id', authenticateAdmin, async (req, res) => {
-  const fields = req.body;
+  // Staff may update room details, but not site-wide nightly rates.
+  const fields = { ...req.body };
+  if (req.user?.role !== 'admin') {
+    delete fields.price_per_night;
+    delete fields.price_weekend;
+  }
   const allowed = [
     'name',
     'room_type',
@@ -241,7 +246,7 @@ router.get('/rooms/:roomId/holidays', authenticateAdmin, async (req, res) => {
   res.json(rows);
 });
 
-router.post('/rooms/:roomId/holidays', authenticateAdmin, async (req, res) => {
+router.post('/rooms/:roomId/holidays', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { label, start_date, end_date, price_per_night } = req.body;
   if (!label || !start_date || !end_date || price_per_night == null) {
     return res.status(400).json({ message: 'label, start_date, end_date, price_per_night required' });
@@ -253,7 +258,7 @@ router.post('/rooms/:roomId/holidays', authenticateAdmin, async (req, res) => {
   res.status(201).json({ id: r.insertId });
 });
 
-router.put('/rooms/:roomId/holidays/:id', authenticateAdmin, async (req, res) => {
+router.put('/rooms/:roomId/holidays/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { label, start_date, end_date, price_per_night } = req.body;
   await pool.query(
     'UPDATE room_holiday_rates SET label=?, start_date=?, end_date=?, price_per_night=? WHERE id=? AND room_id=?',
@@ -262,7 +267,7 @@ router.put('/rooms/:roomId/holidays/:id', authenticateAdmin, async (req, res) =>
   res.json({ message: 'Updated' });
 });
 
-router.delete('/rooms/:roomId/holidays/:id', authenticateAdmin, async (req, res) => {
+router.delete('/rooms/:roomId/holidays/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
   await pool.query('DELETE FROM room_holiday_rates WHERE id=? AND room_id=?', [
     req.params.id,
     req.params.roomId,
@@ -322,7 +327,7 @@ router.get('/settings', async (_req, res) => {
   res.json(settings);
 });
 
-router.put('/settings', authenticateAdmin, async (req, res) => {
+router.put('/settings', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { validateExtraPersonRatesInput } = await import('../utils/extraPersonRates.js');
   const { errors, parsed } = validateExtraPersonRatesInput(req.body);
   if (errors.length > 0) {

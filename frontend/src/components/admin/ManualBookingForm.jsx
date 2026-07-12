@@ -19,12 +19,9 @@ import {
   isSeniorPassenger,
   isPwdPassenger,
 } from '../../data/islandHoppingRates';
-import {
-  validateManualBookingFields,
-  minCheckOutDate,
-} from '../../utils/manualBookingValidation';
+import { validateManualBookingFields } from '../../utils/manualBookingValidation';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
-import { minCheckInDate } from '../../utils/stayDates';
+import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
 
 const inputClass =
@@ -165,7 +162,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     (parseInt(form.children_7_12, 10) || 0);
 
   const roomSubtotal =
-    availability?.available && availability.subtotal != null ? Number(availability.subtotal) : 0;
+    availability?.subtotal != null &&
+    (availability.available || isPastStayDate(form.check_in)) &&
+    !availability.occupancy_error
+      ? Number(availability.subtotal)
+      : 0;
 
   const extrasQuote = selectedRoom ? validateBookingExtras(bookingExtras, roomType) : null;
   const islandQuote =
@@ -392,11 +393,17 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
   const priceSummary = useMemo(() => {
     if (!form.room_id || !availability) return null;
-    if (!availability.available) {
-      return { unavailable: true, message: availability.occupancy_error };
+    const anteDate = isPastStayDate(form.check_in);
+    // Occupancy always blocks; calendar conflicts only block future stays (not ante-date recording).
+    if (availability.occupancy_error) {
+      return { unavailable: true, message: availability.occupancy_error, anteDate };
+    }
+    if (!availability.available && !anteDate) {
+      return { unavailable: true, message: null, anteDate };
     }
     return {
       unavailable: false,
+      anteDate,
       nights: availability.nights,
       roomSubtotal,
       islandTotal,
@@ -404,7 +411,16 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       totalAmount,
       amountToPay,
     };
-  }, [form.room_id, availability, roomSubtotal, islandTotal, addOnsTotal, totalAmount, amountToPay]);
+  }, [
+    form.room_id,
+    form.check_in,
+    availability,
+    roomSubtotal,
+    islandTotal,
+    addOnsTotal,
+    totalAmount,
+    amountToPay,
+  ]);
 
   const goNext = () => {
     if (!validateTab(activeTab)) return;
@@ -439,7 +455,10 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
       <div className="min-h-[200px]">
         {activeTab === 'stay' && (
-          <Panel title="Room & dates" hint="Confirmed status blocks these dates on the public site.">
+          <Panel
+            title="Room & dates"
+            hint="Past check-in is allowed for late recording / Statement of Account. Confirmed future stays still block the public calendar."
+          >
             <Field label="Room" required error={fieldErrors.room_id}>
               <select
                 value={form.room_id}
@@ -458,7 +477,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               <Field label="Check-in" required error={fieldErrors.check_in}>
                 <input
                   type="date"
-                  min={minCheckInDate()}
                   value={form.check_in}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -475,13 +493,19 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               <Field label="Check-out" required error={fieldErrors.check_out}>
                 <input
                   type="date"
-                  min={minCheckOutDate(form.check_in) || minCheckInDate()}
+                  min={minCheckOutDate(form.check_in)}
                   value={form.check_out}
                   onChange={(e) => update({ check_out: e.target.value })}
                   className={fieldInputClass(fieldErrors.check_out)}
                 />
               </Field>
             </div>
+            {isPastStayDate(form.check_in) && (
+              <p className="text-xs text-aegean-600 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2">
+                Ante-dated stay — for recording / Statement of Account when the booking was not
+                entered on time.
+              </p>
+            )}
             <div>
               <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               <div className="grid grid-cols-3 gap-3">
@@ -540,6 +564,16 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                 {priceSummary.message ? ` — ${priceSummary.message}` : ''}.
               </p>
             )}
+            {priceSummary &&
+              !priceSummary.unavailable &&
+              priceSummary.anteDate &&
+              availability &&
+              !availability.available && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  Calendar shows a conflict, but ante-dated recording is allowed for Statement of
+                  Account.
+                </p>
+              )}
             {priceSummary && !priceSummary.unavailable && priceSummary.totalAmount > 0 && (
               <p className="text-sm text-aegean-700 bg-aegean-50 rounded-lg px-3 py-2">
                 Estimated total: <strong>₱{priceSummary.totalAmount.toLocaleString()}</strong>

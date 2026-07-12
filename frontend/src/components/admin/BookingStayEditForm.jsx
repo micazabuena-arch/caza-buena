@@ -12,7 +12,7 @@ import { calculateIslandHopping } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
-import { minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
+import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
 import BookingCustomAddons from './BookingCustomAddons';
 
@@ -23,7 +23,7 @@ const TABS = [
   { id: 'stay', label: '1. Stay' },
   { id: 'guest', label: '2. Guest' },
   { id: 'addons', label: '3. Add-ons' },
-  { id: 'custom-addons', label: '4. Custom Add-ons' },
+  { id: 'custom-addons', label: '4. Extra charges' },
   { id: 'payment', label: '5. Payment' },
 ];
 
@@ -63,7 +63,6 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const [error, setError] = useState('');
   const [rebookQuote, setRebookQuote] = useState(null);
   const [rebookQuoteLoading, setRebookQuoteLoading] = useState(false);
-  const [customAddons, setCustomAddons] = useState([]);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -146,7 +145,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     const addonsOnBooking =
       Number(booking?.island_hopping_amount || 0) +
       Number(booking?.bilao_amount || 0) +
-      Number(booking?.boodle_fight_amount || 0);
+      Number(booking?.boodle_fight_amount || 0) +
+      (Array.isArray(booking?.addons)
+        ? booking.addons.reduce((s, a) => s + (Number(a.amount) || 0), 0)
+        : 0);
     const roomNet = Number(booking?.total_amount || 0) - addonsOnBooking;
     return roomNet + Number(booking?.discount_amount || 0);
   }, [booking, rebookQuote]);
@@ -283,7 +285,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         {activeTab === 'stay' && (
           <Panel
             title="Room & dates"
-            hint="Rebooking uses weekday (Mon–Thu) and weekend (Fri–Sun) rates for each night. Weekends cost more; weekdays cost less."
+            hint="Past check-in is allowed for late recording / SOA. Rebooking uses weekday (Mon–Thu) and weekend (Fri–Sun) rates per night."
           >
             <Field label="Room" required>
               <select
@@ -305,7 +307,6 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 <input
                   type="date"
                   required
-                  min={minCheckInDate()}
                   value={form.check_in}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -324,7 +325,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 <input
                   type="date"
                   required
-                  min={minCheckOutDate(form.check_in) || minCheckInDate()}
+                  min={minCheckOutDate(form.check_in)}
                   value={form.check_out}
                   onChange={(e) => {
                     update({ check_out: e.target.value });
@@ -334,6 +335,11 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 />
               </Field>
             </div>
+            {isPastStayDate(form.check_in) && (
+              <p className="text-xs text-aegean-600 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2 mt-3">
+                Ante-dated stay — for recording / Statement of Account.
+              </p>
+            )}
             <div>
               <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
               <div className="grid grid-cols-3 gap-3">
@@ -446,12 +452,15 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         )}
 
         {activeTab === 'custom-addons' && (
-          <Panel title="Custom add-ons" hint="Admin-only charges like room extensions, ordered food, etc.">
+          <Panel
+            title="Extra charges"
+            hint="Room extension, ordered food, and other during-stay charges (admin only)."
+          >
             <BookingCustomAddons
               bookingId={booking.id}
               addons={booking.addons || []}
-              onChange={(addons) => {
-                setCustomAddons(addons);
+              onBookingUpdated={(updated) => {
+                if (updated) onSaved?.(updated);
               }}
             />
           </Panel>

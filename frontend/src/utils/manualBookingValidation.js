@@ -14,6 +14,7 @@ export function isValidGuestPhone(phone) {
 /**
  * Validate manual booking fields for a tab or full form.
  * Returns { fieldErrors, bannerError, tabId } — all fieldErrors values are strings.
+ * Past check-in is allowed (admin ante-date / late recording for SOA).
  */
 export function validateManualBookingFields(form, context = {}) {
   const {
@@ -51,9 +52,6 @@ export function validateManualBookingFields(form, context = {}) {
     if (!form.check_in) {
       fieldErrors.check_in = 'Check-in date is required.';
       markTab('stay');
-    } else if (isPastStayDate(form.check_in)) {
-      fieldErrors.check_in = 'Check-in cannot be in the past.';
-      markTab('stay');
     }
     if (!form.check_out) {
       fieldErrors.check_out = 'Check-out date is required.';
@@ -73,12 +71,18 @@ export function validateManualBookingFields(form, context = {}) {
       markTab('stay');
     }
     if (form.room_id && !dateError) {
+      const anteDate = isPastStayDate(form.check_in);
       if (availabilityChecking) {
         bannerError = 'Checking availability for these dates…';
         markTab('stay');
-      } else if (!availability?.available) {
-        bannerError =
-          availability?.occupancy_error || 'Room is not available for these dates.';
+      } else if (availability?.occupancy_error) {
+        bannerError = availability.occupancy_error;
+        markTab('stay');
+      } else if (!availability?.available && !anteDate) {
+        bannerError = 'Room is not available for these dates.';
+        markTab('stay');
+      } else if (anteDate && availability?.subtotal == null && !availabilityChecking) {
+        bannerError = 'Unable to price this stay. Check the room and dates.';
         markTab('stay');
       }
     }

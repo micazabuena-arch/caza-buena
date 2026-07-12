@@ -8,6 +8,7 @@ import {
   generateReferenceCode,
   calculateNights,
   isRoomAvailable,
+  isAnteDateCheckIn,
   applyDiscount,
   getRateCalendarDays,
 } from '../utils/booking.js';
@@ -65,7 +66,9 @@ router.get('/availability', async (req, res) => {
   let roomLimits = null;
   let extraBreakdown = null;
 
-  if (available && nights > 0) {
+  // Always price the stay when nights are valid — even if the room is booked —
+  // so admin ante-date / recording can still show totals and create an SOA.
+  if (nights > 0) {
     const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ?', [room_id]);
     const room = rooms[0];
     const occupancy =
@@ -717,7 +720,8 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
   const blocksAvailability = ['pending', 'awaiting_payment', 'payment_submitted', 'confirmed'].includes(
     booking.status
   );
-  if (blocksAvailability) {
+  // Ante-dated stays (past check-in) skip conflict checks for recording / SOA.
+  if (blocksAvailability && !isAnteDateCheckIn(checkIn)) {
     const available = await isRoomAvailable(pool, booking.room_id, checkIn, checkOut, booking.id);
     if (!available) {
       return res.status(409).json({ message: 'Room is not available for the selected dates' });
@@ -949,6 +953,21 @@ router.get('/admin/:id', authenticateAdmin, async (req, res) => {
   }
 
   res.json(booking);
+});
+
+/** Admin: permanently delete a booking and related room/add-on rows (CASCADE). */
+router.delete('/admin/:id', authenticateAdmin, async (req, res) => {
+  const [rows] = await pool.query(
+    'SELECT id, reference_code, guest_name FROM bookings WHERE id = ?',
+    [req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+
+  await pool.query('DELETE FROM bookings WHERE id = ?', [req.params.id]);
+  res.json({
+    message: 'Booking deleted',
+    reference_code: rows[0].reference_code,
+  });
 });
 
 // Public: upload payment proof

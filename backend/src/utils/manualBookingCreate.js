@@ -1,5 +1,10 @@
 import pool from '../config/database.js';
-import { generateReferenceCode, calculateNights, isRoomAvailable } from './booking.js';
+import {
+  generateReferenceCode,
+  calculateNights,
+  isRoomAvailable,
+  isAnteDateCheckIn,
+} from './booking.js';
 import { sendBookingConfirmation } from '../services/email.js';
 import { buildAdminNotesWithManualPayment } from './manualBookingPayment.js';
 
@@ -50,8 +55,11 @@ export async function createManualBooking(body) {
   const nights = calculateNights(checkIn, checkOut);
   if (nights < 1) return { error: 'Invalid date range' };
 
-  const available = await isRoomAvailable(pool, room_id, checkIn, checkOut);
-  if (!available) return { error: 'Room is not available for the selected dates' };
+  // Ante-dated (past check-in) stays skip calendar conflicts so staff can record late bookings / SOA.
+  if (!isAnteDateCheckIn(checkIn)) {
+    const available = await isRoomAvailable(pool, room_id, checkIn, checkOut);
+    if (!available) return { error: 'Room is not available for the selected dates' };
+  }
 
   const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ?', [room_id]);
   if (rooms.length === 0) return { error: 'Room not found' };

@@ -18,6 +18,6 @@ export function openBookingSoaPrint(bookingId, docType = 'soa') {
   );
 
   if (!printWindow) {
-    throw new Error('Pop-up blocked. Please allow pop-ups to open the printable SOA.');
+    throw new Error('Pop-up blocked. Please allow pop-ups to open the printable statement of account.');
   }
 }

@@ -221,9 +221,11 @@ export default function AdminQuotation() {
         tourSeniorPwdQty,
         tourInfantQty,
         boats: [{ boatTierId: boatTier }],
+        bilaoEnabled: Boolean(detail.bilao_package),
         bilaoLines: detail.bilao_package
           ? [{ packageId: detail.bilao_package, qty: 1 }]
           : [],
+        boodleEnabled: Boolean(detail.boodle_fight_tier),
         boodleLines: detail.boodle_fight_tier
           ? [{ tierId: detail.boodle_fight_tier, qty: 1 }]
           : [],
@@ -611,119 +613,163 @@ export default function AdminQuotation() {
 
           <section className="bg-white rounded-xl border border-aegean-100 p-5 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="font-medium text-aegean-800">Seafood bilao (optional)</h2>
-              <button
-                type="button"
-                onClick={addBilaoLine}
-                className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
-              >
-                <Plus size={14} /> Add bilao
-              </button>
-            </div>
-            {(quote.bilaoLines || []).length === 0 && (
-              <p className="text-xs text-aegean-500">No bilao orders added.</p>
-            )}
-            {(quote.bilaoLines || []).map((line, index) => (
-              <div
-                key={`bilao-${index}`}
-                className="rounded-lg border border-aegean-100 p-3 grid sm:grid-cols-[1fr_100px_auto] gap-3 items-end"
-              >
-                <Field label="Package">
-                  <select
-                    className={inputClass}
-                    value={line.packageId}
-                    onChange={(e) => patchBilaoLine(index, { packageId: e.target.value })}
-                  >
-                    <option value="">Select…</option>
-                    {BILAO_PACKAGES.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label} ({p.pax} pax) — ₱{p.price.toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Qty">
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={line.qty}
-                    onChange={(e) => patchBilaoLine(index, { qty: e.target.value })}
-                  />
-                </Field>
+              <label className="flex items-center gap-2 text-sm font-medium text-aegean-800">
+                <input
+                  type="checkbox"
+                  checked={Boolean(quote.bilaoEnabled)}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    patch({
+                      bilaoEnabled: enabled,
+                      bilaoLines:
+                        enabled && !(quote.bilaoLines || []).length
+                          ? [emptyQuotationBilaoLine()]
+                          : quote.bilaoLines,
+                    });
+                  }}
+                />
+                Include seafood bilao
+              </label>
+              {quote.bilaoEnabled && (
                 <button
                   type="button"
-                  onClick={() => removeBilaoLine(index)}
-                  className="text-red-600 hover:text-red-700 p-2 mb-0.5"
-                  aria-label="Remove bilao"
+                  onClick={addBilaoLine}
+                  className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
                 >
-                  <Trash2 size={14} />
+                  <Plus size={14} /> Add bilao
                 </button>
-              </div>
-            ))}
-            {totals.bilao.total > 0 && (
-              <p className="text-sm text-aegean-600">
-                Seafood bilao total: ₱{formatQuoteAmount(totals.bilao.total)}
-              </p>
+              )}
+            </div>
+            {quote.bilaoEnabled && (
+              <>
+                {(quote.bilaoLines || []).length === 0 && (
+                  <p className="text-xs text-aegean-500">No bilao orders added.</p>
+                )}
+                {(quote.bilaoLines || []).map((line, index) => (
+                  <div
+                    key={`bilao-${index}`}
+                    className="rounded-lg border border-aegean-100 p-3 grid sm:grid-cols-[1fr_100px_auto] gap-3 items-end"
+                  >
+                    <Field label="Package">
+                      <select
+                        className={inputClass}
+                        value={line.packageId}
+                        onChange={(e) => patchBilaoLine(index, { packageId: e.target.value })}
+                      >
+                        <option value="">Select…</option>
+                        {BILAO_PACKAGES.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label} ({p.pax} pax) — ₱{p.price.toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Qty">
+                      <input
+                        type="number"
+                        min={1}
+                        className={inputClass}
+                        value={line.qty}
+                        onChange={(e) => patchBilaoLine(index, { qty: e.target.value })}
+                      />
+                    </Field>
+                    <button
+                      type="button"
+                      onClick={() => removeBilaoLine(index)}
+                      className="text-red-600 hover:text-red-700 p-2 mb-0.5"
+                      aria-label="Remove bilao"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {totals.bilao.total > 0 && (
+                  <p className="text-sm text-aegean-600">
+                    Seafood bilao total: ₱{formatQuoteAmount(totals.bilao.total)}
+                  </p>
+                )}
+              </>
             )}
           </section>
 
           <section className="bg-white rounded-xl border border-aegean-100 p-5 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="font-medium text-aegean-800">Boodle fight (optional)</h2>
-              <button
-                type="button"
-                onClick={addBoodleLine}
-                className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
-              >
-                <Plus size={14} /> Add boodle fight
-              </button>
-            </div>
-            {(quote.boodleLines || []).length === 0 && (
-              <p className="text-xs text-aegean-500">No boodle fight orders added.</p>
-            )}
-            {(quote.boodleLines || []).map((line, index) => (
-              <div
-                key={`boodle-${index}`}
-                className="rounded-lg border border-aegean-100 p-3 grid sm:grid-cols-[1fr_100px_auto] gap-3 items-end"
-              >
-                <Field label="Group size">
-                  <select
-                    className={inputClass}
-                    value={line.tierId}
-                    onChange={(e) => patchBoodleLine(index, { tierId: e.target.value })}
-                  >
-                    <option value="">Select…</option>
-                    {BOODLE_FIGHT_PACKAGES.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label} — ₱{p.price.toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Qty">
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={line.qty}
-                    onChange={(e) => patchBoodleLine(index, { qty: e.target.value })}
-                  />
-                </Field>
+              <label className="flex items-center gap-2 text-sm font-medium text-aegean-800">
+                <input
+                  type="checkbox"
+                  checked={Boolean(quote.boodleEnabled)}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    patch({
+                      boodleEnabled: enabled,
+                      boodleLines:
+                        enabled && !(quote.boodleLines || []).length
+                          ? [emptyQuotationBoodleLine()]
+                          : quote.boodleLines,
+                    });
+                  }}
+                />
+                Include boodle fight
+              </label>
+              {quote.boodleEnabled && (
                 <button
                   type="button"
-                  onClick={() => removeBoodleLine(index)}
-                  className="text-red-600 hover:text-red-700 p-2 mb-0.5"
-                  aria-label="Remove boodle fight"
+                  onClick={addBoodleLine}
+                  className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
                 >
-                  <Trash2 size={14} />
+                  <Plus size={14} /> Add boodle fight
                 </button>
-              </div>
-            ))}
-            {totals.boodleFight.total > 0 && (
-              <p className="text-sm text-aegean-600">
-                Boodle fight total: ₱{formatQuoteAmount(totals.boodleFight.total)}
-              </p>
+              )}
+            </div>
+            {quote.boodleEnabled && (
+              <>
+                {(quote.boodleLines || []).length === 0 && (
+                  <p className="text-xs text-aegean-500">No boodle fight orders added.</p>
+                )}
+                {(quote.boodleLines || []).map((line, index) => (
+                  <div
+                    key={`boodle-${index}`}
+                    className="rounded-lg border border-aegean-100 p-3 grid sm:grid-cols-[1fr_100px_auto] gap-3 items-end"
+                  >
+                    <Field label="Group size">
+                      <select
+                        className={inputClass}
+                        value={line.tierId}
+                        onChange={(e) => patchBoodleLine(index, { tierId: e.target.value })}
+                      >
+                        <option value="">Select…</option>
+                        {BOODLE_FIGHT_PACKAGES.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label} — ₱{p.price.toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Qty">
+                      <input
+                        type="number"
+                        min={1}
+                        className={inputClass}
+                        value={line.qty}
+                        onChange={(e) => patchBoodleLine(index, { qty: e.target.value })}
+                      />
+                    </Field>
+                    <button
+                      type="button"
+                      onClick={() => removeBoodleLine(index)}
+                      className="text-red-600 hover:text-red-700 p-2 mb-0.5"
+                      aria-label="Remove boodle fight"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {totals.boodleFight.total > 0 && (
+                  <p className="text-sm text-aegean-600">
+                    Boodle fight total: ₱{formatQuoteAmount(totals.boodleFight.total)}
+                  </p>
+                )}
+              </>
             )}
           </section>
 

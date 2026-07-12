@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Eye, Pencil, Download } from 'lucide-react';
+import { Eye, Pencil, Download, Trash2 } from 'lucide-react';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import Pagination from '../components/ui/Pagination';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { usePagination } from '../hooks/usePagination';
 import { formatGuestCount } from '../utils/guestCount';
 import BookingStayDetails from '../components/admin/BookingStayDetails';
@@ -53,6 +54,7 @@ export default function AdminGuests() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [paymentProofUrl, setPaymentProofUrl] = useState(null);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(bookings);
 
@@ -120,6 +122,25 @@ export default function AdminGuests() {
     }
   };
 
+  const deleteBooking = async (booking) => {
+    const ok = await confirm({
+      title: 'Delete booking?',
+      message: `"${formatReference(booking.reference_code)}" for ${booking.guest_name} will be permanently deleted. This cannot be undone.`,
+      confirmLabel: 'Yes, delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      await api.delete(`/bookings/admin/${booking.id}`);
+      toast.success('Booking deleted.');
+      if (selected?.id === booking.id) closePanel();
+      await loadBookings();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-4 mb-2">
@@ -160,6 +181,12 @@ export default function AdminGuests() {
                     <IconActionGroup>
                       <IconActionButton icon={Eye} label="View stay" onClick={() => openView(b)} />
                       <IconActionButton icon={Pencil} label="Edit stay" onClick={() => openEdit(b)} />
+                      <IconActionButton
+                        icon={Trash2}
+                        label="Delete booking"
+                        className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                        onClick={() => deleteBooking(b)}
+                      />
                     </IconActionGroup>
                   }
                 />
@@ -213,6 +240,12 @@ export default function AdminGuests() {
                       <IconActionGroup>
                         <IconActionButton icon={Eye} label="View stay" onClick={() => openView(b)} />
                         <IconActionButton icon={Pencil} label="Edit stay" onClick={() => openEdit(b)} />
+                        <IconActionButton
+                          icon={Trash2}
+                          label="Delete booking"
+                          className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                          onClick={() => deleteBooking(b)}
+                        />
                       </IconActionGroup>
                     </td>
                   </tr>

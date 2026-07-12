@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import api, { getApiError } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
@@ -36,6 +38,7 @@ function FieldLabel({ children, required }) {
 
 /** Admin booking rates — extra guest fees and related pricing (expand here later). */
 export default function AdminPricing() {
+  const { isFullAdmin } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [extraRatesForm, setExtraRatesForm] = useState(() => extraRatesFromSettings());
@@ -43,12 +46,17 @@ export default function AdminPricing() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isFullAdmin) return;
     api
       .get('/admin/settings')
       .then((r) => setExtraRatesForm(extraRatesFromSettings(r.data)))
       .catch((e) => setError(getApiError(e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isFullAdmin]);
+
+  if (!isFullAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const handleSave = async (e) => {
     e.preventDefault();

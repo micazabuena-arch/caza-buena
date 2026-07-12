@@ -3,9 +3,24 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import pool from '../config/database.js';
-import { authenticateAdmin } from '../middleware/auth.js';
+import { authenticateAdmin, requireAdminRole } from '../middleware/auth.js';
 
 const router = Router();
+
+const ADMIN_SELECT =
+  'SELECT id, name, email, role, COALESCE(is_active, 1) AS is_active, created_at FROM users';
+
+async function countActiveAdmins(excludeId = null) {
+  let sql = `SELECT COUNT(*) AS c FROM users
+    WHERE role = 'admin' AND COALESCE(is_active, 1) = 1`;
+  const params = [];
+  if (excludeId != null) {
+    sql += ' AND id != ?';
+    params.push(excludeId);
+  }
+  const [rows] = await pool.query(sql, params);
+  return Number(rows[0].c);
+}
 
 router.post(
   '/login',
@@ -20,6 +35,10 @@ router.post(
       if (users.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
 
       const user = users[0];
+      if (user.is_active != null && !Number(user.is_active)) {
+        return res.status(403).json({ message: 'This account has been deactivated' });
+      }
+
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
@@ -48,7 +67,7 @@ router.post(
 
 router.get('/me', authenticateAdmin, async (req, res) => {
   const [users] = await pool.query(
-    'SELECT id, name, email, role FROM users WHERE id = ?',
+    'SELECT id, name, email, role, COALESCE(is_active, 1) AS is_active FROM users WHERE id = ?',
     [req.user.id]
   );
   if (users.length === 0) return res.status(404).json({ message: 'User not found' });
@@ -58,9 +77,7 @@ router.get('/me', authenticateAdmin, async (req, res) => {
 /** List admin panel accounts (no password hashes) */
 router.get('/admins', authenticateAdmin, async (_req, res) => {
   try {
-    const [users] = await pool.query(
-      'SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC'
-    );
+    const [users] = await pool.query(`${ADMIN_SELECT} ORDER BY created_at ASC`);
     res.json(users);
   } catch (err) {
     console.error('List admins error:', err);
@@ -72,6 +89,7 @@ router.get('/admins', authenticateAdmin, async (_req, res) => {
 router.post(
   '/admins',
   authenticateAdmin,
+  requireAdminRole,
   [
     body('name').trim().notEmpty().isLength({ max: 100 }),
     body('email').isEmail().normalizeEmail(),
@@ -91,7 +109,7 @@ router.post(
 
       const password_hash = await bcrypt.hash(password, 12);
       const [result] = await pool.query(
-        'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+        'INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, 1)',
         [name.trim(), email, password_hash, role]
       );
 
@@ -100,10 +118,104 @@ router.post(
         name: name.trim(),
         email,
         role,
+        is_active: 1,
       });
     } catch (err) {
       console.error('Create admin error:', err);
       res.status(500).json({ message: 'Could not create admin account' });
+    }
+  }
+);
+
+/**
+ * Update an admin panel account (name, email, role, optional password, active flag).
+ * Admins cannot deactivate or demote themselves if they are the last active admin.
+ */
+router.patch(
+  '/admins/:id',
+  authenticateAdmin,
+  requireAdminRole,
+  [
+    body('name').optional().trim().notEmpty().isLength({ max: 100 }),
+    body('email').optional().isEmail().normalizeEmail(),
+    body('role').optional().isIn(['admin', 'staff']),
+    body('password').optional({ values: 'falsy' }).isLength({ min: 8 }),
+    body('is_active').optional().isBoolean(),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const targetId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(targetId)) {
+      return res.status(400).json({ message: 'Invalid account id' });
+    }
+
+    try {
+      const [rows] = await pool.query(`${ADMIN_SELECT} WHERE id = ?`, [targetId]);
+      if (rows.length === 0) return res.status(404).json({ message: 'Account not found' });
+
+      const existing = rows[0];
+      const {
+        name = existing.name,
+        email = existing.email,
+        role = existing.role,
+        password,
+        is_active: isActiveBody,
+      } = req.body;
+
+      const nextActive =
+        isActiveBody === undefined
+          ? Number(existing.is_active)
+          : isActiveBody === true || isActiveBody === 1 || isActiveBody === '1'
+            ? 1
+            : 0;
+
+      // Cannot deactivate your own account while signed in.
+      if (targetId === req.user.id && nextActive === 0) {
+        return res.status(400).json({ message: 'You cannot deactivate your own account' });
+      }
+
+      // Keep at least one active admin who can manage the panel.
+      const wouldLoseAdminAccess =
+        existing.role === 'admin' &&
+        Number(existing.is_active) === 1 &&
+        (nextActive === 0 || role !== 'admin');
+      if (wouldLoseAdminAccess) {
+        const remaining = await countActiveAdmins(targetId);
+        if (remaining < 1) {
+          return res.status(400).json({
+            message: 'Cannot deactivate or demote the last active admin account',
+          });
+        }
+      }
+
+      if (email !== existing.email) {
+        const [dup] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [
+          email,
+          targetId,
+        ]);
+        if (dup.length > 0) {
+          return res.status(409).json({ message: 'An account with this email already exists' });
+        }
+      }
+
+      const updates = ['name = ?', 'email = ?', 'role = ?', 'is_active = ?'];
+      const params = [String(name).trim(), email, role, nextActive];
+
+      if (password) {
+        updates.push('password_hash = ?');
+        params.push(await bcrypt.hash(password, 12));
+      }
+
+      params.push(targetId);
+      await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+
+      const [updated] = await pool.query(`${ADMIN_SELECT} WHERE id = ?`, [targetId]);
+      res.json(updated[0]);
+    } catch (err) {
+      console.error('Update admin error:', err);
+      res.status(500).json({ message: 'Could not update admin account' });
     }
   }
 );

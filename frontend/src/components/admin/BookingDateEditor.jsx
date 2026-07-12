@@ -8,7 +8,7 @@ import RebookPricePreview, {
   rebookConfirmMessage,
   rebookSuccessMessage,
 } from './RebookPricePreview';
-import { minCheckInDate, minCheckOutDate } from '../../utils/stayDates';
+import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 
 const EDITABLE_STATUSES = new Set([
   'cancelled',
@@ -141,7 +141,6 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
           <input
             type="date"
             value={checkIn}
-            min={minCheckInDate()}
             onChange={(e) => handleCheckInChange(e.target.value)}
             className="w-full border border-aegean-200 rounded-lg px-2 py-1.5 text-sm"
           />
@@ -151,12 +150,17 @@ export default function BookingDateEditor({ booking, onSaved, className = '', in
           <input
             type="date"
             value={checkOut}
-            min={minCheckOutDate(checkIn) || minCheckInDate()}
+            min={minCheckOutDate(checkIn)}
             onChange={(e) => setCheckOut(e.target.value)}
             className="w-full border border-aegean-200 rounded-lg px-2 py-1.5 text-sm"
           />
         </div>
       </div>
+      {isPastStayDate(checkIn) && (
+        <p className="text-[11px] text-aegean-600">
+          Ante-dated stay — allowed for recording / Statement of Account.
+        </p>
+      )}
       {datesChanged && (
         <RebookPricePreview quote={quote} loading={quoteLoading} compact={inline} />
       )}

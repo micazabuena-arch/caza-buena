@@ -31,7 +31,8 @@ const nav = [
   { to: '/admin/rooms', icon: Bed, label: 'Rooms' },
   { to: '/admin/availability', icon: Ban, label: 'Availability' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
-  { to: '/admin/pricing', icon: BadgeDollarSign, label: 'Pricing' },
+  // Site-wide rates — admin role only (staff cannot change prices)
+  { to: '/admin/pricing', icon: BadgeDollarSign, label: 'Pricing', adminOnly: true },
   { to: '/admin/guests', icon: Users, label: 'Guests' },
   { to: '/admin/inquiries', icon: Mail, label: 'Inquiries' },
   { to: '/admin/gallery', icon: Image, label: 'Gallery' },
@@ -43,7 +44,8 @@ const nav = [
 ];
 
 function SidebarContent({ onNavigate }) {
-  const { logout } = useAuth();
+  const { logout, isFullAdmin } = useAuth();
+  const links = nav.filter((item) => !item.adminOnly || isFullAdmin);
 
   return (
     <>
@@ -68,7 +70,7 @@ function SidebarContent({ onNavigate }) {
         </button>
       </div>
       <nav className="flex-1 p-3 lg:p-4 space-y-1 overflow-y-auto">
-        {nav.map(({ to, icon: Icon, label, end }) => (
+        {links.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}

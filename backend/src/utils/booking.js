@@ -15,6 +15,23 @@ export function calculateNights(checkIn, checkOut) {
   return diff > 0 ? diff : 0;
 }
 
+/** Local YYYY-MM-DD for the server clock (used for ante-date / recording stays). */
+export function todayYmd(referenceDate = new Date()) {
+  const y = referenceDate.getFullYear();
+  const m = String(referenceDate.getMonth() + 1).padStart(2, '0');
+  const d = String(referenceDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Admin ante-date: check-in is before today.
+ * Past stays may be recorded for SOA even when the room calendar shows a conflict.
+ */
+export function isAnteDateCheckIn(checkIn, referenceDate = new Date()) {
+  if (!checkIn) return false;
+  return String(checkIn).slice(0, 10) < todayYmd(referenceDate);
+}
+
 /** Check if room is available for date range (excludes given booking id when updating) */
 export async function isRoomAvailable(pool, roomId, checkIn, checkOut, excludeBookingId = null) {
   // Blocked dates by admin
