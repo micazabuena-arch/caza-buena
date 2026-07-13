@@ -7,8 +7,10 @@ import QuotationDocument from '../components/admin/QuotationDocument';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import {
+  ADDITIONAL_PAX_LABEL_OPTIONS,
   computeQuotationTotals,
   emptyQuotation,
+  emptyQuotationAdditionalPaxLine,
   emptyQuotationBilaoLine,
   emptyQuotationBoat,
   emptyQuotationBoodleLine,
@@ -87,6 +89,35 @@ export default function AdminQuotation() {
           ? (q.boats || []).filter((_, i) => i !== index)
           : q.boats || [emptyQuotationBoat()],
     }));
+  };
+
+  const patchAdditionalPaxLine = (index, fields) => {
+    setQuote((q) => {
+      const next = [...(q.additionalPaxLines || [])];
+      next[index] = { ...next[index], ...fields };
+      return { ...q, additionalPaxLines: next };
+    });
+  };
+
+  const addAdditionalPaxLine = () => {
+    setQuote((q) => ({
+      ...q,
+      additionalPaxLines: [
+        ...(q.additionalPaxLines || []),
+        emptyQuotationAdditionalPaxLine(),
+      ],
+    }));
+  };
+
+  const removeAdditionalPaxLine = (index) => {
+    setQuote((q) => {
+      const lines = q.additionalPaxLines || [];
+      return {
+        ...q,
+        additionalPaxLines:
+          lines.length > 1 ? lines.filter((_, i) => i !== index) : [emptyQuotationAdditionalPaxLine()],
+      };
+    });
   };
 
   const patchBilaoLine = (index, fields) => {
@@ -209,8 +240,16 @@ export default function AdminQuotation() {
         bookingPlatform: '',
         pax: detail.guest_count || 2,
         rooms: roomLines,
-        additionalPaxOccupants: '',
-        additionalPaxAmount: detail.extra_person_charges > 0 ? detail.extra_person_charges : '',
+        additionalPaxLines:
+          detail.extra_person_charges > 0
+            ? [
+                {
+                  label: 'Adult',
+                  occupants: '',
+                  amount: detail.extra_person_charges,
+                },
+              ]
+            : [emptyQuotationAdditionalPaxLine()],
         discountAmount: detail.discount_amount || '',
         discountLabel: detail.discount_code || detail.discount_note || '',
         downPaymentAmount: detail.amount_to_pay < detail.total_amount ? detail.amount_to_pay : '',
@@ -450,30 +489,82 @@ export default function AdminQuotation() {
                 </p>
               </div>
             ))}
-            <div className="rounded-lg border border-aegean-100 p-3 space-y-3">
-              <p className="text-xs font-medium text-aegean-600">Additional pax</p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <Field label="No. of additional pax">
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={quote.additionalPaxOccupants}
-                    onChange={(e) => patch({ additionalPaxOccupants: e.target.value })}
-                    placeholder="Optional"
-                  />
-                </Field>
-                <Field label="Amount (₱)">
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={quote.additionalPaxAmount}
-                    onChange={(e) => patch({ additionalPaxAmount: e.target.value })}
-                    placeholder="Manual total"
-                  />
-                </Field>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-aegean-600">Additional pax</p>
+                <button
+                  type="button"
+                  onClick={addAdditionalPaxLine}
+                  className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
+                >
+                  <Plus size={14} /> Add additional pax
+                </button>
               </div>
+              {(quote.additionalPaxLines || []).map((paxRow, index) => (
+                <div
+                  key={`additional-pax-${index}`}
+                  className="rounded-lg border border-aegean-100 p-3 space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs font-medium text-aegean-600">
+                      Additional pax {index + 1}
+                    </p>
+                    {(quote.additionalPaxLines || []).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeAdditionalPaxLine(index)}
+                        className="text-red-600 hover:text-red-700"
+                        aria-label="Remove additional pax line"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <Field label="Type">
+                      <select
+                        className={inputClass}
+                        value={
+                          ADDITIONAL_PAX_LABEL_OPTIONS.includes(paxRow.label)
+                            ? paxRow.label
+                            : 'Adult'
+                        }
+                        onChange={(e) => patchAdditionalPaxLine(index, { label: e.target.value })}
+                      >
+                        {ADDITIONAL_PAX_LABEL_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="No. of additional pax">
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputClass}
+                        value={paxRow.occupants}
+                        onChange={(e) =>
+                          patchAdditionalPaxLine(index, { occupants: e.target.value })
+                        }
+                        placeholder="Optional"
+                      />
+                    </Field>
+                    <Field label="Amount (₱)">
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputClass}
+                        value={paxRow.amount}
+                        onChange={(e) =>
+                          patchAdditionalPaxLine(index, { amount: e.target.value })
+                        }
+                        placeholder="Manual total"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-aegean-100">
               <Field label="Discount label">

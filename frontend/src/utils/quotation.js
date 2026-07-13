@@ -17,6 +17,13 @@ export function emptyQuotationBoodleLine() {
   return { tierId: '', qty: 1 };
 }
 
+/** One additional-pax charge line (adult vs child rates differ). */
+export function emptyQuotationAdditionalPaxLine() {
+  return { label: 'Adult', occupants: '', amount: '' };
+}
+
+export const ADDITIONAL_PAX_LABEL_OPTIONS = ['Adult', 'Child (7–12)'];
+
 export function emptyQuotation() {
   return {
     rmNo: '',
@@ -27,8 +34,7 @@ export function emptyQuotation() {
     checkInTime: '1:00 PM',
     checkOutTime: '11:00 AM',
     rooms: [emptyQuotationRoom()],
-    additionalPaxOccupants: '',
-    additionalPaxAmount: '',
+    additionalPaxLines: [emptyQuotationAdditionalPaxLine()],
     discountLabel: '',
     discountAmount: '',
     downPaymentLabel: '',
@@ -55,7 +61,7 @@ function parseIntSafe(value) {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-/** Support quotes saved before multi-boat / multi-add-on fields. */
+/** Support quotes saved before multi-boat / multi-add-on / multi-pax fields. */
 export function normalizeQuotation(quote) {
   if (!quote) return emptyQuotation();
 
@@ -83,7 +89,39 @@ export function normalizeQuotation(quote) {
   const boodleEnabled =
     quote.boodleEnabled != null ? Boolean(quote.boodleEnabled) : boodleLines.length > 0;
 
-  return { ...quote, boats, bilaoEnabled, bilaoLines, boodleEnabled, boodleLines };
+  // Migrate single additionalPaxOccupants / additionalPaxAmount → additionalPaxLines[]
+  let additionalPaxLines = quote.additionalPaxLines;
+  if (!Array.isArray(additionalPaxLines)) {
+    const legacyAmount = quote.additionalPaxAmount;
+    const legacyOccupants = quote.additionalPaxOccupants;
+    const hasLegacy =
+      (legacyAmount !== '' && legacyAmount != null) ||
+      (legacyOccupants !== '' && legacyOccupants != null);
+    if (hasLegacy) {
+      additionalPaxLines = [
+        {
+          label: 'Adult',
+          occupants: legacyOccupants ?? '',
+          amount: legacyAmount ?? '',
+        },
+      ];
+    } else {
+      additionalPaxLines = [emptyQuotationAdditionalPaxLine()];
+    }
+  }
+  if (additionalPaxLines.length === 0) {
+    additionalPaxLines = [emptyQuotationAdditionalPaxLine()];
+  }
+
+  return {
+    ...quote,
+    boats,
+    bilaoEnabled,
+    bilaoLines,
+    boodleEnabled,
+    boodleLines,
+    additionalPaxLines,
+  };
 }
 
 export function computeAccommodation(quote) {
@@ -102,22 +140,24 @@ export function computeAccommodation(quote) {
     };
   });
 
-  const additionalPaxAmount = parseMoney(q.additionalPaxAmount);
-  const additionalPaxOccupants = parseIntSafe(q.additionalPaxOccupants);
-  const additionalPaxLine =
-    additionalPaxAmount > 0
-      ? {
-          roomType: 'Additional pax',
-          occupants: additionalPaxOccupants > 0 ? additionalPaxOccupants : '—',
-          rate: additionalPaxAmount,
-          nights: 1,
-          total: additionalPaxAmount,
-        }
-      : null;
+  // Each line can be adult or child (different rates); amount is the manual line total.
+  const additionalPaxLines = (q.additionalPaxLines || [])
+    .map((row) => {
+      const amount = parseMoney(row.amount);
+      if (amount <= 0) return null;
+      const occupants = parseIntSafe(row.occupants);
+      const label = String(row.label || '').trim();
+      return {
+        roomType: label ? `Additional pax — ${label}` : 'Additional pax',
+        occupants: occupants > 0 ? occupants : '—',
+        rate: amount,
+        nights: 1,
+        total: amount,
+      };
+    })
+    .filter(Boolean);
 
-  const accommodationLines = additionalPaxLine
-    ? [...roomLines, additionalPaxLine]
-    : roomLines;
+  const accommodationLines = [...roomLines, ...additionalPaxLines];
 
   const roomSubtotal = accommodationLines.reduce((s, r) => s + r.total, 0);
   const discount = parseMoney(q.discountAmount);
