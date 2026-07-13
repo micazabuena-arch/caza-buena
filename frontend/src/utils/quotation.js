@@ -140,12 +140,15 @@ export function computeAccommodation(quote) {
     };
   });
 
-  // Each line can be adult or child (different rates); amount is the manual line total.
+  // Each line can be adult or child (different rates). Amount 0 still prints (e.g. Child 0–6 free).
   const additionalPaxLines = (q.additionalPaxLines || [])
     .map((row) => {
-      const amount = parseMoney(row.amount);
-      if (amount <= 0) return null;
+      const amountFilled = row.amount !== '' && row.amount != null;
       const occupants = parseIntSafe(row.occupants);
+      // Skip blank unused rows; keep ₱0 lines that were filled in.
+      if (!amountFilled && occupants <= 0) return null;
+
+      const amount = parseMoney(row.amount);
       const label = String(row.label || '').trim();
       return {
         roomType: label ? `Additional pax — ${label}` : 'Additional pax',
