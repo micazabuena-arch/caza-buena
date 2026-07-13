@@ -22,7 +22,7 @@ export function emptyQuotationAdditionalPaxLine() {
   return { label: 'Adult', occupants: '', amount: '' };
 }
 
-export const ADDITIONAL_PAX_LABEL_OPTIONS = ['Adult', 'Child (7–12)'];
+export const ADDITIONAL_PAX_LABEL_OPTIONS = ['Adult', 'Child (0–6)', 'Child (7–12)'];
 
 export function emptyQuotation() {
   return {
