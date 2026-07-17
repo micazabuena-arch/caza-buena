@@ -14,8 +14,15 @@ export default function IslandHoppingSection({
   data,
   onChange,
   embedded = false,
+  // Admin manual booking / edit: guests may not supply passenger details up front,
+  // so fields are not enforced. Public guest booking keeps them required.
+  optionalFields = false,
 }) {
   const update = (patch) => onChange({ ...data, ...patch });
+
+  // Whether to enforce the HTML `required` attribute and show the `*` marker.
+  const fieldRequired = !optionalFields;
+  const star = optionalFields ? '' : ' *';
 
   const updatePassenger = (index, field, value) => {
     const passengers = [...data.passengers];
@@ -113,8 +120,13 @@ export default function IslandHoppingSection({
         <div className="space-y-6 pt-2 border-t border-aegean-200">
           <div>
             <p className="text-sm font-medium text-aegean-800 mb-3">
-              1. Guest details — name, age, gender, first-timer & PWD status *
+              {`1. Guest details — name, age, gender, first-timer & PWD status${star}`}
             </p>
+            {optionalFields && (
+              <p className="text-xs text-aegean-500 mb-3 -mt-2">
+                Passenger details are optional here — they can be completed later from the booking.
+              </p>
+            )}
             <div className="space-y-4">
               {data.passengers.map((p, index) => (
                 <div
@@ -136,10 +148,10 @@ export default function IslandHoppingSection({
                   </div>
                   <input
                     type="text"
-                    placeholder="Full name *"
+                    placeholder={`Full name${star}`}
                     value={p.full_name}
                     onChange={(e) => updatePassenger(index, 'full_name', e.target.value)}
-                    required
+                    required={fieldRequired}
                     className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm"
                   />
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -147,19 +159,19 @@ export default function IslandHoppingSection({
                       type="number"
                       min={0}
                       max={120}
-                      placeholder="Age *"
+                      placeholder={`Age${star}`}
                       value={p.age}
                       onChange={(e) => updatePassenger(index, 'age', e.target.value)}
-                      required
+                      required={fieldRequired}
                       className="border border-aegean-200 rounded-lg px-3 py-2 text-sm"
                     />
                     <select
                       value={p.gender}
                       onChange={(e) => updatePassenger(index, 'gender', e.target.value)}
-                      required
+                      required={fieldRequired}
                       className="border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
                     >
-                      <option value="">Gender *</option>
+                      <option value="">{`Gender${star}`}</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                       <option value="other">Other</option>
@@ -173,10 +185,10 @@ export default function IslandHoppingSection({
                           e.target.value === '' ? '' : e.target.value === 'yes'
                         )
                       }
-                      required
+                      required={fieldRequired}
                       className="border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
                     >
-                      <option value="">First timer? *</option>
+                      <option value="">{`First timer?${star}`}</option>
                       <option value="yes">Yes</option>
                       <option value="no">No</option>
                     </select>
@@ -189,10 +201,10 @@ export default function IslandHoppingSection({
                           e.target.value === '' ? '' : e.target.value === 'yes'
                         )
                       }
-                      required
+                      required={fieldRequired}
                       className="border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
                     >
-                      <option value="">PWD? *</option>
+                      <option value="">{`PWD?${star}`}</option>
                       <option value="no">No</option>
                       <option value="yes">Yes</option>
                     </select>
@@ -255,69 +267,69 @@ export default function IslandHoppingSection({
 
           <div>
             <label className="block text-sm font-medium text-aegean-800 mb-1">
-              2. Address of passengers *
+              {`2. Address of passengers${star}`}
             </label>
             <textarea
               rows={2}
               value={data.passenger_address}
               onChange={(e) => update({ passenger_address: e.target.value })}
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
           </div>
 
           <div className="space-y-3">
             <p className="text-sm font-medium text-aegean-800">
-              3. Name of payor with complete address and cellphone number *
+              {`3. Name of payor with complete address and cellphone number${star}`}
             </p>
             <input
               type="text"
-              placeholder="Payor full name *"
+              placeholder={`Payor full name${star}`}
               value={data.payor_name}
               onChange={(e) => update({ payor_name: e.target.value })}
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
             <textarea
               rows={2}
-              placeholder="Complete address *"
+              placeholder={`Complete address${star}`}
               value={data.payor_address}
               onChange={(e) => update({ payor_address: e.target.value })}
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
             <input
               type="tel"
-              placeholder="Cellphone number *"
+              placeholder={`Cellphone number${star}`}
               value={data.payor_phone}
               onChange={(e) => update({ payor_phone: digitsOnly(e.target.value) })}
               inputMode="numeric"
               pattern="[0-9]*"
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
           </div>
 
           <div className="space-y-3">
             <p className="text-sm font-medium text-aegean-800">
-              4. Name of contact person in case of emergency *
+              {`4. Name of contact person in case of emergency${star}`}
             </p>
             <p className="text-xs text-aegean-600 -mt-2">
               Must be someone who is not joining the tour.
             </p>
             <input
               type="text"
-              placeholder="Emergency contact name *"
+              placeholder={`Emergency contact name${star}`}
               value={data.emergency_contact_name}
               onChange={(e) => update({ emergency_contact_name: e.target.value })}
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-aegean-800 mb-1">
-              5. Cellphone number of contact person in case of emergency *
+              {`5. Cellphone number of contact person in case of emergency${star}`}
             </label>
             <input
               type="tel"
@@ -325,7 +337,7 @@ export default function IslandHoppingSection({
               onChange={(e) => update({ emergency_contact_phone: digitsOnly(e.target.value) })}
               inputMode="numeric"
               pattern="[0-9]*"
-              required
+              required={fieldRequired}
               className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
             />
           </div>

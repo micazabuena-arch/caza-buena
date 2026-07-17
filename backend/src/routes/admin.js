@@ -110,7 +110,9 @@ router.get('/rooms/:id', authenticateAdmin, async (req, res) => {
   res.json(room);
 });
 
-router.post('/rooms', authenticateAdmin, requireAdminRole, async (req, res) => {
+// Staff may add rooms (and set the new room's rates). Only editing an EXISTING
+// room's price is restricted (handled in PUT below). Deleting rooms stays admin-only.
+router.post('/rooms', authenticateAdmin, async (req, res) => {
   const {
     name,
     slug,
@@ -221,7 +223,8 @@ router.put('/rooms/:id', authenticateAdmin, async (req, res) => {
   res.json({ message: 'Updated', room: rows[0] });
 });
 
-router.delete('/rooms/:id', authenticateAdmin, async (req, res) => {
+// Deleting a room is destructive site configuration — admin-only.
+router.delete('/rooms/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
   const roomId = req.params.id;
   const [room] = await pool.query('SELECT id, name FROM rooms WHERE id = ?', [roomId]);
   if (room.length === 0) return res.status(404).json({ message: 'Room not found' });
@@ -320,8 +323,9 @@ router.patch('/rooms/:id/images/:imageId/primary', authenticateAdmin, async (req
   res.json({ message: 'Primary image updated' });
 });
 
-// Site settings
-router.get('/settings', async (_req, res) => {
+// Site settings — requires a signed-in admin/staff (viewing prices is allowed for both).
+// The public website reads its whitelisted settings via GET /settings/public instead.
+router.get('/settings', authenticateAdmin, async (_req, res) => {
   const [rows] = await pool.query('SELECT setting_key, setting_value FROM site_settings');
   const settings = Object.fromEntries(rows.map((r) => [r.setting_key, r.setting_value]));
   res.json(settings);

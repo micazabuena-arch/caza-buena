@@ -66,6 +66,11 @@ export default function AdminRooms() {
   const [holidaySaving, setHolidaySaving] = useState(false);
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(rooms);
 
+  // Staff may add rooms and set the NEW room's nightly/weekend rates, but they
+  // cannot change an existing room's prices (those stay admin-only). Holiday
+  // rates and room deletion remain admin-only via `canEditPrices` / `isFullAdmin`.
+  const canSetNightlyRate = isFullAdmin || editingId === 'new';
+
   const loadRooms = () => {
     setLoading(true);
     api
@@ -80,10 +85,6 @@ export default function AdminRooms() {
   }, []);
 
   const openAdd = () => {
-    if (!canEditPrices) {
-      toast.error('Only admins can create rooms and set rates.');
-      return;
-    }
     setEditingId('new');
     setForm(emptyForm());
     setImages([]);
@@ -148,12 +149,6 @@ export default function AdminRooms() {
     let includedAdults = parseInt(form.included_adults, 10) || 2;
     if (includedAdults > maxGuests) includedAdults = maxGuests;
 
-    if (editingId === 'new' && !canEditPrices) {
-      setError('Only admins can create rooms and set rates.');
-      setSaving(false);
-      return;
-    }
-
     const payload = {
       name: form.name.trim(),
       room_type: form.room_type === 'suite' ? 'suite' : 'queen',
@@ -169,8 +164,10 @@ export default function AdminRooms() {
       amenities: parseAmenities(),
     };
 
-    // Nightly rates are admin-only; staff updates omit price fields (API also strips them).
-    if (canEditPrices) {
+    // Prices are sent only when the user may set them: admins always, and staff
+    // only while creating a new room. Editing an existing room as staff omits the
+    // price fields (the API also strips them defensively).
+    if (canSetNightlyRate) {
       payload.price_per_night = parseFloat(form.price_per_night);
       payload.price_weekend = parseFloat(form.price_weekend || form.price_per_night);
     }
@@ -192,7 +189,7 @@ export default function AdminRooms() {
       setSaving(false);
       return;
     }
-    if (canEditPrices) {
+    if (canSetNightlyRate) {
       if (Number.isNaN(payload.price_per_night) || payload.price_per_night < 0) {
         setError('Enter a valid weekday price');
         setSaving(false);
@@ -349,6 +346,11 @@ export default function AdminRooms() {
   };
 
   const deleteRoom = async (room) => {
+    // Deleting a room is admin-only (matches the backend requireAdminRole guard).
+    if (!isFullAdmin) {
+      toast.error('Only admins can delete rooms.');
+      return;
+    }
     const ok = await askConfirm({
       title: 'Delete room permanently?',
       message: `"${room.name}" will be removed. This only works if the room has no bookings — otherwise set it to Inactive.`,
@@ -395,15 +397,13 @@ export default function AdminRooms() {
           <h1 className="text-3xl font-serif text-aegean-800">Rooms</h1>
           {!canEditPrices && (
             <p className="text-sm text-aegean-600 mt-1">
-              You can edit room details. Nightly and holiday rates can only be changed by admins.
+              You can add rooms and edit room details. Existing room prices and holiday rates can only be changed by admins.
             </p>
           )}
         </div>
-        {canEditPrices && (
-          <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
-            <Plus size={18} /> Add Room
-          </button>
-        )}
+        <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
+          <Plus size={18} /> Add Room
+        </button>
       </div>
 
       <AdminModal
@@ -467,9 +467,9 @@ export default function AdminRooms() {
             <div className="rounded-xl border border-aegean-100 bg-aegean-50/40 p-4">
               <p className="text-sm font-medium text-aegean-800 mb-3">Nightly rates</p>
               <p className="text-xs text-aegean-600 mb-4">
-                {canEditPrices
+                {canSetNightlyRate
                   ? 'Weekday = Mon–Thu · Weekend = Fri–Sun · Holiday periods override both for those dates'
-                  : 'Rates are view-only for staff. Ask an admin to change prices.'}
+                  : 'Existing room rates are view-only for staff. Ask an admin to change prices.'}
               </p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -478,8 +478,8 @@ export default function AdminRooms() {
                     type="number"
                     min={0}
                     step={0.01}
-                    required={canEditPrices}
-                    disabled={!canEditPrices}
+                    required={canSetNightlyRate}
+                    disabled={!canSetNightlyRate}
                     value={form.price_per_night}
                     onChange={(e) => setForm((f) => ({ ...f, price_per_night: e.target.value }))}
                     className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white disabled:bg-aegean-50 disabled:text-aegean-500"
@@ -491,8 +491,8 @@ export default function AdminRooms() {
                     type="number"
                     min={0}
                     step={0.01}
-                    required={canEditPrices}
-                    disabled={!canEditPrices}
+                    required={canSetNightlyRate}
+                    disabled={!canSetNightlyRate}
                     value={form.price_weekend}
                     onChange={(e) => setForm((f) => ({ ...f, price_weekend: e.target.value }))}
                     className="w-full border border-aegean-200 rounded-lg px-4 py-2.5 bg-white disabled:bg-aegean-50 disabled:text-aegean-500"
@@ -757,7 +757,7 @@ export default function AdminRooms() {
             <button type="button" onClick={closeForm} className="btn-outline text-sm">
               Cancel
             </button>
-            {editingId !== 'new' && (
+            {editingId !== 'new' && isFullAdmin && (
               <button
                 type="button"
                 onClick={() => {
@@ -827,12 +827,14 @@ export default function AdminRooms() {
                       label="Edit room"
                       onClick={() => openEdit(room)}
                     />
-                    <IconActionButton
-                      icon={Trash2}
-                      label="Delete room"
-                      onClick={() => deleteRoom(room)}
-                      className="hover:border-red-200 hover:text-red-600 hover:bg-red-50"
-                    />
+                    {isFullAdmin && (
+                      <IconActionButton
+                        icon={Trash2}
+                        label="Delete room"
+                        onClick={() => deleteRoom(room)}
+                        className="hover:border-red-200 hover:text-red-600 hover:bg-red-50"
+                      />
+                    )}
                   </IconActionGroup>
                 </div>
               </div>

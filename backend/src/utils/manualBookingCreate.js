@@ -85,28 +85,47 @@ export async function createManualBooking(body) {
   let islandHoppingStored = null;
 
   if (islandHopping) {
-    const { validateIslandHoppingPayload, calculateIslandHopping } = await import('./islandHopping.js');
-    const validation = validateIslandHoppingPayload(islandHoppingData);
+    const { validateIslandHoppingPayloadLenient, isIslandHoppingComplete, calculateIslandHopping } =
+      await import('./islandHopping.js');
+
+    // Admin bookings allow partial island hopping details (guests may not give
+    // passenger names up front). Only hard constraints (max passengers) block here.
+    const ihData = islandHoppingData || {};
+    const validation = validateIslandHoppingPayloadLenient(ihData);
     if (!validation.valid) return { error: validation.message };
-    try {
-      const computed = calculateIslandHopping(islandHoppingData.passengers);
-      if (computed.error) return { error: computed.error };
-      islandHoppingAmount = computed.total;
-      islandHoppingStored = {
-        passengers: islandHoppingData.passengers,
-        passenger_address: islandHoppingData.passenger_address.trim(),
-        payor_name: islandHoppingData.payor_name.trim(),
-        payor_address: islandHoppingData.payor_address.trim(),
-        payor_phone: islandHoppingData.payor_phone.trim(),
-        emergency_contact_name: islandHoppingData.emergency_contact_name.trim(),
-        emergency_contact_phone: islandHoppingData.emergency_contact_phone.trim(),
-        breakdown: computed.breakdown,
-        boat_tier: computed.boat_tier,
-        boat_label: computed.boat_label,
-        total: computed.total,
-      };
-    } catch (e) {
-      return { error: e.message || 'Invalid island hopping details' };
+
+    const trim = (v) => (v == null ? '' : String(v).trim());
+    const baseStored = {
+      passengers: ihData.passengers || [],
+      passenger_address: trim(ihData.passenger_address),
+      payor_name: trim(ihData.payor_name),
+      payor_address: trim(ihData.payor_address),
+      payor_phone: trim(ihData.payor_phone),
+      emergency_contact_name: trim(ihData.emergency_contact_name),
+      emergency_contact_phone: trim(ihData.emergency_contact_phone),
+    };
+
+    // Price the tour only when full details are present. Partial details are saved
+    // with a ₱0 amount so they can be completed (and priced) later — this mirrors
+    // the admin form total, which also excludes an incomplete tour.
+    if (isIslandHoppingComplete(ihData)) {
+      try {
+        const computed = calculateIslandHopping(ihData.passengers);
+        if (computed.error) return { error: computed.error };
+        islandHoppingAmount = computed.total;
+        islandHoppingStored = {
+          ...baseStored,
+          breakdown: computed.breakdown,
+          boat_tier: computed.boat_tier,
+          boat_label: computed.boat_label,
+          total: computed.total,
+        };
+      } catch (e) {
+        return { error: e.message || 'Invalid island hopping details' };
+      }
+    } else {
+      islandHoppingAmount = 0;
+      islandHoppingStored = baseStored;
     }
   }
 

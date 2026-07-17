@@ -14,6 +14,7 @@ import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
+import { stayAddonsTotal } from '../../utils/stayAddons';
 import BookingCustomAddons from './BookingCustomAddons';
 
 const inputClass =
@@ -138,6 +139,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const estimatedAddOns = islandTotal + addOnsTotal;
 
+  // Room-only gross stay total (excludes every add-on), used for the discount cap and
+  // as the base of the payment preview. The rebook quote already returns a room-only
+  // subtotal; the non-rebook branch strips all add-ons (island/bilao/boodle, custom
+  // charges, and during-stay stay_addons) so both paths mean the same thing.
   const grossRoomSubtotal = useMemo(() => {
     if (rebookQuote?.new_stay_subtotal != null) {
       return Number(rebookQuote.new_stay_subtotal);
@@ -148,7 +153,8 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       Number(booking?.boodle_fight_amount || 0) +
       (Array.isArray(booking?.addons)
         ? booking.addons.reduce((s, a) => s + (Number(a.amount) || 0), 0)
-        : 0);
+        : 0) +
+      stayAddonsTotal(booking?.stay_addons);
     const roomNet = Number(booking?.total_amount || 0) - addonsOnBooking;
     return roomNet + Number(booking?.discount_amount || 0);
   }, [booking, rebookQuote]);
@@ -175,24 +181,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
     if (!extrasQuote?.valid) return extrasQuote.message;
     if (form.islandHoppingEnabled) {
+      // Island hopping details are optional for admin bookings (guests may not give
+      // passenger names up front, and partial bookings created via manual booking must
+      // remain editable). Only block on hard errors (e.g. exceeding max passengers).
       if (islandQuote?.error) return islandQuote.error;
-      if (!islandQuote?.complete) {
-        return 'Complete island hopping details (tab 3) or turn it off.';
-      }
-      if (!form.islandHopping.passenger_address?.trim()) return 'Passenger address is required (tab 3).';
-      if (
-        !form.islandHopping.payor_name?.trim() ||
-        !form.islandHopping.payor_address?.trim() ||
-        !form.islandHopping.payor_phone?.trim()
-      ) {
-        return 'Complete payor details (tab 3).';
-      }
-      if (
-        !form.islandHopping.emergency_contact_name?.trim() ||
-        !form.islandHopping.emergency_contact_phone?.trim()
-      ) {
-        return 'Complete emergency contact (tab 3).';
-      }
     }
     if (form.payment_option === 'custom') {
       const custom = parseFloat(form.custom_payment_amount);
@@ -250,8 +242,14 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
 
   const paymentPreviewTotal = useMemo(() => {
     const roomPart = Math.max(0, grossRoomSubtotal - manualDiscount);
-    return roomPart + estimatedAddOns;
-  }, [estimatedAddOns, grossRoomSubtotal, manualDiscount]);
+    // Custom during-stay charges (booking.addons) and stay_addons are saved separately
+    // but are part of the stored total, so include them in the preview so it matches.
+    const customAddonsOnBooking = Array.isArray(booking?.addons)
+      ? booking.addons.reduce((sum, a) => sum + (Number(a.amount) || 0), 0)
+      : 0;
+    const stayAddonsOnBooking = stayAddonsTotal(booking?.stay_addons);
+    return roomPart + estimatedAddOns + customAddonsOnBooking + stayAddonsOnBooking;
+  }, [estimatedAddOns, grossRoomSubtotal, manualDiscount, booking]);
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">

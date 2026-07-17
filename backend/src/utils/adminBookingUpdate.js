@@ -108,39 +108,57 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   const existingIsland = parseIslandHoppingData(existingBooking.island_hopping_data);
 
   if (islandHopping) {
-    const { validateIslandHoppingPayload, calculateIslandHopping } = await import(
-      './islandHopping.js'
-    );
-    const validation = validateIslandHoppingPayload(islandHoppingData);
+    const { validateIslandHoppingPayloadLenient, isIslandHoppingComplete, calculateIslandHopping } =
+      await import('./islandHopping.js');
+
+    // Admin edits allow partial island hopping details so names / payor / emergency
+    // contact can be filled in later. Only hard constraints (max passengers) block here.
+    const ihData = islandHoppingData || {};
+    const validation = validateIslandHoppingPayloadLenient(ihData);
     if (!validation.valid) return { error: validation.message };
-    try {
-      const computed = calculateIslandHopping(islandHoppingData.passengers);
-      if (computed.error) return { error: computed.error };
-      islandHoppingAmount = computed.total;
-      const passengers = islandHoppingData.passengers.map((p, i) => ({
-        ...p,
-        senior_id_url: existingIsland?.passengers?.[i]?.senior_id_url ?? p.senior_id_url ?? null,
-        senior_id_public_id:
-          existingIsland?.passengers?.[i]?.senior_id_public_id ?? p.senior_id_public_id ?? null,
-        pwd_id_url: existingIsland?.passengers?.[i]?.pwd_id_url ?? p.pwd_id_url ?? null,
-        pwd_id_public_id:
-          existingIsland?.passengers?.[i]?.pwd_id_public_id ?? p.pwd_id_public_id ?? null,
-      }));
-      islandHoppingStored = {
-        passengers,
-        passenger_address: islandHoppingData.passenger_address.trim(),
-        payor_name: islandHoppingData.payor_name.trim(),
-        payor_address: islandHoppingData.payor_address.trim(),
-        payor_phone: islandHoppingData.payor_phone.trim(),
-        emergency_contact_name: islandHoppingData.emergency_contact_name.trim(),
-        emergency_contact_phone: islandHoppingData.emergency_contact_phone.trim(),
-        breakdown: computed.breakdown,
-        boat_tier: computed.boat_tier,
-        boat_label: computed.boat_label,
-        total: computed.total,  
-      };
-    } catch (e) {
-      return { error: e.message || 'Invalid island hopping details' };
+
+    const trim = (v) => (v == null ? '' : String(v).trim());
+    // Keep any previously uploaded senior / PWD ID references when re-saving.
+    const passengers = (ihData.passengers || []).map((p, i) => ({
+      ...p,
+      senior_id_url: existingIsland?.passengers?.[i]?.senior_id_url ?? p.senior_id_url ?? null,
+      senior_id_public_id:
+        existingIsland?.passengers?.[i]?.senior_id_public_id ?? p.senior_id_public_id ?? null,
+      pwd_id_url: existingIsland?.passengers?.[i]?.pwd_id_url ?? p.pwd_id_url ?? null,
+      pwd_id_public_id:
+        existingIsland?.passengers?.[i]?.pwd_id_public_id ?? p.pwd_id_public_id ?? null,
+    }));
+
+    const baseStored = {
+      passengers,
+      passenger_address: trim(ihData.passenger_address),
+      payor_name: trim(ihData.payor_name),
+      payor_address: trim(ihData.payor_address),
+      payor_phone: trim(ihData.payor_phone),
+      emergency_contact_name: trim(ihData.emergency_contact_name),
+      emergency_contact_phone: trim(ihData.emergency_contact_phone),
+    };
+
+    // Price the tour only when full details are present; otherwise save partial
+    // details with a ₱0 amount so they can be completed (and priced) later.
+    if (isIslandHoppingComplete(ihData)) {
+      try {
+        const computed = calculateIslandHopping(ihData.passengers);
+        if (computed.error) return { error: computed.error };
+        islandHoppingAmount = computed.total;
+        islandHoppingStored = {
+          ...baseStored,
+          breakdown: computed.breakdown,
+          boat_tier: computed.boat_tier,
+          boat_label: computed.boat_label,
+          total: computed.total,
+        };
+      } catch (e) {
+        return { error: e.message || 'Invalid island hopping details' };
+      }
+    } else {
+      islandHoppingAmount = 0;
+      islandHoppingStored = baseStored;
     }
   }
 

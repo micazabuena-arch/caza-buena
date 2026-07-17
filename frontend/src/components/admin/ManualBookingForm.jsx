@@ -292,7 +292,10 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
             gender: p.gender,
             is_first_timer: p.is_first_timer,
             is_senior: Boolean(p.is_senior),
-            is_pwd: Boolean(p.is_pwd),
+            // Preserve "unanswered" (null) so the backend's completeness check agrees
+            // with the form — coercing to false would make the backend price a tour
+            // the form shows as excluded.
+            is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
           })),
           passenger_address: islandHopping.passenger_address,
           payor_name: islandHopping.payor_name,
@@ -658,6 +661,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
             <div className="border-t border-aegean-100 pt-5">
               <IslandHoppingSection
                 embedded
+                optionalFields
                 enabled={islandHoppingEnabled}
                 onEnabledChange={setIslandHoppingEnabled}
                 data={islandHopping}

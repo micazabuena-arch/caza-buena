@@ -287,10 +287,6 @@ export default function AdminGuests() {
                 booking={selected}
                 onViewPaymentProof={setPaymentProofUrl}
                 onEdit={() => openEdit(selected)}
-                onBookingUpdated={(updated) => {
-                  setSelected(updated);
-                  loadBookings();
-                }}
               />
             ) : (
               <BookingStayEditForm

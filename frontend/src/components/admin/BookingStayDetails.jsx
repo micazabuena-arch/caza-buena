@@ -18,13 +18,13 @@ import { openBookingSoaPrint } from '../../utils/openBookingSoaPrint';
 import { bookingRoomStayTotal } from '../../utils/bookingSoaLines';
 import { parseStayAddons } from '../../utils/stayAddons';
 import { SOA_DOCUMENT_TYPES } from '../../utils/soaDocumentTitle';
-import BookingStayAddonsEditor from './BookingStayAddonsEditor';
 import { useToast } from '../../context/ToastContext';
 
 const TABS = [
   { id: 'stay', label: 'Stay' },
   { id: 'guest', label: 'Guest' },
   { id: 'addons', label: 'Add-ons' },
+  { id: 'custom-addons', label: 'Extra charges' },
   { id: 'payment', label: 'Payment' },
 ];
 
@@ -43,8 +43,9 @@ function Row({ label, value, children }) {
   );
 }
 
-/** Read-only booking summary with the same tabs as the edit form */
-export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit, onBookingUpdated }) {
+/** Read-only booking summary with the same tabs as the edit form.
+ *  During-stay add-ons are edited on the booking edit page, not here. */
+export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit }) {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('stay');
   const [printLoading, setPrintLoading] = useState(false);
@@ -58,6 +59,10 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
   const payment = getBookingPaymentSummary(booking);
   const stayAddons = parseStayAddons(booking.stay_addons);
   const stayAddonsTotal = stayAddons.reduce((sum, item) => sum + item.amount, 0);
+  // Admin-only during-stay charges (room extension, food, etc.) — read-only here;
+  // edited on the booking edit page.
+  const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
+  const customAddonsTotal = customAddons.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
   return (
     <div className="flex flex-col">
@@ -204,7 +209,53 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
               </div>
             )}
 
-            <BookingStayAddonsEditor booking={booking} onUpdated={onBookingUpdated} />
+          </Panel>
+        )}
+
+        {activeTab === 'custom-addons' && (
+          <Panel>
+            {customAddons.length === 0 ? (
+              <p className="text-sm text-aegean-500">No extra charges recorded.</p>
+            ) : (
+              <div className="space-y-2">
+                {customAddons.map((addon) => (
+                  <div
+                    key={addon.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-aegean-100 bg-aegean-50/40 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-aegean-800">{addon.label}</span>
+                        {!Number(addon.include_in_soa) && (
+                          <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            Hidden from SOA
+                          </span>
+                        )}
+                        {!Number(addon.include_in_confirmation) && (
+                          <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            Hidden from confirmation
+                          </span>
+                        )}
+                      </div>
+                      {addon.description && (
+                        <p className="text-xs text-aegean-500 mt-0.5">{addon.description}</p>
+                      )}
+                    </div>
+                    <span className="text-sm font-medium text-aegean-900 shrink-0">
+                      ₱{Number(addon.amount || 0).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-aegean-100 pt-2 text-sm font-semibold text-aegean-800">
+                  <span>Extra charges total</span>
+                  <span>₱{customAddonsTotal.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-aegean-500 mt-3">
+              Room extension, food orders, and other during-stay charges. Edit these on the booking
+              edit page.
+            </p>
           </Panel>
         )}
 
@@ -236,6 +287,13 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
             {stayAddonsTotal > 0 && stayAddons.length > 1 && (
               <Row label="During-stay subtotal" value={`₱${stayAddonsTotal.toLocaleString()}`} />
             )}
+            {customAddons.map((addon) => (
+              <Row
+                key={addon.id}
+                label={addon.label || 'Extra charge'}
+                value={`₱${Number(addon.amount || 0).toLocaleString()}`}
+              />
+            ))}
             {Number(booking.discount_amount) > 0 && (
               <Row
                 label="Discount"

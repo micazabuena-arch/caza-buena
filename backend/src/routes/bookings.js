@@ -234,6 +234,11 @@ router.post(
       return res.status(400).json({ message: 'Select at least one room' });
     }
 
+    // Public bookings cannot be back-dated — only admins may record past (ante-dated) stays.
+    if (isAnteDateCheckIn(req.body.check_in)) {
+      return res.status(400).json({ message: 'Check-in date cannot be in the past.' });
+    }
+
     try {
     const {
       room_id,
@@ -748,7 +753,20 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
   const boodleAmount = Number(booking.boodle_fight_amount) || 0;
   const { stayAddonsTotal } = await import('../utils/stayAddons.js');
   const duringStayAmount = stayAddonsTotal(booking.stay_addons);
-  const total = roomTotal + islandAmount + bilaoAmount + boodleAmount + duringStayAmount;
+  // Custom during-stay charges (booking_addons) must stay in the total when only the
+  // dates change — otherwise a quick date edit would silently drop them.
+  let customAddonsAmount = 0;
+  try {
+    const [addonRows] = await pool.query(
+      'SELECT amount FROM booking_addons WHERE booking_id = ?',
+      [booking.id]
+    );
+    customAddonsAmount = (addonRows || []).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+  } catch (err) {
+    console.warn('[Booking dates] booking_addons unavailable:', err.message);
+  }
+  const total =
+    roomTotal + islandAmount + bilaoAmount + boodleAmount + duringStayAmount + customAddonsAmount;
   const avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(booking.room_rate);
 
   const [settingRows] = await pool.query(

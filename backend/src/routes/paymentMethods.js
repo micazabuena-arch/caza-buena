@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/database.js';
-import { authenticateAdmin } from '../middleware/auth.js';
+import { authenticateAdmin, requireAdminRole } from '../middleware/auth.js';
 import { uploadImage } from '../middleware/upload.js';
 import { uploadFile } from '../utils/fileUpload.js';
 
@@ -19,7 +19,8 @@ router.get('/admin/all', authenticateAdmin, async (_req, res) => {
   res.json(rows);
 });
 
-router.post('/admin', authenticateAdmin, uploadImage.single('qr'), async (req, res) => {
+// Payment methods hold bank / e-wallet account details — admin-only to configure.
+router.post('/admin', authenticateAdmin, requireAdminRole, uploadImage.single('qr'), async (req, res) => {
   const { name, type, account_name, account_number, instructions, is_active, sort_order } = req.body;
   if (!name?.trim()) return res.status(400).json({ message: 'Name is required' });
 
@@ -53,7 +54,7 @@ router.post('/admin', authenticateAdmin, uploadImage.single('qr'), async (req, r
   res.status(201).json(rows[0]);
 });
 
-router.put('/admin/:id', authenticateAdmin, uploadImage.single('qr'), async (req, res) => {
+router.put('/admin/:id', authenticateAdmin, requireAdminRole, uploadImage.single('qr'), async (req, res) => {
   const { name, account_name, account_number, instructions, is_active } = req.body;
   const updates = [];
   const params = [];
@@ -79,7 +80,7 @@ router.put('/admin/:id', authenticateAdmin, uploadImage.single('qr'), async (req
   res.json(rows[0]);
 });
 
-router.delete('/admin/:id', authenticateAdmin, async (req, res) => {
+router.delete('/admin/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
   const [rows] = await pool.query('SELECT id, name FROM payment_methods WHERE id = ?', [req.params.id]);
   if (rows.length === 0) return res.status(404).json({ message: 'Payment method not found' });
 

@@ -176,11 +176,24 @@ export async function attachBookingRooms(pool, booking) {
   };
 }
 
-/** Load booking_rooms before guest emails / SOA PDF (multi-room aware). */
+/** Load booking_rooms + custom add-ons before guest emails / SOA PDF (multi-room aware). */
 export async function prepareBookingForEmail(pool, booking) {
   const enriched = await attachBookingRooms(pool, booking);
+  // Load custom during-stay charges so the emailed PDF itemizes them like the admin
+  // screen does (the on-screen doc fetches these via /bookings/admin/:id).
+  let addons = [];
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM booking_addons WHERE booking_id = ? ORDER BY sort_order, created_at',
+      [booking.id]
+    );
+    addons = rows || [];
+  } catch (err) {
+    console.warn('[Email prep] booking_addons unavailable:', err.message);
+  }
   return {
     ...enriched,
+    addons,
     room_name: enriched.room_names || enriched.room_name,
   };
 }

@@ -5,6 +5,21 @@ function customAddonsTotal(addons) {
   return addons.reduce((sum, addon) => sum + (Number(addon.amount) || 0), 0);
 }
 
+/** Whether a custom add-on should be shown on the given document. */
+function isCustomAddonShown(addon, docType = 'soa') {
+  return docType === 'confirmation'
+    ? Boolean(Number(addon.include_in_confirmation ?? 1))
+    : Boolean(Number(addon.include_in_soa ?? addon.show_in_soa ?? 1));
+}
+
+/** Total of custom add-ons hidden from this document (still part of total_amount). */
+function hiddenCustomAddonsTotal(addons, docType = 'soa') {
+  if (!Array.isArray(addons)) return 0;
+  return addons
+    .filter((addon) => !isCustomAddonShown(addon, docType) && Number(addon.amount) > 0)
+    .reduce((sum, addon) => sum + Number(addon.amount), 0);
+}
+
 /** Room stay total (excludes island hopping, food add-ons, and during-stay charges). */
 export function bookingRoomStayTotal(booking) {
   if (!booking) return 0;
@@ -51,6 +66,31 @@ export function buildBookingSoaLineItems(booking, docType = 'soa') {
         : 'Discount';
     lines.push({ label: discountLabel, amount: -discount });
   }
+
+  // During-stay charges (room extension, food orders, etc.) sit directly under the
+  // room stay — they are part of the accommodation, not the food / tour packages.
+  const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
+  for (const addon of customAddons) {
+    if (isCustomAddonShown(addon, docType) && Number(addon.amount) > 0) {
+      lines.push({
+        label: addon.label || 'Add-on',
+        amount: Number(addon.amount),
+      });
+    }
+  }
+  for (const addon of parseStayAddons(booking.stay_addons)) {
+    lines.push({ label: addon.description, amount: addon.amount });
+  }
+
+  // Charges the admin chose to hide from this document are still part of total_amount
+  // (the guest still owes them), so bundle them into one reconciling line to keep the
+  // document footing (visible line items must sum to the printed Total).
+  const hiddenAddonsTotal = hiddenCustomAddonsTotal(booking.addons, docType);
+  if (hiddenAddonsTotal > 0) {
+    lines.push({ label: 'Other charges', amount: hiddenAddonsTotal });
+  }
+
+  // Food / tour packages always appear at the bottom of the charges table.
   if (booking.island_hopping && Number(booking.island_hopping_amount) > 0) {
     lines.push({
       label: 'Hundred Island tour',
@@ -65,24 +105,6 @@ export function buildBookingSoaLineItems(booking, docType = 'soa') {
       label: 'Boodle fight',
       amount: Number(booking.boodle_fight_amount),
     });
-  }
-
-  const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
-  for (const addon of customAddons) {
-    const show =
-      docType === 'confirmation'
-        ? Boolean(Number(addon.include_in_confirmation ?? 1))
-        : Boolean(Number(addon.include_in_soa ?? addon.show_in_soa ?? 1));
-    if (show && Number(addon.amount) > 0) {
-      lines.push({
-        label: addon.label || 'Add-on',
-        amount: Number(addon.amount),
-      });
-    }
-  }
-
-  for (const addon of parseStayAddons(booking.stay_addons)) {
-    lines.push({ label: addon.description, amount: addon.amount });
   }
 
   return lines;

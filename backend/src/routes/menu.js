@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import pool from '../config/database.js';
-import { authenticateAdmin, requireAdminRole } from '../middleware/auth.js';
+import { authenticateAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -18,7 +18,7 @@ router.get('/admin/all', authenticateAdmin, async (_req, res) => {
   res.json(rows);
 });
 
-router.post('/admin', authenticateAdmin, requireAdminRole, async (req, res) => {
+router.post('/admin', authenticateAdmin, async (req, res) => {
   const { name, category, description, price, sort_order, is_active } = req.body;
   if (!name?.trim() || !category?.trim()) {
     return res.status(400).json({ message: 'Name and category are required' });
@@ -48,7 +48,7 @@ router.post('/admin', authenticateAdmin, requireAdminRole, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-router.put('/admin/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
+router.put('/admin/:id', authenticateAdmin, async (req, res) => {
   const { name, category, description, price, sort_order, is_active } = req.body;
   const [existing] = await pool.query('SELECT * FROM menu_items WHERE id = ?', [req.params.id]);
   if (!existing.length) return res.status(404).json({ message: 'Menu item not found' });
@@ -79,7 +79,7 @@ router.put('/admin/:id', authenticateAdmin, requireAdminRole, async (req, res) =
   res.json(rows[0]);
 });
 
-router.delete('/admin/:id', authenticateAdmin, requireAdminRole, async (req, res) => {
+router.delete('/admin/:id', authenticateAdmin, async (req, res) => {
   await pool.query('UPDATE menu_items SET is_active = 0 WHERE id = ?', [req.params.id]);
   res.json({ message: 'Removed' });
 });

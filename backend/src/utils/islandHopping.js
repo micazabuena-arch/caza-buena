@@ -150,6 +150,29 @@ export function validateIslandHoppingPayload(data) {
   return { valid: true };
 }
 
+/**
+ * Lenient validation for admin-entered island hopping.
+ * Admins may record a tour before the guest provides full passenger / payor /
+ * emergency details, so only hard constraints (max passengers) are enforced here.
+ * The remaining details can be completed later from the booking.
+ */
+export function validateIslandHoppingPayloadLenient(data) {
+  if (!data) return { valid: true };
+  const passengers = data.passengers || [];
+  if (passengers.length > ISLAND_HOPPING_RATES.maxPassengers) {
+    return {
+      valid: false,
+      message: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat. Contact us for larger groups.`,
+    };
+  }
+  return { valid: true };
+}
+
+/** True when the payload has every field needed to price the tour. */
+export function isIslandHoppingComplete(data) {
+  return validateIslandHoppingPayload(data).valid;
+}
+
 export function calculateIslandHopping(passengers) {
   const pax = passengers?.length || 0;
   if (pax < 1) return { error: 'At least one passenger is required.' };

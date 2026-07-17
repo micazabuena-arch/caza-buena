@@ -122,7 +122,9 @@ export function editStateToPayload(state) {
         gender: p.gender,
         is_first_timer: p.is_first_timer,
         is_senior: Boolean(p.is_senior),
-        is_pwd: Boolean(p.is_pwd),
+        // Preserve "unanswered" (null) so the backend's completeness check agrees with
+        // the form (avoids pricing a tour the form shows as excluded).
+        is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
       })),
       passenger_address: state.islandHopping.passenger_address,
       payor_name: state.islandHopping.payor_name,

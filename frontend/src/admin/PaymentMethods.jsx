@@ -8,6 +8,7 @@ import SubmitButton from '../components/ui/SubmitButton';
 import AdminModal from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
 
@@ -55,6 +56,8 @@ export default function AdminPaymentMethods() {
   const [error, setError] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
+  // Payment methods hold bank / e-wallet account details — only full admins may manage them.
+  const { isFullAdmin } = useAuth();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(methods);
 
   const editingMethod = editingId ? methods.find((m) => m.id === editingId) : null;
@@ -73,6 +76,10 @@ export default function AdminPaymentMethods() {
   }, []);
 
   const openAdd = () => {
+    if (!isFullAdmin) {
+      toast.error('Only admins can manage payment methods.');
+      return;
+    }
     setEditingId(null);
     setForm(emptyForm());
     setError('');
@@ -80,6 +87,10 @@ export default function AdminPaymentMethods() {
   };
 
   const openEdit = (method) => {
+    if (!isFullAdmin) {
+      toast.error('Only admins can manage payment methods.');
+      return;
+    }
     setEditingId(method.id);
     setForm({
       name: method.name || '',
@@ -119,6 +130,10 @@ export default function AdminPaymentMethods() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!isFullAdmin) {
+      toast.error('Only admins can manage payment methods.');
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Payment name is required.');
       return;
@@ -160,6 +175,10 @@ export default function AdminPaymentMethods() {
   };
 
   const remove = async (method) => {
+    if (!isFullAdmin) {
+      toast.error('Only admins can manage payment methods.');
+      return;
+    }
     const ok = await confirm({
       title: 'Delete payment method?',
       message: `Remove "${method.name}" from the website? This cannot be undone.`,
@@ -190,12 +209,15 @@ export default function AdminPaymentMethods() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
         <h1 className="text-3xl font-serif text-aegean-800">Payment Methods</h1>
-        <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
-          <Plus size={18} /> Add payment method
-        </button>
+        {isFullAdmin && (
+          <button type="button" onClick={openAdd} className="btn-primary text-sm flex items-center gap-2">
+            <Plus size={18} /> Add payment method
+          </button>
+        )}
       </div>
       <p className="text-aegean-600 text-sm mb-8">
         Manage QR codes and instructions for GCash, Maya, bank transfers, and more.
+        {!isFullAdmin && ' Payment method details are view-only for staff.'}
       </p>
       {error && !modalOpen && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
@@ -231,17 +253,19 @@ export default function AdminPaymentMethods() {
                   )}
                 </div>
               </div>
-              <IconActionGroup className="shrink-0">
-                <IconActionButton icon={Pencil} label={`Edit ${m.name}`} onClick={() => openEdit(m)} />
-                <IconActionButton
-                  icon={Trash2}
-                  label={`Delete ${m.name}`}
-                  onClick={() => remove(m)}
-                  loading={deleting === m.id}
-                  disabled={Boolean(deleting)}
-                  className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
-                />
-              </IconActionGroup>
+              {isFullAdmin && (
+                <IconActionGroup className="shrink-0">
+                  <IconActionButton icon={Pencil} label={`Edit ${m.name}`} onClick={() => openEdit(m)} />
+                  <IconActionButton
+                    icon={Trash2}
+                    label={`Delete ${m.name}`}
+                    onClick={() => remove(m)}
+                    loading={deleting === m.id}
+                    disabled={Boolean(deleting)}
+                    className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                  />
+                </IconActionGroup>
+              )}
             </div>
           ))
         )}

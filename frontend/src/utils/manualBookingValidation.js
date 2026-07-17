@@ -28,7 +28,6 @@ export function validateManualBookingFields(form, context = {}) {
     extrasQuote,
     islandHoppingEnabled,
     islandQuote,
-    islandHopping,
     totalAmount,
     customPay,
     roomSubtotal,
@@ -128,27 +127,11 @@ export function validateManualBookingFields(form, context = {}) {
       markTab('addons');
     }
     if (islandHoppingEnabled) {
+      // Admin island hopping details are optional — clients may not give passenger
+      // names / payor / emergency contact up front, and these can be filled in later.
+      // Only block on hard errors (e.g. exceeding the max passengers per boat).
       if (islandQuote?.error) {
         bannerError = islandQuote.error;
-        markTab('addons');
-      } else if (!islandQuote?.complete) {
-        bannerError = 'Complete all island hopping passenger details or turn island hopping off.';
-        markTab('addons');
-      } else if (!islandHopping.passenger_address?.trim()) {
-        bannerError = 'Passenger address is required for island hopping.';
-        markTab('addons');
-      } else if (
-        !islandHopping.payor_name?.trim() ||
-        !islandHopping.payor_address?.trim() ||
-        !islandHopping.payor_phone?.trim()
-      ) {
-        bannerError = 'Complete payor name, address, and phone for island hopping.';
-        markTab('addons');
-      } else if (
-        !islandHopping.emergency_contact_name?.trim() ||
-        !islandHopping.emergency_contact_phone?.trim()
-      ) {
-        bannerError = 'Complete emergency contact name and phone for island hopping.';
         markTab('addons');
       }
     }
