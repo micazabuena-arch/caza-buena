@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -26,10 +26,12 @@ export function getEmailLogoAttachment() {
   const logoPath = path.resolve(__dirname, '../../assets/email-logo.png');
   if (!existsSync(logoPath)) return [];
 
+  // Load as buffer (not path/href) so transporter disableFileAccess stays on.
   return [
     {
       filename: 'logo.png',
-      path: logoPath,
+      content: readFileSync(logoPath),
+      contentType: 'image/png',
       cid: EMAIL_LOGO_CID,
     },
   ];

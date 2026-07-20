@@ -64,6 +64,9 @@ async function buildTransporter() {
     socketTimeout: 25000,
     tls: { servername: hostname },
     lookup: ipv4Lookup,
+    // Block path/href message content (incl. raw) from reading files or fetching URLs.
+    disableFileAccess: true,
+    disableUrlAccess: true,
     auth: {
       user: process.env.SMTP_USER.trim(),
       pass: smtpPassword(),
