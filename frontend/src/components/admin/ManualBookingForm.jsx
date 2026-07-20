@@ -3,6 +3,7 @@ import { format, addDays } from 'date-fns';
 import api, { getApiError } from '../../api/client';
 import SubmitButton from '../ui/SubmitButton';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
+import BookingRoomLinesSection from '../booking/BookingRoomLinesSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
 import {
@@ -23,6 +24,12 @@ import { validateManualBookingFields } from '../../utils/manualBookingValidation
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
+import {
+  createRoomLine,
+  roomLinesToPayload,
+  totalGuestsFromLines,
+  usedRoomIds,
+} from '../../utils/bookingRoomLines';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -70,7 +77,6 @@ function Panel({ title, hint, children }) {
 }
 
 const emptyForm = () => ({
-  room_id: '',
   guest_name: '',
   guest_email: '',
   guest_phone: '',
@@ -78,9 +84,6 @@ const emptyForm = () => ({
   estimated_arrival: '',
   check_in: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
   check_out: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
-  adults: 2,
-  children_under6: 0,
-  children_7_12: 0,
   status: 'confirmed',
   special_requests: '',
   send_confirmation_email: false,
@@ -98,6 +101,9 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [depositPercent, setDepositPercent] = useState(20);
   const [form, setForm] = useState(emptyForm);
+  const [roomLines, setRoomLines] = useState(() => [createRoomLine()]);
+  const [lineQuotes, setLineQuotes] = useState({});
+  const [lineQuotesLoading, setLineQuotesLoading] = useState(false);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
@@ -105,8 +111,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
-  const [availability, setAvailability] = useState(null);
-  const [availabilityChecking, setAvailabilityChecking] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -124,51 +128,84 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       .catch(() => {});
   }, []);
 
+  // Price each selected room for the shared check-in / check-out dates.
   useEffect(() => {
-    if (!form.room_id || !form.check_in || !form.check_out) {
-      setAvailability(null);
-      setAvailabilityChecking(false);
-      return;
+    if (!form.check_in || !form.check_out) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
     }
-    setAvailabilityChecking(true);
-    api
-      .get('/bookings/availability', {
-        params: {
-          room_id: form.room_id,
-          check_in: form.check_in,
-          check_out: form.check_out,
-          adults: form.adults,
-          children_under6: form.children_under6,
-          children_7_12: form.children_7_12,
-        },
+
+    const linesWithRoom = roomLines.filter((line) => line.room_id);
+    if (linesWithRoom.length === 0) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
+    }
+
+    setLineQuotesLoading(true);
+    let cancelled = false;
+
+    Promise.all(
+      linesWithRoom.map((line) =>
+        api
+          .get('/bookings/availability', {
+            params: {
+              room_id: line.room_id,
+              check_in: form.check_in,
+              check_out: form.check_out,
+              adults: line.adults,
+              children_under6: line.children_under6,
+              children_7_12: line.children_7_12,
+            },
+          })
+          .then((r) => ({ id: line.id, data: r.data }))
+          .catch(() => ({ id: line.id, data: null }))
+      )
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const next = {};
+        results.forEach(({ id, data }) => {
+          next[id] = data;
+        });
+        setLineQuotes(next);
       })
-      .then((r) => setAvailability(r.data))
-      .catch(() => setAvailability(null))
-      .finally(() => setAvailabilityChecking(false));
-  }, [
-    form.room_id,
-    form.check_in,
-    form.check_out,
-    form.adults,
-    form.children_under6,
-    form.children_7_12,
-  ]);
+      .finally(() => {
+        if (!cancelled) setLineQuotesLoading(false);
+      });
 
-  const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
-  const roomType = selectedRoom?.room_type === 'suite' ? 'suite' : 'queen';
-  const guestCount =
-    (parseInt(form.adults, 10) || 0) +
-    (parseInt(form.children_under6, 10) || 0) +
-    (parseInt(form.children_7_12, 10) || 0);
+    return () => {
+      cancelled = true;
+    };
+  }, [roomLines, form.check_in, form.check_out]);
 
-  const roomSubtotal =
-    availability?.subtotal != null &&
-    (availability.available || isPastStayDate(form.check_in)) &&
-    !availability.occupancy_error
-      ? Number(availability.subtotal)
-      : 0;
+  const anteDate = isPastStayDate(form.check_in);
+  const guestCount = totalGuestsFromLines(roomLines);
+  const primaryLine = roomLines[0];
+  const selectedRoom = primaryLine?.room_id
+    ? rooms.find((r) => String(r.id) === String(primaryLine.room_id))
+    : null;
+  // Suite extras (e.g. bilao) unlock if ANY selected room is a suite.
+  const roomType = roomLines.some(
+    (line) => rooms.find((r) => String(r.id) === String(line.room_id))?.room_type === 'suite'
+  )
+    ? 'suite'
+    : 'queen';
 
-  const extrasQuote = selectedRoom ? validateBookingExtras(bookingExtras, roomType) : null;
+  const roomSubtotal = roomLines.reduce((sum, line) => {
+    const quote = lineQuotes[line.id];
+    if (!quote || quote.occupancy_error) return sum;
+    if (!(quote.available || anteDate)) return sum;
+    if (quote.subtotal == null) return sum;
+    return sum + Number(quote.subtotal);
+  }, 0);
+
+  const nights = Object.values(lineQuotes).find((q) => q?.nights)?.nights || 0;
+
+  const extrasQuote = selectedRoom || roomLines.some((l) => l.room_id)
+    ? validateBookingExtras(bookingExtras, roomType)
+    : null;
   const islandQuote =
     islandHoppingEnabled && islandHopping.passengers?.length
       ? calculateIslandHopping(islandHopping.passengers)
@@ -195,6 +232,14 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
           ? customPay
           : 0;
 
+  const anyUnavailable =
+    !anteDate &&
+    roomLines.some((line) => {
+      if (!line.room_id) return false;
+      const quote = lineQuotes[line.id];
+      return quote && !quote.available && !quote.occupancy_error;
+    });
+
   const update = (patch) => {
     const cleanPatch = { ...patch };
     if (Object.prototype.hasOwnProperty.call(cleanPatch, 'guest_phone')) {
@@ -209,12 +254,33 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     setError('');
   };
 
+  const handleLineChange = (lineId, patch) => {
+    setRoomLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.room_id;
+      delete next.adults;
+      return next;
+    });
+    setError('');
+  };
+
+  const handleAddLine = () => {
+    setRoomLines((prev) => [...prev, createRoomLine()]);
+    setError('');
+  };
+
+  const handleRemoveLine = (lineId) => {
+    setRoomLines((prev) => (prev.length <= 1 ? prev : prev.filter((line) => line.id !== lineId)));
+    setError('');
+  };
+
   const validationContext = useMemo(
     () => ({
-      availability,
-      availabilityChecking,
-      selectedRoom,
-      guestCount,
+      roomLines,
+      lineQuotes,
+      lineQuotesLoading,
+      rooms,
       paymentMethods,
       manualOnlyPaymentMethods: MANUAL_ONLY_PAYMENT_METHODS,
       extrasQuote,
@@ -226,10 +292,10 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       customPay,
     }),
     [
-      availability,
-      availabilityChecking,
-      selectedRoom,
-      guestCount,
+      roomLines,
+      lineQuotes,
+      lineQuotesLoading,
+      rooms,
       paymentMethods,
       extrasQuote,
       islandHoppingEnabled,
@@ -258,65 +324,70 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
   const validateAll = () => applyValidationResult(runValidation('all'));
 
-  const buildPayload = () => ({
-    room_id: parseInt(form.room_id, 10),
-    guest_name: form.guest_name.trim(),
-    guest_email: form.guest_email.trim(),
-    guest_phone: form.guest_phone.trim(),
-    valid_id: form.valid_id.trim(),
-    estimated_arrival: form.estimated_arrival.trim() || null,
-    adults: parseInt(form.adults, 10) || 1,
-    children_under6: parseInt(form.children_under6, 10) || 0,
-    children_7_12: parseInt(form.children_7_12, 10) || 0,
-    check_in: form.check_in,
-    check_out: form.check_out,
-    status: form.status,
-    special_requests: form.special_requests.trim() || undefined,
-    send_confirmation_email: form.send_confirmation_email,
-    payment_method_id: isManualOnlyPaymentMethodId(form.payment_method_id)
-      ? null
-      : form.payment_method_id
-        ? parseInt(form.payment_method_id, 10)
-        : null,
-    manual_payment_method: isManualOnlyPaymentMethodId(form.payment_method_id)
-      ? getManualOnlyPaymentMethodName(form.payment_method_id)
-      : undefined,
-    payment_option: form.payment_option,
-    custom_payment_amount: form.payment_option === 'custom' ? customPay : undefined,
-    island_hopping: islandHoppingEnabled,
-    island_hopping_data: islandHoppingEnabled
-      ? {
-          passengers: islandHopping.passengers.map((p) => ({
-            full_name: p.full_name.trim(),
-            age: parseInt(p.age, 10),
-            gender: p.gender,
-            is_first_timer: p.is_first_timer,
-            is_senior: Boolean(p.is_senior),
-            // Preserve "unanswered" (null) so the backend's completeness check agrees
-            // with the form — coercing to false would make the backend price a tour
-            // the form shows as excluded.
-            is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
-          })),
-          passenger_address: islandHopping.passenger_address,
-          payor_name: islandHopping.payor_name,
-          payor_address: islandHopping.payor_address,
-          payor_phone: islandHopping.payor_phone,
-          emergency_contact_name: islandHopping.emergency_contact_name,
-          emergency_contact_phone: islandHopping.emergency_contact_phone,
-        }
-      : undefined,
-    bringing_car: bookingExtras.bringing_car,
-    car_count: bookingExtras.bringing_car ? parseInt(bookingExtras.car_count, 10) || 1 : 0,
-    pet_count: parseInt(bookingExtras.pet_count, 10) || 0,
-    bilao_enabled: bookingExtras.bilao_enabled,
-    bilao_package: bookingExtras.bilao_enabled ? bookingExtras.bilao_package : undefined,
-    boodle_fight_enabled: bookingExtras.boodle_fight_enabled,
-    boodle_fight_tier: bookingExtras.boodle_fight_enabled
-      ? bookingExtras.boodle_fight_tier
-      : undefined,
-    admin_discount_amount: form.admin_discount_amount,
-    admin_discount_note: form.admin_discount_note.trim() || undefined,
-  });
+  const buildPayload = () => {
+    const linesPayload = roomLinesToPayload(roomLines);
+    const primary = linesPayload[0] || {};
+    return {
+      room_id: primary.room_id,
+      room_lines: linesPayload,
+      guest_name: form.guest_name.trim(),
+      guest_email: form.guest_email.trim(),
+      guest_phone: form.guest_phone.trim(),
+      valid_id: form.valid_id.trim(),
+      estimated_arrival: form.estimated_arrival.trim() || null,
+      adults: primary.adults || 1,
+      children_under6: primary.children_under6 || 0,
+      children_7_12: primary.children_7_12 || 0,
+      check_in: form.check_in,
+      check_out: form.check_out,
+      status: form.status,
+      special_requests: form.special_requests.trim() || undefined,
+      send_confirmation_email: form.send_confirmation_email,
+      payment_method_id: isManualOnlyPaymentMethodId(form.payment_method_id)
+        ? null
+        : form.payment_method_id
+          ? parseInt(form.payment_method_id, 10)
+          : null,
+      manual_payment_method: isManualOnlyPaymentMethodId(form.payment_method_id)
+        ? getManualOnlyPaymentMethodName(form.payment_method_id)
+        : undefined,
+      payment_option: form.payment_option,
+      custom_payment_amount: form.payment_option === 'custom' ? customPay : undefined,
+      island_hopping: islandHoppingEnabled,
+      island_hopping_data: islandHoppingEnabled
+        ? {
+            passengers: islandHopping.passengers.map((p) => ({
+              full_name: p.full_name.trim(),
+              age: parseInt(p.age, 10),
+              gender: p.gender,
+              is_first_timer: p.is_first_timer,
+              is_senior: Boolean(p.is_senior),
+              // Preserve "unanswered" (null) so the backend's completeness check agrees
+              // with the form — coercing to false would make the backend price a tour
+              // the form shows as excluded.
+              is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
+            })),
+            passenger_address: islandHopping.passenger_address,
+            payor_name: islandHopping.payor_name,
+            payor_address: islandHopping.payor_address,
+            payor_phone: islandHopping.payor_phone,
+            emergency_contact_name: islandHopping.emergency_contact_name,
+            emergency_contact_phone: islandHopping.emergency_contact_phone,
+          }
+        : undefined,
+      bringing_car: bookingExtras.bringing_car,
+      car_count: bookingExtras.bringing_car ? parseInt(bookingExtras.car_count, 10) || 1 : 0,
+      pet_count: parseInt(bookingExtras.pet_count, 10) || 0,
+      bilao_enabled: bookingExtras.bilao_enabled,
+      bilao_package: bookingExtras.bilao_enabled ? bookingExtras.bilao_package : undefined,
+      boodle_fight_enabled: bookingExtras.boodle_fight_enabled,
+      boodle_fight_tier: bookingExtras.boodle_fight_enabled
+        ? bookingExtras.boodle_fight_tier
+        : undefined,
+      admin_discount_amount: form.admin_discount_amount,
+      admin_discount_note: form.admin_discount_note.trim() || undefined,
+    };
+  };
 
   const uploadIslandHoppingIds = async (reference) => {
     if (!islandHoppingEnabled) return false;
@@ -355,11 +426,12 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     e.preventDefault();
     if (!validateAll()) return;
 
+    const roomLabel = roomLines.length > 1 ? 'rooms' : 'room';
     const ok = await confirm({
       title: 'Create manual booking?',
       message:
         form.status === 'confirmed'
-          ? 'This will block the room on the website for these dates.'
+          ? `This will block the ${roomLabel} on the website for these dates.`
           : 'Create this booking record?',
       confirmLabel: 'Yes, create',
     });
@@ -393,37 +465,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       setSaving(false);
     }
   };
-
-  const priceSummary = useMemo(() => {
-    if (!form.room_id || !availability) return null;
-    const anteDate = isPastStayDate(form.check_in);
-    // Occupancy always blocks; calendar conflicts only block future stays (not ante-date recording).
-    if (availability.occupancy_error) {
-      return { unavailable: true, message: availability.occupancy_error, anteDate };
-    }
-    if (!availability.available && !anteDate) {
-      return { unavailable: true, message: null, anteDate };
-    }
-    return {
-      unavailable: false,
-      anteDate,
-      nights: availability.nights,
-      roomSubtotal,
-      islandTotal,
-      addOnsTotal,
-      totalAmount,
-      amountToPay,
-    };
-  }, [
-    form.room_id,
-    form.check_in,
-    availability,
-    roomSubtotal,
-    islandTotal,
-    addOnsTotal,
-    totalAmount,
-    amountToPay,
-  ]);
 
   const goNext = () => {
     if (!validateTab(activeTab)) return;
@@ -459,23 +500,9 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       <div className="min-h-[200px]">
         {activeTab === 'stay' && (
           <Panel
-            title="Room & dates"
-            hint="Past check-in is allowed for late recording / Statement of Account. Confirmed future stays still block the public calendar."
+            title="Rooms & dates"
+            hint="Past check-in is allowed for late recording / Statement of Account. Confirmed future stays still block the public calendar. Guests can book more than one room under the same reservation."
           >
-            <Field label="Room" required error={fieldErrors.room_id}>
-              <select
-                value={form.room_id}
-                onChange={(e) => update({ room_id: e.target.value })}
-                className={fieldInputClass(fieldErrors.room_id)}
-              >
-                <option value="">Select room</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} ({r.min_guests ?? 1}–{r.max_guests ?? r.capacity} guests)
-                  </option>
-                ))}
-              </select>
-            </Field>
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Check-in" required error={fieldErrors.check_in}>
                 <input
@@ -503,49 +530,35 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                 />
               </Field>
             </div>
-            {isPastStayDate(form.check_in) && (
+            {anteDate && (
               <p className="text-xs text-aegean-600 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2">
                 Ante-dated stay — for recording / Statement of Account when the booking was not
                 entered on time.
               </p>
             )}
-            <div>
-              <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Adults" required error={fieldErrors.adults}>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.adults}
-                    onChange={(e) => update({ adults: e.target.value })}
-                    className={fieldInputClass(fieldErrors.adults)}
-                  />
-                </Field>
-                <Field label="Under 6">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.children_under6}
-                    onChange={(e) => update({ children_under6: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Age 7–12">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.children_7_12}
-                    onChange={(e) => update({ children_7_12: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-              {selectedRoom && guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 99) && (
-                <p className="text-xs text-amber-700 mt-2">
-                  This room allows up to {selectedRoom.max_guests ?? selectedRoom.capacity} guests.
-                </p>
-              )}
-            </div>
+
+            <BookingRoomLinesSection
+              lines={roomLines}
+              rooms={rooms}
+              lineQuotes={lineQuotes}
+              quotesLoading={lineQuotesLoading}
+              onLineChange={handleLineChange}
+              onAddLine={handleAddLine}
+              onRemoveLine={handleRemoveLine}
+              usedRoomIds={usedRoomIds(roomLines)}
+              allowUnavailable={anteDate}
+            />
+            {fieldErrors.room_id && (
+              <p className="text-xs text-red-600" role="alert">
+                {fieldErrors.room_id}
+              </p>
+            )}
+            {fieldErrors.adults && (
+              <p className="text-xs text-red-600" role="alert">
+                {fieldErrors.adults}
+              </p>
+            )}
+
             <Field label="Status">
               <select
                 value={form.status}
@@ -558,38 +571,30 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
                 <option value="pending">Pending</option>
               </select>
             </Field>
-            {availabilityChecking && (
+
+            {lineQuotesLoading && (
               <p className="text-sm text-aegean-500">Checking availability and price…</p>
             )}
-            {priceSummary?.unavailable && (
+            {anyUnavailable && (
               <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                Room not available for these dates
-                {priceSummary.message ? ` — ${priceSummary.message}` : ''}.
+                One or more rooms are not available for these dates.
               </p>
             )}
-            {priceSummary &&
-              !priceSummary.unavailable &&
-              priceSummary.anteDate &&
-              availability &&
-              !availability.available && (
-                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  Calendar shows a conflict, but ante-dated recording is allowed for Statement of
-                  Account.
-                </p>
-              )}
-            {priceSummary && !priceSummary.unavailable && priceSummary.totalAmount > 0 && (
+            {!anyUnavailable && roomSubtotal > 0 && (
               <p className="text-sm text-aegean-700 bg-aegean-50 rounded-lg px-3 py-2">
-                Estimated total: <strong>₱{priceSummary.totalAmount.toLocaleString()}</strong>
-                {priceSummary.nights ? ` · ${priceSummary.nights} night(s)` : ''}
-                {priceSummary.islandTotal > 0 || priceSummary.addOnsTotal > 0 ? (
+                Estimated total: <strong>₱{totalAmount.toLocaleString()}</strong>
+                {nights ? ` · ${nights} night(s)` : ''}
+                {roomLines.length > 1 ? ` · ${roomLines.length} rooms` : ''}
+                {guestCount > 0 ? ` · ${guestCount} guest(s)` : ''}
+                {islandTotal > 0 || addOnsTotal > 0 ? (
                   <>
                     {' '}
-                    (room ₱{priceSummary.roomSubtotal.toLocaleString()}
-                    {priceSummary.islandTotal > 0
-                      ? ` + island hopping ₱${priceSummary.islandTotal.toLocaleString()}`
+                    (rooms ₱{roomSubtotal.toLocaleString()}
+                    {islandTotal > 0
+                      ? ` + island hopping ₱${islandTotal.toLocaleString()}`
                       : ''}
-                    {priceSummary.addOnsTotal > 0
-                      ? ` + extras ₱${priceSummary.addOnsTotal.toLocaleString()}`
+                    {addOnsTotal > 0
+                      ? ` + extras ₱${addOnsTotal.toLocaleString()}`
                       : ''}
                     )
                   </>
@@ -768,7 +773,7 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               loading={saving}
               loadingLabel="Creating..."
               className="text-sm"
-              disabled={priceSummary?.unavailable}
+              disabled={anyUnavailable}
             >
               Create booking
             </SubmitButton>

@@ -1,15 +1,16 @@
 import pool from '../config/database.js';
-import {
-  generateReferenceCode,
-  calculateNights,
-  isRoomAvailable,
-  isAnteDateCheckIn,
-} from './booking.js';
+import { generateReferenceCode, isAnteDateCheckIn } from './booking.js';
 import { sendBookingConfirmation } from '../services/email.js';
 import { buildAdminNotesWithManualPayment } from './manualBookingPayment.js';
+import {
+  normalizeRoomLines,
+  validateAndPriceRoomLines,
+  insertBookingRooms,
+} from './bookingRooms.js';
 
 /**
  * Creates an admin manual booking with the same pricing fields as the public form.
+ * Supports one or more rooms via body.room_lines (or legacy single room_id).
  */
 export async function createManualBooking(body) {
   const {
@@ -22,6 +23,8 @@ export async function createManualBooking(body) {
     adults: adultsBody,
     children_under6 = 0,
     children_7_12 = 0,
+    guest_count: guestCountBody,
+    room_lines: roomLinesBody,
     valid_id,
     estimated_arrival,
     status = 'confirmed',
@@ -45,39 +48,43 @@ export async function createManualBooking(body) {
     admin_discount_note,
   } = body;
 
-  const adults = parseInt(adultsBody, 10) || 1;
-  const childrenUnder6 = parseInt(children_under6, 10) || 0;
-  const children712 = parseInt(children_7_12, 10) || 0;
-  const guest_count = adults + childrenUnder6 + children712;
+  const hasRoomLines = Array.isArray(roomLinesBody) && roomLinesBody.length > 0;
+  if (!hasRoomLines && !room_id) {
+    return { error: 'Select at least one room' };
+  }
 
   const checkIn = String(check_in).slice(0, 10);
   const checkOut = String(check_out).slice(0, 10);
-  const nights = calculateNights(checkIn, checkOut);
-  if (nights < 1) return { error: 'Invalid date range' };
 
-  // Ante-dated (past check-in) stays skip calendar conflicts so staff can record late bookings / SOA.
-  if (!isAnteDateCheckIn(checkIn)) {
-    const available = await isRoomAvailable(pool, room_id, checkIn, checkOut);
-    if (!available) return { error: 'Room is not available for the selected dates' };
-  }
-
-  const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ?', [room_id]);
-  if (rooms.length === 0) return { error: 'Room not found' };
-
-  const room = rooms[0];
-  const occupancy = { adults, childrenUnder6, children7_12: children712 };
-
-  const { validateOccupancy } = await import('../config/resortRules.js');
-  const occCheck = validateOccupancy(room, occupancy);
-  if (!occCheck.valid) return { error: occCheck.message };
-
-  const { calculateStayTotal } = await import('./pricing.js');
-  const stay = await calculateStayTotal(pool, room_id, checkIn, checkOut, {
-    adults,
-    childrenUnder6,
-    children7_12: children712,
+  const rawLines = normalizeRoomLines({
+    room_id,
+    room_lines: roomLinesBody,
+    adults: adultsBody,
+    children_under6,
+    children_7_12,
+    guest_count: guestCountBody,
   });
-  const { subtotal, extraPersonCharges, roomSubtotal: stayRoomSubtotal } = stay;
+
+  // Ante-dated stays skip calendar conflicts so staff can record late bookings / SOA.
+  const priced = await validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, {
+    skipAvailabilityCheck: isAnteDateCheckIn(checkIn),
+    allowInactiveRooms: true,
+  });
+  if (priced.error) return { error: priced.error };
+
+  const {
+    nights,
+    lines: pricedLines,
+    combinedSubtotal: subtotal,
+    combinedExtraCharges: extraPersonCharges,
+    totalAdults: adults,
+    totalUnder6: childrenUnder6,
+    total712: children712,
+    totalGuests: guest_count,
+    primaryRoom: room,
+    hasSuite,
+  } = priced;
+
   const avgNightlyRate = nights > 0 ? subtotal / nights : Number(room.price_per_night);
 
   let islandHopping = Boolean(islandHoppingFlag);
@@ -140,7 +147,7 @@ export async function createManualBooking(body) {
       boodle_fight_enabled: boodleFightEnabledFlag,
       boodle_fight_tier: boodleFightTierBody,
     },
-    room.room_type
+    hasSuite ? 'suite' : room.room_type
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
@@ -190,7 +197,7 @@ export async function createManualBooking(body) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reference,
-      room_id,
+      pricedLines[0].room_id,
       guest_name.trim(),
       guest_email.trim(),
       guest_phone.trim(),
@@ -231,23 +238,9 @@ export async function createManualBooking(body) {
     ]
   );
 
-  const { insertBookingRooms } = await import('./bookingRooms.js');
-  await insertBookingRooms(pool, result.insertId, [
-    {
-      room_id,
-      adults,
-      children_under6: childrenUnder6,
-      children_7_12: children712,
-      guest_count,
-      nights,
-      room_rate: avgNightlyRate,
-      room_subtotal: stayRoomSubtotal ?? subtotal - (extraPersonCharges || 0),
-      extra_person_charges: extraPersonCharges || 0,
-      subtotal,
-      sort_order: 0,
-    },
-  ]);
+  await insertBookingRooms(pool, result.insertId, pricedLines);
 
+  const roomNames = pricedLines.map((l) => l.room.name).join(', ');
   const bookingRow = {
     id: result.insertId,
     reference_code: reference,
@@ -263,7 +256,9 @@ export async function createManualBooking(body) {
     discount_note: discountResolved.note,
     amount_to_pay: payResolved.amount,
     status,
-    room_name: room.name,
+    room_id: pricedLines[0].room_id,
+    room_name: roomNames,
+    room_count: pricedLines.length,
     island_hopping: islandHopping ? 1 : 0,
     island_hopping_amount: islandHoppingAmount,
     bilao_amount: extrasValidation.bilao_amount,
@@ -273,7 +268,7 @@ export async function createManualBooking(body) {
 
   let emailResult = { sent: false };
   if (send_confirmation_email && status === 'confirmed') {
-    emailResult = await sendBookingConfirmation(bookingRow, { name: room.name });
+    emailResult = await sendBookingConfirmation(bookingRow, { name: roomNames });
   }
 
   return { booking: bookingRow, emailResult };

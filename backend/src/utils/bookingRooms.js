@@ -33,8 +33,12 @@ export function normalizeRoomLines(body) {
 
 /**
  * Validate availability, occupancy, and pricing for each room line.
+ * @param {object} [options]
+ * @param {boolean} [options.skipAvailabilityCheck] - Skip calendar conflicts (admin ante-date recording).
+ * @param {boolean} [options.allowInactiveRooms] - Allow booking rooms marked inactive (admin only).
  */
-export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines) {
+export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, options = {}) {
+  const { skipAvailabilityCheck = false, allowInactiveRooms = false } = options;
   const checkInStr = String(checkIn).slice(0, 10);
   const checkOutStr = String(checkOut).slice(0, 10);
   const nights = calculateNights(checkInStr, checkOutStr);
@@ -59,7 +63,10 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
     }
     seenRooms.add(roomId);
 
-    const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ? AND is_active = 1', [roomId]);
+    const roomSql = allowInactiveRooms
+      ? 'SELECT * FROM rooms WHERE id = ?'
+      : 'SELECT * FROM rooms WHERE id = ? AND is_active = 1';
+    const [rooms] = await pool.query(roomSql, [roomId]);
     if (rooms.length === 0) return { error: `Room ${i + 1}: room not found` };
     const room = rooms[0];
 
@@ -73,9 +80,12 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
       return { error: `Room ${i + 1} (${room.name}): ${occCheck.message}` };
     }
 
-    const available = await isRoomAvailable(pool, roomId, checkInStr, checkOutStr);
-    if (!available) {
-      return { error: `${room.name} is not available for the selected dates` };
+    // Past (ante-dated) admin bookings skip calendar holds so staff can still record / SOA.
+    if (!skipAvailabilityCheck) {
+      const available = await isRoomAvailable(pool, roomId, checkInStr, checkOutStr);
+      if (!available) {
+        return { error: `${room.name} is not available for the selected dates` };
+      }
     }
 
     const stay = await calculateStayTotal(pool, roomId, checkInStr, checkOutStr, occupancy);

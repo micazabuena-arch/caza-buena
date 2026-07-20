@@ -1,4 +1,5 @@
 import { getStayDateError, minCheckOutDate, isPastStayDate } from './stayDates';
+import { roomLineGuestCount } from './bookingRoomLines';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,14 +16,15 @@ export function isValidGuestPhone(phone) {
  * Validate manual booking fields for a tab or full form.
  * Returns { fieldErrors, bannerError, tabId } — all fieldErrors values are strings.
  * Past check-in is allowed (admin ante-date / late recording for SOA).
+ * Supports multi-room via context.roomLines + context.lineQuotes.
  */
 export function validateManualBookingFields(form, context = {}) {
   const {
     tab = 'all',
-    availability,
-    availabilityChecking,
-    selectedRoom,
-    guestCount,
+    roomLines = null,
+    lineQuotes = {},
+    lineQuotesLoading = false,
+    rooms = [],
     paymentMethods = [],
     manualOnlyPaymentMethods = [],
     extrasQuote,
@@ -31,6 +33,11 @@ export function validateManualBookingFields(form, context = {}) {
     totalAmount,
     customPay,
     roomSubtotal,
+    // Legacy single-room fields (kept for backwards compatibility)
+    availability,
+    availabilityChecking,
+    selectedRoom,
+    guestCount,
   } = context;
 
   const fieldErrors = {};
@@ -42,12 +49,10 @@ export function validateManualBookingFields(form, context = {}) {
   };
 
   const need = (tabIds) => tab === 'all' || tabIds.includes(tab);
+  const useRoomLines = Array.isArray(roomLines) && roomLines.length > 0;
+  const anteDate = isPastStayDate(form.check_in);
 
   if (need(['stay'])) {
-    if (!form.room_id) {
-      fieldErrors.room_id = 'Please select a room.';
-      markTab('stay');
-    }
     if (!form.check_in) {
       fieldErrors.check_in = 'Check-in date is required.';
       markTab('stay');
@@ -61,28 +66,92 @@ export function validateManualBookingFields(form, context = {}) {
       fieldErrors.check_out = dateError;
       markTab('stay');
     }
-    if (!fieldErrors.adults && form.adults < 1) {
-      fieldErrors.adults = 'At least 1 adult is required.';
-      markTab('stay');
-    }
-    if (selectedRoom && guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 99)) {
-      fieldErrors.adults = `This room allows up to ${selectedRoom.max_guests ?? selectedRoom.capacity} guests.`;
-      markTab('stay');
-    }
-    if (form.room_id && !dateError) {
-      const anteDate = isPastStayDate(form.check_in);
-      if (availabilityChecking) {
-        bannerError = 'Checking availability for these dates…';
+
+    if (useRoomLines) {
+      if (roomLines.some((line) => !line.room_id)) {
+        fieldErrors.room_id = 'Please select a room for every line.';
         markTab('stay');
-      } else if (availability?.occupancy_error) {
-        bannerError = availability.occupancy_error;
+      }
+
+      const roomIds = roomLines.filter((l) => l.room_id).map((l) => String(l.room_id));
+      if (new Set(roomIds).size !== roomIds.length) {
+        bannerError = 'Each room can only be booked once per reservation.';
         markTab('stay');
-      } else if (!availability?.available && !anteDate) {
-        bannerError = 'Room is not available for these dates.';
+      }
+
+      for (const line of roomLines) {
+        if (!line.room_id) continue;
+        const room = rooms.find((r) => String(r.id) === String(line.room_id));
+        const count = roomLineGuestCount(line);
+        if ((parseInt(line.adults, 10) || 0) < 1) {
+          fieldErrors.adults = 'Each room needs at least 1 adult.';
+          markTab('stay');
+        }
+        if (room && count > (room.max_guests ?? room.capacity ?? 99)) {
+          fieldErrors.adults = `${room.name} allows up to ${room.max_guests ?? room.capacity} guests.`;
+          markTab('stay');
+        }
+        if (room && count < (room.min_guests ?? 1)) {
+          fieldErrors.adults = `${room.name} requires at least ${room.min_guests ?? 1} guest(s).`;
+          markTab('stay');
+        }
+      }
+
+      if (!dateError && roomLines.every((line) => line.room_id)) {
+        if (lineQuotesLoading) {
+          bannerError = 'Checking availability for these dates…';
+          markTab('stay');
+        } else {
+          for (const line of roomLines) {
+            const quote = lineQuotes[line.id];
+            const room = rooms.find((r) => String(r.id) === String(line.room_id));
+            const label = room?.name || 'Room';
+            if (quote?.occupancy_error) {
+              bannerError = `${label}: ${quote.occupancy_error}`;
+              markTab('stay');
+              break;
+            }
+            if (!quote?.available && !anteDate) {
+              bannerError = `${label} is not available for these dates.`;
+              markTab('stay');
+              break;
+            }
+            if (anteDate && quote?.subtotal == null && !lineQuotesLoading) {
+              bannerError = `Unable to price ${label}. Check the room and dates.`;
+              markTab('stay');
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // Legacy single-room validation path
+      if (!form.room_id) {
+        fieldErrors.room_id = 'Please select a room.';
         markTab('stay');
-      } else if (anteDate && availability?.subtotal == null && !availabilityChecking) {
-        bannerError = 'Unable to price this stay. Check the room and dates.';
+      }
+      if (!fieldErrors.adults && form.adults < 1) {
+        fieldErrors.adults = 'At least 1 adult is required.';
         markTab('stay');
+      }
+      if (selectedRoom && guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 99)) {
+        fieldErrors.adults = `This room allows up to ${selectedRoom.max_guests ?? selectedRoom.capacity} guests.`;
+        markTab('stay');
+      }
+      if (form.room_id && !dateError) {
+        if (availabilityChecking) {
+          bannerError = 'Checking availability for these dates…';
+          markTab('stay');
+        } else if (availability?.occupancy_error) {
+          bannerError = availability.occupancy_error;
+          markTab('stay');
+        } else if (!availability?.available && !anteDate) {
+          bannerError = 'Room is not available for these dates.';
+          markTab('stay');
+        } else if (anteDate && availability?.subtotal == null && !availabilityChecking) {
+          bannerError = 'Unable to price this stay. Check the room and dates.';
+          markTab('stay');
+        }
       }
     }
   }

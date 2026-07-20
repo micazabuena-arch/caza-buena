@@ -18,6 +18,7 @@ function RoomLineCard({
   canRemove,
   roomsSearchUrl,
   usedRoomIds,
+  allowUnavailable,
 }) {
   const selectedRoom = rooms.find((r) => String(r.id) === String(line.room_id));
   const guestCount = roomLineGuestCount(line);
@@ -32,6 +33,7 @@ function RoomLineCard({
   const overCapacity = selectedRoom && guestCount > maxG;
   const underCapacity = selectedRoom && guestCount < minG;
   const lockThisRoom = roomLocked && index === 0;
+  const browseUrl = typeof roomsSearchUrl === 'function' ? roomsSearchUrl() : null;
 
   const availableRooms = rooms.filter((r) => {
     const id = String(r.id);
@@ -40,6 +42,8 @@ function RoomLineCard({
   });
 
   const update = (patch) => onChange(line.id, patch);
+  const calendarConflict =
+    line.room_id && lineQuote && !lineQuote.available && !lineQuote.occupancy_error;
 
   return (
     <div className="rounded-xl border border-aegean-200 bg-white overflow-hidden">
@@ -68,9 +72,11 @@ function RoomLineCard({
             {capacityLabel && (
               <p className="text-sm text-aegean-600 mt-1">{capacityLabel}</p>
             )}
-            <Link to={roomsSearchUrl()} className="text-sm text-aegean-500 hover:underline mt-2 inline-block">
-              Change room
-            </Link>
+            {browseUrl && (
+              <Link to={browseUrl} className="text-sm text-aegean-500 hover:underline mt-2 inline-block">
+                Change room
+              </Link>
+            )}
           </div>
         ) : (
           <div>
@@ -88,9 +94,9 @@ function RoomLineCard({
                 </option>
               ))}
             </select>
-            {!line.room_id && (
+            {!line.room_id && browseUrl && (
               <p className="text-xs text-aegean-500 mt-1.5">
-                <Link to={roomsSearchUrl()} className="underline">
+                <Link to={browseUrl} className="underline">
                   Browse available rooms
                 </Link>{' '}
                 for your dates.
@@ -153,8 +159,13 @@ function RoomLineCard({
         {lineQuote?.occupancy_error && (
           <p className="text-sm text-red-600">{lineQuote.occupancy_error}</p>
         )}
-        {line.room_id && lineQuote && !lineQuote.available && !lineQuote.occupancy_error && (
+        {calendarConflict && !allowUnavailable && (
           <p className="text-sm text-red-600">Not available for selected dates</p>
+        )}
+        {calendarConflict && allowUnavailable && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Calendar shows a conflict — ante-dated recording is still allowed for Statement of Account.
+          </p>
         )}
         {overCapacity && (
           <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
@@ -167,7 +178,9 @@ function RoomLineCard({
             This room requires at least {minG} guest{minG !== 1 ? 's' : ''}.
           </p>
         )}
-        {lineQuote?.available && lineQuote.subtotal != null && (
+        {lineQuote?.subtotal != null &&
+          (lineQuote.available || allowUnavailable) &&
+          !lineQuote.occupancy_error && (
           <p className="text-sm text-aegean-700">
             Room subtotal: <strong>₱{Number(lineQuote.subtotal).toLocaleString()}</strong>
             {lineQuote.nights ? ` · ${lineQuote.nights} night(s)` : ''}
@@ -189,6 +202,7 @@ export default function BookingRoomLinesSection({
   onRemoveLine,
   roomsSearchUrl,
   usedRoomIds,
+  allowUnavailable = false,
 }) {
   const totalGuests = lines.reduce((s, l) => s + roomLineGuestCount(l), 0);
 
@@ -208,6 +222,7 @@ export default function BookingRoomLinesSection({
           canRemove={lines.length > 1}
           roomsSearchUrl={roomsSearchUrl}
           usedRoomIds={usedRoomIds}
+          allowUnavailable={allowUnavailable}
         />
       ))}
 

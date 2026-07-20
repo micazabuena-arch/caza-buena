@@ -483,7 +483,12 @@ router.post(
   '/admin',
   authenticateAdmin,
   [
-    body('room_id').toInt().isInt({ min: 1 }),
+    body('room_id').optional({ nullable: true }).toInt().isInt({ min: 1 }),
+    body('room_lines').optional().isArray({ min: 1 }),
+    body('room_lines.*.room_id').optional().toInt().isInt({ min: 1 }),
+    body('room_lines.*.adults').optional().toInt().isInt({ min: 1 }),
+    body('room_lines.*.children_under6').optional().toInt().isInt({ min: 0 }),
+    body('room_lines.*.children_7_12').optional().toInt().isInt({ min: 0 }),
     body('guest_name').trim().notEmpty(),
     body('guest_email').isEmail(),
     body('guest_phone').trim().notEmpty(),
@@ -518,6 +523,11 @@ router.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const hasRoomLines = Array.isArray(req.body.room_lines) && req.body.room_lines.length > 0;
+    if (!hasRoomLines && !req.body.room_id) {
+      return res.status(400).json({ message: 'Select at least one room' });
+    }
 
     try {
       const { createManualBooking } = await import('../utils/manualBookingCreate.js');
