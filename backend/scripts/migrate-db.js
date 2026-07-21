@@ -276,6 +276,33 @@ async function run() {
     'UPDATE rooms SET price_weekend = ROUND(price_per_night * 1.2, 2) WHERE price_weekend IS NULL'
   );
 
+  console.log('\nquotations table:');
+  const [quotationsTable] = await pool.query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'quotations'`
+  );
+  if (Number(quotationsTable[0].c) === 0) {
+    await pool.query(`
+      CREATE TABLE quotations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        reference_code VARCHAR(20) NOT NULL UNIQUE,
+        guest_name VARCHAR(150) NOT NULL DEFAULT 'Untitled quote',
+        booking_id INT NULL,
+        quote_data JSON NOT NULL,
+        grand_total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_quotations_updated (updated_at)
+      )
+    `);
+    console.log('  + created quotations');
+  } else {
+    console.log('  ✓ quotations (already exists)');
+  }
+
   console.log('\nroom descriptions (fix ?? encoding):');
   const [descFix] = await pool.query(`
     UPDATE rooms SET short_description = CONCAT(

@@ -127,6 +127,8 @@ export default function App() {
             <Route path="payments" element={<AdminPaymentMethods />} />
             <Route path="pricing" element={<AdminPricing />} />
             <Route path="quotation" element={<AdminQuotation />} />
+            <Route path="quotation/new" element={<AdminQuotation />} />
+            <Route path="quotation/:id" element={<AdminQuotation />} />
             <Route path="guests" element={<AdminGuests />} />
             <Route path="inquiries" element={<AdminInquiries />} />
             <Route path="gallery" element={<AdminGallery />} />

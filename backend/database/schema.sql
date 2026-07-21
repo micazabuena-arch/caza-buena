@@ -262,6 +262,22 @@ CREATE TABLE IF NOT EXISTS contact_inquiries (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Saved admin quotations (full quote JSON for edit / reprint)
+CREATE TABLE IF NOT EXISTS quotations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  reference_code VARCHAR(20) NOT NULL UNIQUE,
+  guest_name VARCHAR(150) NOT NULL DEFAULT 'Untitled quote',
+  booking_id INT NULL,
+  quote_data JSON NOT NULL,
+  grand_total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_quotations_updated (updated_at)
+);
+
 -- Site settings (key-value)
 CREATE TABLE IF NOT EXISTS site_settings (
   id INT AUTO_INCREMENT PRIMARY KEY,

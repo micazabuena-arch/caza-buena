@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Printer, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Eye, Pencil, Plus, Printer, Save, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import AdminModal from '../components/admin/AdminModal';
 import QuotationDocument from '../components/admin/QuotationDocument';
+import Loading from '../components/ui/Loading';
+import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
+import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import {
@@ -16,6 +20,7 @@ import {
   emptyQuotationBoodleLine,
   emptyQuotationRoom,
   formatQuoteAmount,
+  normalizeQuotation,
 } from '../utils/quotation';
 import { openQuotationPrint } from '../utils/openQuotationPrint';
 
@@ -32,12 +37,75 @@ function Field({ label, children }) {
 }
 
 export default function AdminQuotation() {
+  const { id: routeId } = useParams();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
+
+  const isNewEditor = pathname.endsWith('/quotation/new');
+  const isEditor = isNewEditor || Boolean(routeId);
+
   const [quote, setQuote] = useState(emptyQuotation);
+  const [savedId, setSavedId] = useState(routeId && !isNewEditor ? Number(routeId) : null);
+  const [referenceCode, setReferenceCode] = useState('');
+  const [savedQuotes, setSavedQuotes] = useState([]);
+  const [pageLoading, setPageLoading] = useState(Boolean(routeId && !isNewEditor));
+  const [listLoading, setListLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [loadModalOpen, setLoadModalOpen] = useState(false);
   const [loadRef, setLoadRef] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loadLoading, setLoadLoading] = useState(false);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [viewQuote, setViewQuote] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
+
+  const loadSavedList = useCallback(() => {
+    setListLoading(true);
+    return api
+      .get('/quotations/admin')
+      .then((r) => setSavedQuotes(r.data || []))
+      .catch(() => setSavedQuotes([]))
+      .finally(() => setListLoading(false));
+  }, []);
+
+  const loadSavedQuote = useCallback(async (id) => {
+    setPageLoading(true);
+    try {
+      const { data } = await api.get(`/quotations/admin/${id}`);
+      setQuote(normalizeQuotation(data.quote_data));
+      setSavedId(data.id);
+      setReferenceCode(data.reference_code || '');
+    } catch (err) {
+      toast.error(getApiError(err));
+      navigate('/admin/quotation', { replace: true });
+    } finally {
+      setPageLoading(false);
+    }
+  }, [navigate, toast]);
+
+  useEffect(() => {
+    loadSavedList();
+  }, [loadSavedList]);
+
+  useEffect(() => {
+    if (isNewEditor) {
+      setSavedId(null);
+      setReferenceCode('');
+      setQuote(emptyQuotation());
+      setPageLoading(false);
+      return;
+    }
+    if (routeId) {
+      loadSavedQuote(routeId);
+      return;
+    }
+    setSavedId(null);
+    setReferenceCode('');
+    setPageLoading(false);
+  }, [routeId, isNewEditor, loadSavedQuote]);
 
   useEffect(() => {
     api
@@ -287,6 +355,245 @@ export default function AdminQuotation() {
 
   const openPrint = () => openQuotationPrint(quote);
 
+  const startNewQuote = () => {
+    navigate('/admin/quotation/new');
+  };
+
+  const backToList = () => {
+    navigate('/admin/quotation');
+  };
+
+  const saveQuote = async () => {
+    const guestLabel = quote.guestName?.trim() || 'this quotation';
+    const isEdit = Boolean(savedId);
+    const ok = await confirm({
+      title: isEdit ? 'Save quotation changes?' : 'Save quotation?',
+      message: isEdit
+        ? `Update the saved quote for ${guestLabel}?`
+        : `Save ${guestLabel} so you can edit or reprint it later?`,
+      confirmLabel: isEdit ? 'Yes, save' : 'Yes, save quote',
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const payload = {
+        quote_data: quote,
+        grand_total: totals.grandTotal,
+        guest_name: quote.guestName?.trim() || 'Untitled quote',
+      };
+      if (isEdit) {
+        await api.put(`/quotations/admin/${savedId}`, payload);
+        toast.success('Quotation updated.');
+        loadSavedList();
+      } else {
+        const { data } = await api.post('/quotations/admin', payload);
+        setSavedId(data.id);
+        setReferenceCode(data.reference_code || '');
+        toast.success('Quotation saved.');
+        loadSavedList();
+        navigate(`/admin/quotation/${data.id}`, { replace: true });
+      }
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSavedQuote = async () => {
+    if (!savedId) return;
+    await deleteQuote({
+      id: savedId,
+      reference_code: referenceCode,
+      guest_name: quote.guestName,
+    });
+  };
+
+  const deleteQuote = async (item) => {
+    const ok = await confirm({
+      title: 'Delete quotation?',
+      message: item.reference_code
+        ? `${item.reference_code}${item.guest_name ? ` for ${item.guest_name}` : ''} will be permanently deleted.`
+        : 'This saved quotation will be permanently deleted.',
+      confirmLabel: 'Yes, delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      await api.delete(`/quotations/admin/${item.id}`);
+      toast.success('Quotation deleted.');
+      if (viewQuote?.id === item.id) closeViewModal();
+      if (savedId === item.id && isEditor) backToList();
+      loadSavedList();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
+  const openViewQuote = async (item) => {
+    setViewModalOpen(true);
+    setViewLoading(true);
+    setViewQuote(null);
+    try {
+      const { data } = await api.get(`/quotations/admin/${item.id}`);
+      setViewQuote({
+        ...data,
+        quote_data: normalizeQuotation(data.quote_data),
+      });
+    } catch (err) {
+      toast.error(getApiError(err));
+      setViewModalOpen(false);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const closeViewModal = () => {
+    setViewModalOpen(false);
+    setViewQuote(null);
+    setViewLoading(false);
+  };
+
+  const openSavedQuote = (item) => {
+    navigate(`/admin/quotation/${item.id}`);
+  };
+
+  if (pageLoading) return <Loading />;
+
+  const viewQuoteModal = (
+    <AdminModal
+      open={viewModalOpen}
+      onClose={closeViewModal}
+      title={viewQuote?.reference_code ? `Quotation ${viewQuote.reference_code}` : 'View quotation'}
+      description={
+        viewQuote?.guest_name
+          ? `${viewQuote.guest_name} · ₱${formatQuoteAmount(viewQuote.grand_total)}`
+          : 'Read-only preview of the saved quotation.'
+      }
+      size="xl"
+    >
+      {viewLoading ? (
+        <Loading />
+      ) : viewQuote?.quote_data ? (
+        <div className="space-y-4">
+          <div className="overflow-x-auto rounded-xl border border-aegean-100 p-4 bg-white">
+            <QuotationDocument quote={viewQuote.quote_data} />
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => openQuotationPrint(viewQuote.quote_data)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700"
+            >
+              <Printer size={16} /> Print / PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeViewModal();
+                openSavedQuote(viewQuote);
+              }}
+              className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
+            >
+              Edit quotation
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </AdminModal>
+  );
+
+  const savedListSection = (
+    <section className="bg-white rounded-xl border border-aegean-100 p-5">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="font-medium text-aegean-800">Saved quotations</h2>
+          <p className="text-xs text-aegean-500 mt-1">
+            Open a saved quote to edit, reprint, or delete it.
+          </p>
+        </div>
+      </div>
+      {listLoading ? (
+        <p className="text-sm text-aegean-500">Loading saved quotes…</p>
+      ) : savedQuotes.length === 0 ? (
+        <p className="text-sm text-aegean-500">No saved quotations yet. Click New quote to create one.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-aegean-600 border-b border-aegean-100">
+                <th className="py-2 pr-3 font-medium">Reference</th>
+                <th className="py-2 pr-3 font-medium">Guest</th>
+                <th className="py-2 pr-3 font-medium">Total</th>
+                <th className="py-2 pr-3 font-medium">Updated</th>
+                <th className="py-2 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {savedQuotes.map((item) => (
+                <tr key={item.id} className="border-b border-aegean-50">
+                  <td className="py-2.5 pr-3 font-mono text-xs">{item.reference_code}</td>
+                  <td className="py-2.5 pr-3">{item.guest_name || '—'}</td>
+                  <td className="py-2.5 pr-3">₱{formatQuoteAmount(item.grand_total)}</td>
+                  <td className="py-2.5 pr-3 text-aegean-500">
+                    {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <IconActionGroup className="justify-end">
+                      <IconActionButton
+                        icon={Eye}
+                        label="View quotation"
+                        onClick={() => openViewQuote(item)}
+                      />
+                      <IconActionButton
+                        icon={Pencil}
+                        label="Edit quotation"
+                        onClick={() => openSavedQuote(item)}
+                      />
+                      <IconActionButton
+                        icon={Trash2}
+                        label="Delete quotation"
+                        className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                        onClick={() => deleteQuote(item)}
+                      />
+                    </IconActionGroup>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+
+  if (!isEditor) {
+    return (
+      <div className="admin-quotation-page">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-serif text-aegean-800">Quotations</h1>
+            <p className="text-sm text-aegean-600 mt-1">
+              Create a new quote or open a saved one to edit or print.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={startNewQuote}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700"
+          >
+            <Plus size={16} /> New quote
+          </button>
+        </div>
+
+        {savedListSection}
+        {viewQuoteModal}
+      </div>
+    );
+  }
+
   return (
     <div className="admin-quotation-page">
       <style>{`
@@ -310,10 +617,22 @@ export default function AdminQuotation() {
 
       <div className="no-print mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-serif text-aegean-800">Quotation</h1>
+          <button
+            type="button"
+            onClick={backToList}
+            className="inline-flex items-center gap-1 text-sm text-aegean-600 hover:text-aegean-800 mb-2"
+          >
+            <ArrowLeft size={16} /> Back to quotations
+          </button>
+          <h1 className="text-2xl font-serif text-aegean-800">
+            {savedId ? 'Edit quotation' : 'New quotation'}
+          </h1>
           <p className="text-sm text-aegean-600 mt-1">
-            Build a booking quotation, then print or save as PDF.
+            Build the quote, save it, then print or share as PDF.
           </p>
+          {referenceCode && (
+            <p className="text-xs text-aegean-500 mt-1 font-mono">{referenceCode}</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -325,10 +644,27 @@ export default function AdminQuotation() {
           </button>
           <button
             type="button"
+            onClick={saveQuote}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-aegean-300 bg-aegean-50 text-aegean-800 text-sm hover:bg-aegean-100 disabled:opacity-50"
+          >
+            <Save size={16} /> {saving ? 'Saving…' : savedId ? 'Save changes' : 'Save quote'}
+          </button>
+          {savedId && (
+            <button
+              type="button"
+              onClick={deleteSavedQuote}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-700 text-sm hover:bg-red-50"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+          )}
+          <button
+            type="button"
             onClick={() => setQuote(emptyQuotation())}
             className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
           >
-            Clear
+            Clear form
           </button>
           <button
             type="button"
@@ -942,6 +1278,8 @@ export default function AdminQuotation() {
           </div>
         </form>
       </AdminModal>
+
+      {viewQuoteModal}
     </div>
   );
 }
