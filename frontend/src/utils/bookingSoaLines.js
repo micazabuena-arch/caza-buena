@@ -1,4 +1,5 @@
 import { parseStayAddons, stayAddonsTotal } from './stayAddons.js';
+import { parseIslandHoppingData } from '../data/islandHoppingRates.js';
 
 function customAddonsTotal(addons) {
   if (!Array.isArray(addons)) return 0;
@@ -93,7 +94,7 @@ export function buildBookingSoaLineItems(booking, docType = 'soa') {
   // Food / tour packages always appear at the bottom of the charges table.
   if (booking.island_hopping && Number(booking.island_hopping_amount) > 0) {
     lines.push({
-      label: 'Hundred Island tour',
+      label: islandTourSoaLabel(booking),
       amount: Number(booking.island_hopping_amount),
     });
   }
@@ -108,6 +109,17 @@ export function buildBookingSoaLineItems(booking, docType = 'soa') {
   }
 
   return lines;
+}
+
+/** SOA line label for island hopping — summary shows pax count instead of passenger names. */
+export function islandTourSoaLabel(booking) {
+  const island = parseIslandHoppingData(booking?.island_hopping_data);
+  if (island?.soa_summary && island.summary_pax) {
+    return `Hundred Islands tour (${island.summary_pax} pax)`;
+  }
+  const pax = island?.passenger_count || island?.passengers?.length;
+  if (pax > 0) return `Hundred Islands tour (${pax} pax)`;
+  return 'Hundred Island tour';
 }
 
 /** Format amounts like the resort SOA sample (commas, decimals only when needed). */

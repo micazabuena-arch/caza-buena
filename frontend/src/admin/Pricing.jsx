@@ -110,7 +110,8 @@ export default function AdminPricing() {
           <h2 className="font-medium text-aegean-800">Extra guest rates</h2>
           <p className="text-sm text-aegean-600 mt-1">
             Per-night fees when guests exceed the adults included in the room package. Weekday is
-            Mon–Thu; weekend is Fri–Sun (same as room rates).
+            Mon–Thu; weekend is Fri–Sun (same as room rates). Amounts can include centavos (e.g.
+            1990.45).
           </p>
         </div>
 
@@ -124,7 +125,7 @@ export default function AdminPricing() {
               <input
                 type="number"
                 min="0"
-                step="1"
+                step="0.01"
                 value={extraRatesForm.adult_weekday}
                 onChange={(e) =>
                   setExtraRatesForm((f) => ({ ...f, adult_weekday: e.target.value }))
@@ -144,7 +145,7 @@ export default function AdminPricing() {
               <input
                 type="number"
                 min="0"
-                step="1"
+                step="0.01"
                 value={extraRatesForm.adult_weekend}
                 onChange={(e) =>
                   setExtraRatesForm((f) => ({ ...f, adult_weekend: e.target.value }))
@@ -164,7 +165,7 @@ export default function AdminPricing() {
               <input
                 type="number"
                 min="0"
-                step="1"
+                step="0.01"
                 value={extraRatesForm.child_7_12}
                 onChange={(e) =>
                   setExtraRatesForm((f) => ({ ...f, child_7_12: e.target.value }))

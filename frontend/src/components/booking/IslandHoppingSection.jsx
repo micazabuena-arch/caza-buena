@@ -118,6 +118,64 @@ export default function IslandHoppingSection({
 
       {enabled && (
         <div className="space-y-6 pt-2 border-t border-aegean-200">
+          {optionalFields && (
+            <div className="rounded-lg border border-aegean-200 bg-white p-4 space-y-3">
+              <label className="flex items-start gap-2 text-sm text-aegean-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(data.soa_summary)}
+                  onChange={(e) =>
+                    update({
+                      soa_summary: e.target.checked,
+                      summary_pax: e.target.checked ? data.summary_pax || '' : '',
+                      summary_amount: e.target.checked ? data.summary_amount || '' : '',
+                    })
+                  }
+                  className="mt-1 rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
+                />
+                <span>
+                  <strong>Summary for SOA only</strong>
+                  <span className="block text-xs text-aegean-500 mt-0.5">
+                    Enter pax count and total amount only — no passenger list on the statement of
+                    account. Use Print manifest later if you need the full guest list.
+                  </span>
+                </span>
+              </label>
+              {data.soa_summary && (
+                <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                  <label className="block">
+                    <span className="block text-xs font-medium text-aegean-600 mb-1">
+                      Number of pax *
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={ISLAND_HOPPING_RATES.maxPassengers}
+                      value={data.summary_pax}
+                      onChange={(e) => update({ summary_pax: e.target.value })}
+                      className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-xs font-medium text-aegean-600 mb-1">
+                      Total amount (₱) *
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={data.summary_amount}
+                      onChange={(e) => update({ summary_amount: e.target.value })}
+                      className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!data.soa_summary && (
+          <>
           <div>
             <p className="text-sm font-medium text-aegean-800 mb-3">
               {`1. Guest details — name, age, gender, first-timer & PWD status${star}`}
@@ -368,6 +426,24 @@ export default function IslandHoppingSection({
             </div>
           )}
           {quote?.error && <p className="text-sm text-red-600">{quote.error}</p>}
+          </>
+          )}
+
+          {data.soa_summary && (
+            <div className="rounded-xl border border-aegean-300 bg-white p-4">
+              <p className="font-medium text-aegean-800">Island hopping summary</p>
+              <p className="text-sm text-aegean-700 mt-2">
+                {data.summary_pax || '—'} pax · ₱
+                {Number(parseFloat(data.summary_amount) || 0).toLocaleString('en-PH', {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
+              <p className="text-xs text-aegean-500 mt-2">
+                This will appear on the SOA as one line with pax count and amount.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

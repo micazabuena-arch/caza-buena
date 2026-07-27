@@ -52,11 +52,26 @@ router.get('/validate-discount', async (req, res) => {
 
 // Public: check availability
 router.get('/availability', async (req, res) => {
-  const { room_id, check_in, check_out, adults, children_under6, children_7_12 } = req.query;
+  const {
+    room_id,
+    check_in,
+    check_out,
+    adults,
+    children_under6,
+    children_7_12,
+    exclude_booking_id,
+  } = req.query;
   if (!room_id || !check_in || !check_out) {
     return res.status(400).json({ message: 'room_id, check_in, check_out required' });
   }
-  const available = await isRoomAvailable(pool, room_id, check_in, check_out);
+  const excludeId = exclude_booking_id ? parseInt(exclude_booking_id, 10) : null;
+  const available = await isRoomAvailable(
+    pool,
+    room_id,
+    check_in,
+    check_out,
+    Number.isFinite(excludeId) ? excludeId : null
+  );
   const nights = calculateNights(check_in, check_out);
   let subtotal = null;
   let breakdown = [];
@@ -666,6 +681,12 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
         req.params.id,
       ]
     );
+
+    if (Array.isArray(result.pricedLines) && result.pricedLines.length > 0) {
+      const { insertBookingRooms } = await import('../utils/bookingRooms.js');
+      await pool.query('DELETE FROM booking_rooms WHERE booking_id = ?', [req.params.id]);
+      await insertBookingRooms(pool, req.params.id, result.pricedLines);
+    }
 
     const [updated] = await pool.query(
       `SELECT b.*, r.name AS room_name, pm.name AS payment_method_name, pm.type AS payment_method_type

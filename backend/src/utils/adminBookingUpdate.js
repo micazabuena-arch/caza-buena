@@ -5,14 +5,16 @@ import {
   resolveStoredManualPayment,
   stripManualPaymentFromNotes,
 } from './manualBookingPayment.js';
+import { normalizeRoomLines, validateAndPriceRoomLines } from './bookingRooms.js';
 
 /**
  * Validates and computes pricing for an admin booking update.
- * Returns { error } or { values } ready for UPDATE.
+ * Returns { error } or { values, pricedLines? } ready for UPDATE.
  */
 export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   const {
     room_id,
+    room_lines: roomLinesBody,
     guest_name,
     guest_email,
     guest_phone,
@@ -42,47 +44,95 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     admin_discount_note,
   } = body;
 
-  const roomId = parseInt(room_id ?? existingBooking.room_id, 10);
-  const adultsN = parseInt(adults ?? existingBooking.adults ?? 1, 10);
-  const childrenUnder6 = parseInt(children_under6, 10) || 0;
-  const children712 = parseInt(children_7_12, 10) || 0;
-  const guestCount = adultsN + childrenUnder6 + children712;
-
   const checkIn = String(check_in ?? existingBooking.check_in).slice(0, 10);
   const checkOut = String(check_out ?? existingBooking.check_out).slice(0, 10);
   const nights = calculateNights(checkIn, checkOut);
   if (nights < 1) return { error: 'Check-out must be after check-in' };
 
-  const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ?', [roomId]);
-  if (rooms.length === 0) return { error: 'Room not found' };
-  const room = rooms[0];
-
+  const hasRoomLines = Array.isArray(roomLinesBody) && roomLinesBody.length > 0;
   const blocksAvailability = ['pending', 'awaiting_payment', 'payment_submitted', 'confirmed'].includes(
     existingBooking.status
   );
-  // Past check-in = ante-date recording; do not block on overlapping calendar holds.
-  if (blocksAvailability && !isAnteDateCheckIn(checkIn)) {
-    const available = await isRoomAvailable(pool, roomId, checkIn, checkOut, existingBooking.id);
-    if (!available) return { error: 'Room is not available for the selected dates' };
+  const skipAvailabilityCheck =
+    !blocksAvailability || isAnteDateCheckIn(checkIn);
+
+  let roomId;
+  let room;
+  let hasSuite = false;
+  let adultsN;
+  let childrenUnder6;
+  let children712;
+  let guestCount;
+  let staySubtotal;
+  let extraPersonCharges;
+  let avgNightlyRate;
+  let pricedLines = null;
+
+  if (hasRoomLines) {
+    const rawLines = normalizeRoomLines({
+      room_id,
+      room_lines: roomLinesBody,
+      adults,
+      children_under6,
+      children_7_12,
+    });
+
+    const priced = await validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, {
+      skipAvailabilityCheck,
+      allowInactiveRooms: true,
+      excludeBookingId: existingBooking.id,
+    });
+    if (priced.error) return { error: priced.error };
+
+    pricedLines = priced.lines;
+    room = priced.primaryRoom;
+    hasSuite = priced.hasSuite;
+    roomId = pricedLines[0].room_id;
+    adultsN = priced.totalAdults;
+    childrenUnder6 = priced.totalUnder6;
+    children712 = priced.total712;
+    guestCount = priced.totalGuests;
+    staySubtotal = priced.combinedSubtotal;
+    extraPersonCharges = priced.combinedExtraCharges;
+    avgNightlyRate = nights > 0 ? staySubtotal / nights : Number(room.price_per_night);
+  } else {
+    roomId = parseInt(room_id ?? existingBooking.room_id, 10);
+    adultsN = parseInt(adults ?? existingBooking.adults ?? 1, 10);
+    childrenUnder6 = parseInt(children_under6, 10) || 0;
+    children712 = parseInt(children_7_12, 10) || 0;
+    guestCount = adultsN + childrenUnder6 + children712;
+
+    const [rooms] = await pool.query('SELECT * FROM rooms WHERE id = ?', [roomId]);
+    if (rooms.length === 0) return { error: 'Room not found' };
+    room = rooms[0];
+
+    if (!skipAvailabilityCheck) {
+      const available = await isRoomAvailable(pool, roomId, checkIn, checkOut, existingBooking.id);
+      if (!available) return { error: 'Room is not available for the selected dates' };
+    }
+
+    const { validateOccupancy } = await import('../config/resortRules.js');
+    const occCheck = validateOccupancy(room, {
+      adults: adultsN,
+      childrenUnder6,
+      children7_12: children712,
+    });
+    if (!occCheck.valid) return { error: occCheck.message };
+
+    const { calculateStayTotal } = await import('./pricing.js');
+    const stay = await calculateStayTotal(pool, roomId, checkIn, checkOut, {
+      adults: adultsN,
+      childrenUnder6,
+      children7_12: children712,
+    });
+
+    staySubtotal = stay.subtotal;
+    extraPersonCharges = stay.extraPersonCharges || 0;
+    avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(room.price_per_night);
   }
 
-  const { validateOccupancy } = await import('../config/resortRules.js');
-  const occCheck = validateOccupancy(room, {
-    adults: adultsN,
-    childrenUnder6,
-    children7_12: children712,
-  });
-  if (!occCheck.valid) return { error: occCheck.message };
-
-  const { calculateStayTotal } = await import('./pricing.js');
-  const stay = await calculateStayTotal(pool, roomId, checkIn, checkOut, {
-    adults: adultsN,
-    childrenUnder6,
-    children7_12: children712,
-  });
-
   const discountResolved = await resolveAdminBookingDiscount(pool, {
-    staySubtotal: stay.subtotal,
+    staySubtotal,
     nights,
     discount_code: existingBooking.discount_code || null,
     admin_discount_amount:
@@ -108,58 +158,15 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   const existingIsland = parseIslandHoppingData(existingBooking.island_hopping_data);
 
   if (islandHopping) {
-    const { validateIslandHoppingPayloadLenient, isIslandHoppingComplete, calculateIslandHopping } =
-      await import('./islandHopping.js');
-
-    // Admin edits allow partial island hopping details so names / payor / emergency
-    // contact can be filled in later. Only hard constraints (max passengers) block here.
+    const { parseIslandHoppingData, resolveAdminIslandHoppingPricing } = await import(
+      './islandHopping.js'
+    );
+    const existingIsland = parseIslandHoppingData(existingBooking.island_hopping_data);
     const ihData = islandHoppingData || {};
-    const validation = validateIslandHoppingPayloadLenient(ihData);
-    if (!validation.valid) return { error: validation.message };
-
-    const trim = (v) => (v == null ? '' : String(v).trim());
-    // Keep any previously uploaded senior / PWD ID references when re-saving.
-    const passengers = (ihData.passengers || []).map((p, i) => ({
-      ...p,
-      senior_id_url: existingIsland?.passengers?.[i]?.senior_id_url ?? p.senior_id_url ?? null,
-      senior_id_public_id:
-        existingIsland?.passengers?.[i]?.senior_id_public_id ?? p.senior_id_public_id ?? null,
-      pwd_id_url: existingIsland?.passengers?.[i]?.pwd_id_url ?? p.pwd_id_url ?? null,
-      pwd_id_public_id:
-        existingIsland?.passengers?.[i]?.pwd_id_public_id ?? p.pwd_id_public_id ?? null,
-    }));
-
-    const baseStored = {
-      passengers,
-      passenger_address: trim(ihData.passenger_address),
-      payor_name: trim(ihData.payor_name),
-      payor_address: trim(ihData.payor_address),
-      payor_phone: trim(ihData.payor_phone),
-      emergency_contact_name: trim(ihData.emergency_contact_name),
-      emergency_contact_phone: trim(ihData.emergency_contact_phone),
-    };
-
-    // Price the tour only when full details are present; otherwise save partial
-    // details with a ₱0 amount so they can be completed (and priced) later.
-    if (isIslandHoppingComplete(ihData)) {
-      try {
-        const computed = calculateIslandHopping(ihData.passengers);
-        if (computed.error) return { error: computed.error };
-        islandHoppingAmount = computed.total;
-        islandHoppingStored = {
-          ...baseStored,
-          breakdown: computed.breakdown,
-          boat_tier: computed.boat_tier,
-          boat_label: computed.boat_label,
-          total: computed.total,
-        };
-      } catch (e) {
-        return { error: e.message || 'Invalid island hopping details' };
-      }
-    } else {
-      islandHoppingAmount = 0;
-      islandHoppingStored = baseStored;
-    }
+    const resolved = resolveAdminIslandHoppingPricing(ihData, existingIsland);
+    if (resolved.error) return { error: resolved.error };
+    islandHoppingAmount = resolved.amount;
+    islandHoppingStored = resolved.stored;
   }
 
   const { validateBookingExtras } = await import('./bookingExtras.js');
@@ -173,11 +180,11 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       boodle_fight_enabled,
       boodle_fight_tier,
     },
-    room.room_type
+    hasSuite ? 'suite' : room.room_type
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 
-  const roomTotal = Math.max(0, stay.subtotal - (discountResolved.amount || 0));
+  const roomTotal = Math.max(0, staySubtotal - (discountResolved.amount || 0));
 
   // Keep during-stay JSON charges and custom booking_addons rows in the total
   const { stayAddonsTotal } = await import('./stayAddons.js');
@@ -209,8 +216,6 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       : undefined;
   const payResolved = resolveAmountToPay(total, payOption, customAmount, depositPercent);
   if (payResolved.error) return { error: payResolved.error };
-
-  const avgNightlyRate = nights > 0 ? stay.subtotal / nights : Number(room.price_per_night);
 
   const storedPayment = resolveStoredManualPayment({
     manual_payment_method,
@@ -253,7 +258,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       discount_code: discountResolved.code,
       discount_note: discountResolved.note,
       total_amount: total,
-      extra_person_charges: stay.extraPersonCharges || 0,
+      extra_person_charges: extraPersonCharges,
       island_hopping: islandHopping ? 1 : 0,
       island_hopping_amount: islandHoppingAmount,
       island_hopping_data: islandHoppingStored ? JSON.stringify(islandHoppingStored) : null,
@@ -270,5 +275,6 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       payment_option: payOption,
       amount_to_pay: payResolved.amount,
     },
+    pricedLines,
   };
 }

@@ -802,6 +802,7 @@ export default function AdminQuotation() {
                     <input
                       type="number"
                       min={0}
+                      step="0.01"
                       className={inputClass}
                       value={row.rate}
                       onChange={(e) => patchRoom(index, { rate: e.target.value })}
@@ -890,6 +891,7 @@ export default function AdminQuotation() {
                       <input
                         type="number"
                         min={0}
+                        step="0.01"
                         className={inputClass}
                         value={paxRow.amount}
                         onChange={(e) =>
@@ -915,6 +917,7 @@ export default function AdminQuotation() {
                 <input
                   type="number"
                   min={0}
+                  step="0.01"
                   className={inputClass}
                   value={quote.discountAmount}
                   onChange={(e) => patch({ discountAmount: e.target.value })}
@@ -932,6 +935,7 @@ export default function AdminQuotation() {
                 <input
                   type="number"
                   min={0}
+                  step="0.01"
                   className={inputClass}
                   value={quote.downPaymentAmount}
                   onChange={(e) => patch({ downPaymentAmount: e.target.value })}

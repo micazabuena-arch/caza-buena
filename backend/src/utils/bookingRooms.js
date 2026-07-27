@@ -38,7 +38,11 @@ export function normalizeRoomLines(body) {
  * @param {boolean} [options.allowInactiveRooms] - Allow booking rooms marked inactive (admin only).
  */
 export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, options = {}) {
-  const { skipAvailabilityCheck = false, allowInactiveRooms = false } = options;
+  const {
+    skipAvailabilityCheck = false,
+    allowInactiveRooms = false,
+    excludeBookingId = null,
+  } = options;
   const checkInStr = String(checkIn).slice(0, 10);
   const checkOutStr = String(checkOut).slice(0, 10);
   const nights = calculateNights(checkInStr, checkOutStr);
@@ -82,7 +86,13 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
 
     // Past (ante-dated) admin bookings skip calendar holds so staff can still record / SOA.
     if (!skipAvailabilityCheck) {
-      const available = await isRoomAvailable(pool, roomId, checkInStr, checkOutStr);
+      const available = await isRoomAvailable(
+        pool,
+        roomId,
+        checkInStr,
+        checkOutStr,
+        excludeBookingId
+      );
       if (!available) {
         return { error: `${room.name} is not available for the selected dates` };
       }

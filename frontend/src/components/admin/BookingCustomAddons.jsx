@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../../api/client';
+import { formatMoney } from '../../utils/money';
 import { useToast } from '../../context/ToastContext';
 import IconActionButton from '../ui/IconActionButton';
 
@@ -307,7 +308,7 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange, 
                       <p className="text-xs text-aegean-500 mt-0.5">{addon.description}</p>
                     )}
                     <p className="text-sm font-medium text-aegean-700 mt-1">
-                      ₱{Number(addon.amount || 0).toLocaleString()}
+                      ₱{formatMoney(addon.amount)}
                     </p>
                   </div>
                   {editingId == null && (
@@ -332,7 +333,7 @@ export default function BookingCustomAddons({ bookingId, addons = [], onChange, 
         <div className="flex justify-between items-center border-t border-aegean-100 pt-3">
           <span className="text-sm font-medium text-aegean-700">Extra charges total</span>
           <span className="text-base font-semibold text-aegean-800">
-            ₱{totalAmount.toLocaleString()}
+            ₱{formatMoney(totalAmount)}
           </span>
         </div>
       )}

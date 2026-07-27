@@ -182,6 +182,9 @@ export function emptyPassenger() {
 }
 
 export const emptyIslandHoppingForm = () => ({
+  soa_summary: false,
+  summary_pax: '',
+  summary_amount: '',
   passengers: [emptyPassenger()],
   passenger_address: '',
   payor_name: '',
@@ -190,3 +193,15 @@ export const emptyIslandHoppingForm = () => ({
   emergency_contact_name: '',
   emergency_contact_phone: '',
 });
+
+/** Admin manual booking: total from summary mode or computed passenger list. */
+export function getAdminIslandHoppingTotal(data) {
+  if (!data) return 0;
+  if (data.soa_summary) {
+    const amount = parseFloat(data.summary_amount);
+    return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+  }
+  const quote = calculateIslandHopping(data.passengers);
+  if (!quote || quote.error || !quote.complete) return 0;
+  return quote.total;
+}

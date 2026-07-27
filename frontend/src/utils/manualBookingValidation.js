@@ -30,6 +30,7 @@ export function validateManualBookingFields(form, context = {}) {
     extrasQuote,
     islandHoppingEnabled,
     islandQuote,
+    islandHopping = null,
     totalAmount,
     customPay,
     roomSubtotal,
@@ -196,10 +197,17 @@ export function validateManualBookingFields(form, context = {}) {
       markTab('addons');
     }
     if (islandHoppingEnabled) {
-      // Admin island hopping details are optional — clients may not give passenger
-      // names / payor / emergency contact up front, and these can be filled in later.
-      // Only block on hard errors (e.g. exceeding the max passengers per boat).
-      if (islandQuote?.error) {
+      if (islandHopping?.soa_summary) {
+        const pax = parseInt(islandHopping.summary_pax, 10);
+        const amount = parseFloat(islandHopping.summary_amount);
+        if (!Number.isFinite(pax) || pax < 1) {
+          bannerError = 'Enter the number of island hopping passengers.';
+          markTab('addons');
+        } else if (!Number.isFinite(amount) || amount < 0) {
+          bannerError = 'Enter a valid island hopping amount.';
+          markTab('addons');
+        }
+      } else if (islandQuote?.error) {
         bannerError = islandQuote.error;
         markTab('addons');
       }

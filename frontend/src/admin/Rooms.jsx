@@ -37,7 +37,10 @@ const emptyHolidayForm = () => ({
   price_per_night: '',
 });
 
-const formatPeso = (n) => `₱${Number(n || 0).toLocaleString()}`;
+const formatPeso = (n) => {
+  const num = Number(n || 0);
+  return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+};
 
 function slugify(text) {
   return text

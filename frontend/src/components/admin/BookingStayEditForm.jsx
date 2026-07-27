@@ -4,17 +4,26 @@ import SubmitButton from '../ui/SubmitButton';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
+import BookingRoomLinesSection from '../booking/BookingRoomLinesSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
 import { validateBookingExtras } from '../../data/bookingAddOns';
 import { MANUAL_ONLY_PAYMENT_METHODS } from '../../data/manualBookingPayment';
-import { calculateIslandHopping } from '../../data/islandHoppingRates';
+import { calculateIslandHopping, getAdminIslandHoppingTotal } from '../../data/islandHoppingRates';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
 import { stayAddonsTotal } from '../../utils/stayAddons';
+import { formatMoney } from '../../utils/money';
+import {
+  bookingToRoomLines,
+  createRoomLine,
+  roomLinesPayloadEqual,
+  roomLinesToPayload,
+  usedRoomIds,
+} from '../../utils/bookingRoomLines';
 import BookingCustomAddons from './BookingCustomAddons';
 
 const inputClass =
@@ -59,6 +68,9 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [depositPercent, setDepositPercent] = useState(20);
   const [form, setForm] = useState(() => bookingToEditState(booking));
+  const [roomLines, setRoomLines] = useState(() => bookingToRoomLines(booking));
+  const [lineQuotes, setLineQuotes] = useState({});
+  const [lineQuotesLoading, setLineQuotesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('stay');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -69,9 +81,104 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
 
   useEffect(() => {
     setForm(bookingToEditState(booking));
+    setRoomLines(bookingToRoomLines(booking));
     setError('');
     setActiveTab('stay');
   }, [booking?.id]);
+
+  const originalRoomLines = useMemo(() => bookingToRoomLines(booking), [booking?.id]);
+  const anteDate = isPastStayDate(form.check_in);
+
+  useEffect(() => {
+    if (!form.check_in || !form.check_out) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
+    }
+
+    const linesWithRoom = roomLines.filter((line) => line.room_id);
+    if (linesWithRoom.length === 0) {
+      setLineQuotes({});
+      setLineQuotesLoading(false);
+      return undefined;
+    }
+
+    setLineQuotesLoading(true);
+    let cancelled = false;
+
+    Promise.all(
+      linesWithRoom.map((line) =>
+        api
+          .get('/bookings/availability', {
+            params: {
+              room_id: line.room_id,
+              check_in: form.check_in,
+              check_out: form.check_out,
+              adults: line.adults,
+              children_under6: line.children_under6,
+              children_7_12: line.children_7_12,
+              exclude_booking_id: booking.id,
+            },
+          })
+          .then((r) => ({ id: line.id, data: r.data }))
+          .catch(() => ({ id: line.id, data: null }))
+      )
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const next = {};
+        results.forEach(({ id, data }) => {
+          next[id] = data;
+        });
+        setLineQuotes(next);
+      })
+      .finally(() => {
+        if (!cancelled) setLineQuotesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomLines, form.check_in, form.check_out, booking.id]);
+
+  const stayConfigChanged =
+    form.check_in !== (booking.check_in?.slice(0, 10) || '') ||
+    form.check_out !== (booking.check_out?.slice(0, 10) || '') ||
+    !roomLinesPayloadEqual(roomLines, originalRoomLines);
+
+  const datesChanged =
+    form.check_in !== (booking.check_in?.slice(0, 10) || '') ||
+    form.check_out !== (booking.check_out?.slice(0, 10) || '');
+
+  useEffect(() => {
+    if (
+      !form.check_in ||
+      !form.check_out ||
+      roomLines.length !== 1 ||
+      !roomLines[0]?.room_id ||
+      !datesChanged
+    ) {
+      setRebookQuote(null);
+      return;
+    }
+
+    setRebookQuoteLoading(true);
+    const timer = setTimeout(() => {
+      api
+        .get(`/bookings/admin/${booking.id}/rebook-quote`, {
+          params: {
+            check_in: form.check_in,
+            check_out: form.check_out,
+            room_id: roomLines[0].room_id,
+          },
+        })
+        .then((r) => setRebookQuote(r.data))
+        .catch(() => setRebookQuote(null))
+        .finally(() => setRebookQuoteLoading(false));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [booking.id, roomLines, form.check_in, form.check_out, datesChanged]);
 
   useEffect(() => {
     Promise.all([
@@ -89,53 +196,26 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       .catch(() => {});
   }, []);
 
-  const stayDatesChanged =
-    form.check_in !== (booking.check_in?.slice(0, 10) || '') ||
-    form.check_out !== (booking.check_out?.slice(0, 10) || '') ||
-    String(form.room_id) !== String(booking.room_id);
+  const roomType = roomLines.some(
+    (line) => rooms.find((r) => String(r.id) === String(line.room_id))?.room_type === 'suite'
+  )
+    ? 'suite'
+    : 'queen';
 
-  useEffect(() => {
-    if (!form.room_id || !form.check_in || !form.check_out || !stayDatesChanged) {
-      setRebookQuote(null);
-      return;
-    }
-
-    setRebookQuoteLoading(true);
-    const timer = setTimeout(() => {
-      api
-        .get(`/bookings/admin/${booking.id}/rebook-quote`, {
-          params: {
-            check_in: form.check_in,
-            check_out: form.check_out,
-            room_id: form.room_id,
-          },
-        })
-        .then((r) => setRebookQuote(r.data))
-        .catch(() => setRebookQuote(null))
-        .finally(() => setRebookQuoteLoading(false));
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [
-    booking.id,
-    form.room_id,
-    form.check_in,
-    form.check_out,
-    stayDatesChanged,
-  ]);
-
-  const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
-  const roomType = selectedRoom?.room_type === 'suite' ? 'suite' : 'queen';
+  const roomSubtotalFromQuotes = roomLines.reduce((sum, line) => {
+    const quote = lineQuotes[line.id];
+    if (!quote || quote.occupancy_error) return sum;
+    if (!(quote.available || anteDate)) return sum;
+    if (quote.subtotal == null) return sum;
+    return sum + Number(quote.subtotal);
+  }, 0);
 
   const extrasQuote = validateBookingExtras(form.bookingExtras, roomType);
   const islandQuote =
-    form.islandHoppingEnabled && form.islandHopping.passengers?.length
+    form.islandHoppingEnabled && !form.islandHopping.soa_summary && form.islandHopping.passengers?.length
       ? calculateIslandHopping(form.islandHopping.passengers)
       : null;
-  const islandTotal =
-    form.islandHoppingEnabled && islandQuote && !islandQuote.error && islandQuote.complete
-      ? islandQuote.total
-      : 0;
+  const islandTotal = form.islandHoppingEnabled ? getAdminIslandHoppingTotal(form.islandHopping) : 0;
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const estimatedAddOns = islandTotal + addOnsTotal;
 
@@ -144,9 +224,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   // subtotal; the non-rebook branch strips all add-ons (island/bilao/boodle, custom
   // charges, and during-stay stay_addons) so both paths mean the same thing.
   const grossRoomSubtotal = useMemo(() => {
-    if (rebookQuote?.new_stay_subtotal != null) {
+    if (datesChanged && roomLines.length === 1 && rebookQuote?.new_stay_subtotal != null) {
       return Number(rebookQuote.new_stay_subtotal);
     }
+    if (roomSubtotalFromQuotes > 0) return roomSubtotalFromQuotes;
     const addonsOnBooking =
       Number(booking?.island_hopping_amount || 0) +
       Number(booking?.bilao_amount || 0) +
@@ -157,7 +238,22 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       stayAddonsTotal(booking?.stay_addons);
     const roomNet = Number(booking?.total_amount || 0) - addonsOnBooking;
     return roomNet + Number(booking?.discount_amount || 0);
-  }, [booking, rebookQuote]);
+  }, [booking, rebookQuote, roomSubtotalFromQuotes, datesChanged, roomLines.length]);
+
+  const handleLineChange = (lineId, patch) => {
+    setRoomLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
+    setError('');
+  };
+
+  const handleAddLine = () => {
+    setRoomLines((prev) => [...prev, createRoomLine()]);
+    setError('');
+  };
+
+  const handleRemoveLine = (lineId) => {
+    setRoomLines((prev) => (prev.length <= 1 ? prev : prev.filter((line) => line.id !== lineId)));
+    setError('');
+  };
 
   const manualDiscountRaw = parseFloat(form.admin_discount_amount);
   const manualDiscount =
@@ -174,8 +270,20 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   };
 
   const validate = () => {
-    if (!form.room_id) return 'Select a room (tab 1).';
+    if (roomLines.some((line) => !line.room_id)) return 'Select a room for each line (tab 1).';
     if (!form.check_in || !form.check_out) return 'Check-in and check-out are required (tab 1).';
+    if (!anteDate) {
+      const unavailable = roomLines.find((line) => {
+        if (!line.room_id) return false;
+        const quote = lineQuotes[line.id];
+        return quote && !quote.available && !quote.occupancy_error;
+      });
+      if (unavailable) return 'One or more rooms are not available for the selected dates (tab 1).';
+    }
+    for (const line of roomLines) {
+      const quote = lineQuotes[line.id];
+      if (quote?.occupancy_error) return `${quote.occupancy_error} (tab 1).`;
+    }
     if (!form.guest_name.trim()) return 'Guest name is required (tab 2).';
     if (!form.guest_email.trim()) return 'Email is required (tab 2).';
     if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
@@ -196,7 +304,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         return 'Enter a valid discount amount (tab 4).';
       }
       if (discount > 0 && grossRoomSubtotal > 0 && discount > grossRoomSubtotal) {
-        return `Discount cannot exceed room stay total (₱${Math.round(grossRoomSubtotal).toLocaleString()}) (tab 4).`;
+        return `Discount cannot exceed room stay total (₱${formatMoney(grossRoomSubtotal)}) (tab 4).`;
       }
     }
     return null;
@@ -210,14 +318,16 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       return;
     }
     const confirmMessage =
-      stayDatesChanged && rebookQuote && !rebookQuote.error
+      stayConfigChanged && rebookQuote && !rebookQuote.error && roomLines.length === 1
         ? rebookConfirmMessage(
             rebookQuote,
             booking.reference_code,
             form.check_in,
             form.check_out
           )
-        : 'Pricing will be recalculated based on your updates.';
+        : stayConfigChanged
+          ? 'Pricing will be recalculated based on your room and date updates.'
+          : 'Pricing will be recalculated based on your updates.';
     const ok = await confirm({
       title: 'Save booking changes?',
       message: confirmMessage,
@@ -228,7 +338,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      const { data } = await api.patch(`/bookings/admin/${booking.id}`, editStateToPayload(form));
+      const { data } = await api.patch(
+        `/bookings/admin/${booking.id}`,
+        editStateToPayload(form, roomLines)
+      );
       toast.success('Booking updated.');
       onSaved?.(data.booking);
     } catch (err) {
@@ -282,25 +395,10 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         <div className="min-h-[280px]">
         {activeTab === 'stay' && (
           <Panel
-            title="Room & dates"
-            hint="Past check-in is allowed for late recording / SOA. Rebooking uses weekday (Mon–Thu) and weekend (Fri–Sun) rates per night."
+            title="Rooms & dates"
+            hint="Past check-in is allowed for late recording / SOA. Add another room if the guest needs more space. Rebooking uses weekday (Mon–Thu) and weekend (Fri–Sun) rates per night."
           >
-            <Field label="Room" required>
-              <select
-                required
-                value={form.room_id}
-                onChange={(e) => update({ room_id: e.target.value })}
-                className={inputClass}
-              >
-                <option value="">Select room</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
               <Field label="Check-in" required>
                 <input
                   type="date"
@@ -333,46 +431,30 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 />
               </Field>
             </div>
-            {isPastStayDate(form.check_in) && (
-              <p className="text-xs text-aegean-600 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2 mt-3">
+            {anteDate && (
+              <p className="text-xs text-aegean-600 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2 mb-4">
                 Ante-dated stay — for recording / Statement of Account.
               </p>
             )}
-            <div>
-              <p className="text-sm font-medium text-aegean-700 mb-3">Guests</p>
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Adults" required>
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    value={form.adults}
-                    onChange={(e) => update({ adults: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Under 6">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.children_under6}
-                    onChange={(e) => update({ children_under6: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Age 7–12">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.children_7_12}
-                    onChange={(e) => update({ children_7_12: e.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-            </div>
-            {stayDatesChanged && (
+            <BookingRoomLinesSection
+              lines={roomLines}
+              rooms={rooms}
+              lineQuotes={lineQuotes}
+              quotesLoading={lineQuotesLoading}
+              onLineChange={handleLineChange}
+              onAddLine={handleAddLine}
+              onRemoveLine={handleRemoveLine}
+              usedRoomIds={usedRoomIds(roomLines)}
+              allowUnavailable={anteDate}
+            />
+            {stayConfigChanged && roomLines.length === 1 && (
               <RebookPricePreview quote={rebookQuote} loading={rebookQuoteLoading} />
+            )}
+            {stayConfigChanged && roomLines.length > 1 && roomSubtotalFromQuotes > 0 && (
+              <p className="text-sm text-aegean-700 bg-aegean-50 border border-aegean-100 rounded-lg px-3 py-2">
+                Combined room subtotal:{' '}
+                <strong>₱{Number(roomSubtotalFromQuotes).toLocaleString()}</strong>
+              </p>
             )}
           </Panel>
         )}
@@ -507,8 +589,8 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               onCustomAmountChange={(val) => update({ custom_payment_amount: val })}
             />
             <p className="text-xs text-aegean-500 -mt-2">
-              Estimated total: ₱{paymentPreviewTotal.toLocaleString()}
-              {stayDatesChanged && rebookQuote && !rebookQuote.error ? (
+              Estimated total: ₱{formatMoney(paymentPreviewTotal)}
+              {stayConfigChanged && rebookQuote && !rebookQuote.error && roomLines.length === 1 ? (
                 <>
                   {' '}
                   ·{' '}

@@ -47,7 +47,7 @@ export default function AdminBookingDiscountFields({
         <p className="text-xs text-aegean-500 mt-0.5">
           One-off discount for this guest — applied to room stay only (before island hopping &amp;
           food add-ons).
-          {maxAmount > 0 ? ` Max ₱${Math.round(maxAmount).toLocaleString()}.` : ''}
+          {maxAmount > 0 ? ` Max ₱${Number(maxAmount).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}.` : ''}
         </p>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
@@ -55,7 +55,7 @@ export default function AdminBookingDiscountFields({
           <input
             type="number"
             min="0"
-            step="1"
+            step="0.01"
             value={amount}
             onChange={(e) => onAmountChange(e.target.value)}
             className={inputClass}

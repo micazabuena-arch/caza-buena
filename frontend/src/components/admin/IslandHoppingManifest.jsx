@@ -38,6 +38,12 @@ export default function IslandHoppingManifest({ booking, islandHop }) {
 
       <section className="mb-6">
         <h2 className="text-sm uppercase tracking-wide text-[#1E6B8C] mb-2">Passengers</h2>
+        {islandHop.soa_summary ? (
+          <p className="text-sm">
+            SOA summary: <strong>{islandHop.summary_pax || islandHop.passenger_count || 0} pax</strong>{' '}
+            · total recorded on this booking
+          </p>
+        ) : (
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="bg-[#f0f7fa]">
@@ -106,6 +112,7 @@ export default function IslandHoppingManifest({ booking, islandHop }) {
             })}
           </tbody>
         </table>
+        )}
       </section>
 
       <section className="mb-4 text-sm">

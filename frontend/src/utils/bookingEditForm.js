@@ -5,6 +5,7 @@ import {
   stripManualPaymentFromNotes,
 } from '../data/manualBookingPayment';
 import { emptyIslandHoppingForm, parseIslandHoppingData } from '../data/islandHoppingRates';
+import { roomLinesToPayload } from './bookingRoomLines';
 
 export function bookingToEditState(booking) {
   const islandRaw = booking?.island_hopping
@@ -46,6 +47,9 @@ export function bookingToEditState(booking) {
     islandHoppingEnabled: Boolean(booking?.island_hopping),
     islandHopping: islandRaw
       ? {
+          soa_summary: Boolean(islandRaw.soa_summary),
+          summary_pax: islandRaw.summary_pax ?? '',
+          summary_amount: islandRaw.summary_amount ?? '',
           passengers: (islandRaw.passengers || []).map((p) => ({
             full_name: p.full_name || '',
             age: p.age ?? '',
@@ -70,14 +74,18 @@ export function bookingToEditState(booking) {
   };
 }
 
-export function editStateToPayload(state) {
+export function editStateToPayload(state, roomLines = []) {
+  const linesPayload = roomLinesToPayload(roomLines);
+  const primaryLine = linesPayload[0];
+
   const payload = {
-    room_id: parseInt(state.room_id, 10),
+    room_id: primaryLine?.room_id ?? parseInt(state.room_id, 10),
+    room_lines: linesPayload.length > 0 ? linesPayload : undefined,
     check_in: state.check_in,
     check_out: state.check_out,
-    adults: parseInt(state.adults, 10) || 1,
-    children_under6: parseInt(state.children_under6, 10) || 0,
-    children_7_12: parseInt(state.children_7_12, 10) || 0,
+    adults: primaryLine?.adults ?? (parseInt(state.adults, 10) || 1),
+    children_under6: primaryLine?.children_under6 ?? (parseInt(state.children_under6, 10) || 0),
+    children_7_12: primaryLine?.children_7_12 ?? (parseInt(state.children_7_12, 10) || 0),
     guest_name: state.guest_name.trim(),
     guest_email: state.guest_email.trim(),
     guest_phone: state.guest_phone.trim(),
@@ -115,24 +123,32 @@ export function editStateToPayload(state) {
   }
 
   if (state.islandHoppingEnabled) {
-    payload.island_hopping_data = {
-      passengers: state.islandHopping.passengers.map((p) => ({
-        full_name: p.full_name.trim(),
-        age: parseInt(p.age, 10),
-        gender: p.gender,
-        is_first_timer: p.is_first_timer,
-        is_senior: Boolean(p.is_senior),
-        // Preserve "unanswered" (null) so the backend's completeness check agrees with
-        // the form (avoids pricing a tour the form shows as excluded).
-        is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
-      })),
-      passenger_address: state.islandHopping.passenger_address,
-      payor_name: state.islandHopping.payor_name,
-      payor_address: state.islandHopping.payor_address,
-      payor_phone: state.islandHopping.payor_phone,
-      emergency_contact_name: state.islandHopping.emergency_contact_name,
-      emergency_contact_phone: state.islandHopping.emergency_contact_phone,
-    };
+    if (state.islandHopping.soa_summary) {
+      payload.island_hopping_data = {
+        soa_summary: true,
+        summary_pax: parseInt(state.islandHopping.summary_pax, 10) || 0,
+        summary_amount: parseFloat(state.islandHopping.summary_amount) || 0,
+      };
+    } else {
+      payload.island_hopping_data = {
+        passengers: state.islandHopping.passengers.map((p) => ({
+          full_name: p.full_name.trim(),
+          age: parseInt(p.age, 10),
+          gender: p.gender,
+          is_first_timer: p.is_first_timer,
+          is_senior: Boolean(p.is_senior),
+          // Preserve "unanswered" (null) so the backend's completeness check agrees with
+          // the form (avoids pricing a tour the form shows as excluded).
+          is_pwd: p.is_pwd === true || p.is_pwd === false ? p.is_pwd : null,
+        })),
+        passenger_address: state.islandHopping.passenger_address,
+        payor_name: state.islandHopping.payor_name,
+        payor_address: state.islandHopping.payor_address,
+        payor_phone: state.islandHopping.payor_phone,
+        emergency_contact_name: state.islandHopping.emergency_contact_name,
+        emergency_contact_phone: state.islandHopping.emergency_contact_phone,
+      };
+    }
   }
 
   return payload;

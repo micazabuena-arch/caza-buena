@@ -158,6 +158,25 @@ export function validateIslandHoppingPayload(data) {
  */
 export function validateIslandHoppingPayloadLenient(data) {
   if (!data) return { valid: true };
+
+  if (data.soa_summary) {
+    const pax = parseInt(data.summary_pax, 10);
+    if (!Number.isFinite(pax) || pax < 1) {
+      return { valid: false, message: 'Enter the number of island hopping passengers.' };
+    }
+    if (pax > ISLAND_HOPPING_RATES.maxPassengers) {
+      return {
+        valid: false,
+        message: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat. Contact us for larger groups.`,
+      };
+    }
+    const amount = parseFloat(data.summary_amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return { valid: false, message: 'Enter a valid island hopping amount.' };
+    }
+    return { valid: true };
+  }
+
   const passengers = data.passengers || [];
   if (passengers.length > ISLAND_HOPPING_RATES.maxPassengers) {
     return {
@@ -239,4 +258,81 @@ export function calculateIslandHopping(passengers) {
     entrance_total: entranceTotal,
     boat_amount: boat.rate,
   };
+}
+
+/**
+ * Admin manual booking / edit — full passenger list OR SOA summary (pax + amount only).
+ */
+export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) {
+  if (!ihData) return { amount: 0, stored: null };
+
+  const validation = validateIslandHoppingPayloadLenient(ihData);
+  if (!validation.valid) return { error: validation.message };
+
+  const trim = (v) => (v == null ? '' : String(v).trim());
+
+  if (ihData.soa_summary) {
+    const pax = parseInt(ihData.summary_pax, 10);
+    const amount = Math.round(parseFloat(ihData.summary_amount) * 100) / 100;
+    return {
+      amount,
+      stored: {
+        soa_summary: true,
+        summary_pax: pax,
+        summary_amount: amount,
+        total: amount,
+        passenger_count: pax,
+        passengers: [],
+        passenger_address: '',
+        payor_name: '',
+        payor_address: '',
+        payor_phone: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+      },
+    };
+  }
+
+  const passengers = (ihData.passengers || []).map((p, i) => ({
+    ...p,
+    senior_id_url: existingIsland?.passengers?.[i]?.senior_id_url ?? p.senior_id_url ?? null,
+    senior_id_public_id:
+      existingIsland?.passengers?.[i]?.senior_id_public_id ?? p.senior_id_public_id ?? null,
+    pwd_id_url: existingIsland?.passengers?.[i]?.pwd_id_url ?? p.pwd_id_url ?? null,
+    pwd_id_public_id:
+      existingIsland?.passengers?.[i]?.pwd_id_public_id ?? p.pwd_id_public_id ?? null,
+  }));
+
+  const baseStored = {
+    soa_summary: false,
+    passengers,
+    passenger_address: trim(ihData.passenger_address),
+    payor_name: trim(ihData.payor_name),
+    payor_address: trim(ihData.payor_address),
+    payor_phone: trim(ihData.payor_phone),
+    emergency_contact_name: trim(ihData.emergency_contact_name),
+    emergency_contact_phone: trim(ihData.emergency_contact_phone),
+  };
+
+  if (isIslandHoppingComplete(ihData)) {
+    try {
+      const computed = calculateIslandHopping(ihData.passengers);
+      if (computed.error) return { error: computed.error };
+      return {
+        amount: computed.total,
+        stored: {
+          ...baseStored,
+          breakdown: computed.breakdown,
+          boat_tier: computed.boat_tier,
+          boat_label: computed.boat_label,
+          total: computed.total,
+          passenger_count: computed.passenger_count,
+        },
+      };
+    } catch (e) {
+      return { error: e.message || 'Invalid island hopping details' };
+    }
+  }
+
+  return { amount: 0, stored: baseStored };
 }

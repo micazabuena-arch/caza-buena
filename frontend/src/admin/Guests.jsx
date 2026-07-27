@@ -14,6 +14,7 @@ import AdminModal from '../components/admin/AdminModal';
 import AdminBookingCard from '../components/admin/AdminBookingCard';
 import AdminTableShell from '../components/ui/AdminTableShell';
 import { exportGuestBookingsExcel } from '../utils/guestExport';
+import { formatMoney } from '../utils/money';
 
 const statusColors = {
   awaiting_payment: 'bg-amber-100 text-amber-800',
@@ -225,7 +226,7 @@ export default function AdminGuests() {
                       {b.check_in} → {b.check_out}
                     </td>
                     <td className="p-4 whitespace-nowrap">
-                      ₱{Number(b.total_amount).toLocaleString()}
+                      ₱{formatMoney(b.total_amount)}
                     </td>
                     <td className="p-4 whitespace-nowrap">
                       <span
@@ -271,7 +272,7 @@ export default function AdminGuests() {
         title={panelMode === 'edit' ? 'Edit stay' : 'Stay details'}
         description={
           selected
-            ? `${formatReference(selected.reference_code)} · ${formatStatus(selected.status)} · ${selected.room_name} · ₱${Number(selected.total_amount).toLocaleString()}`
+            ? `${formatReference(selected.reference_code)} · ${formatStatus(selected.status)} · ${selected.room_name} · ₱${formatMoney(selected.total_amount)}`
             : undefined
         }
         size="xl"

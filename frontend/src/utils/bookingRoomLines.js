@@ -43,3 +43,30 @@ export function usedRoomIds(lines, excludeLineId = null) {
       .map((line) => String(line.room_id))
   );
 }
+
+/** Build editable room lines from a booking (multi-room or legacy single room). */
+export function bookingToRoomLines(booking) {
+  if (Array.isArray(booking?.room_lines) && booking.room_lines.length > 0) {
+    return booking.room_lines.map((line) =>
+      createRoomLine({
+        room_id: line.room_id ? String(line.room_id) : '',
+        adults: line.adults ?? 1,
+        children_under6: line.children_under6 ?? 0,
+        children_7_12: line.children_7_12 ?? 0,
+      })
+    );
+  }
+
+  return [
+    createRoomLine({
+      room_id: booking?.room_id ? String(booking.room_id) : '',
+      adults: booking?.adults ?? 1,
+      children_under6: booking?.children_under6 ?? 0,
+      children_7_12: booking?.children_7_12 ?? 0,
+    }),
+  ];
+}
+
+export function roomLinesPayloadEqual(a, b) {
+  return JSON.stringify(roomLinesToPayload(a)) === JSON.stringify(roomLinesToPayload(b));
+}

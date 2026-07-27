@@ -1,5 +1,6 @@
 /** Payment options shown only in admin manual booking — not stored in payment_methods. */
 export const MANUAL_ONLY_PAYMENT_METHODS = [
+  { id: 'cash', name: 'Cash' },
   { id: 'online_platform', name: 'Online Booking Platform' },
 ];
 

@@ -17,6 +17,7 @@ import { emptyBookingExtras, validateBookingExtras } from '../../data/bookingAdd
 import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
+  getAdminIslandHoppingTotal,
   isSeniorPassenger,
   isPwdPassenger,
 } from '../../data/islandHoppingRates';
@@ -207,13 +208,10 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
     ? validateBookingExtras(bookingExtras, roomType)
     : null;
   const islandQuote =
-    islandHoppingEnabled && islandHopping.passengers?.length
+    islandHoppingEnabled && !islandHopping.soa_summary && islandHopping.passengers?.length
       ? calculateIslandHopping(islandHopping.passengers)
       : null;
-  const islandTotal =
-    islandHoppingEnabled && islandQuote && !islandQuote.error && islandQuote.complete
-      ? islandQuote.total
-      : 0;
+  const islandTotal = islandHoppingEnabled ? getAdminIslandHoppingTotal(islandHopping) : 0;
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const manualDiscountRaw = parseFloat(form.admin_discount_amount);
   const manualDiscount =
@@ -355,7 +353,13 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       custom_payment_amount: form.payment_option === 'custom' ? customPay : undefined,
       island_hopping: islandHoppingEnabled,
       island_hopping_data: islandHoppingEnabled
-        ? {
+        ? islandHopping.soa_summary
+          ? {
+              soa_summary: true,
+              summary_pax: parseInt(islandHopping.summary_pax, 10) || 0,
+              summary_amount: parseFloat(islandHopping.summary_amount) || 0,
+            }
+          : {
             passengers: islandHopping.passengers.map((p) => ({
               full_name: p.full_name.trim(),
               age: parseInt(p.age, 10),
