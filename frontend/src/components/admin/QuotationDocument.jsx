@@ -34,6 +34,9 @@ const PRINT_COLORS = `
   .q-boodle-h1 th, .q-boodle-h1 td { background-color: #dae8fc !important; }
   .q-boodle-h2 th, .q-boodle-h2 td { background-color: #e8f0fe !important; }
   .q-boodle-total th, .q-boodle-total td { background-color: #6d9eeb !important; color: #fff !important; }
+  .q-custom-h1 th, .q-custom-h1 td { background-color: #d9d2e9 !important; }
+  .q-custom-h2 th, .q-custom-h2 td { background-color: #ede7f6 !important; }
+  .q-custom-total th, .q-custom-total td { background-color: #7e57c2 !important; color: #fff !important; }
   .q-grand-total th, .q-grand-total td { background-color: #ffd966 !important; }
 `;
 
@@ -49,7 +52,8 @@ function MetaRow({ label, value, valueClass = '' }) {
 export default function QuotationDocument({ quote }) {
   if (!quote) return null;
 
-  const { accommodation, tour, bilao, boodleFight, grandTotal } = computeQuotationTotals(quote);
+  const { accommodation, tour, bilao, boodleFight, customAddons, grandTotal } =
+    computeQuotationTotals(quote);
   const { entrance, garbageFee } = ISLAND_HOPPING_RATES;
   const pax = quote.pax || accommodation.roomLines.reduce((s, r) => s + r.occupants, 0) || '—';
 
@@ -83,7 +87,7 @@ export default function QuotationDocument({ quote }) {
       </header>
 
       <h1 className="text-center text-[12pt] font-bold uppercase tracking-wider m-0 mb-4">
-        Quotation
+        {quote.documentTitle?.trim() || 'Quotation'}
       </h1>
 
       <section className="grid sm:grid-cols-2 gap-x-8 gap-y-1 mb-4 uppercase">
@@ -336,12 +340,57 @@ export default function QuotationDocument({ quote }) {
         </table>
       )}
 
+      {/* Custom add-ons — room extension, food, misc */}
+      {quote.customAddonsEnabled && customAddons.lines.length > 0 && (
+        <table className="w-full border-collapse mb-3">
+          <thead>
+            <tr className="q-custom-h1">
+              <th className={th} colSpan={5}>
+                {customAddons.sectionTitle}
+              </th>
+            </tr>
+            <tr className="q-custom-h2">
+              <th className={th} colSpan={2}>
+                Item
+              </th>
+              <th className={th}>Rate</th>
+              <th className={`${th} text-center`}>Qty</th>
+              <th className={`${th} text-right`}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {customAddons.lines.map((line, i) => (
+              <tr key={`custom-addon-${i}`}>
+                <td className={td} colSpan={2}>
+                  {line.label}
+                  {line.detail ? (
+                    <span className="block text-[8pt] normal-case text-gray-700">{line.detail}</span>
+                  ) : null}
+                </td>
+                <td className={tdRight}>{formatQuoteAmount(line.rate)}</td>
+                <td className={tdCenter}>{line.qty}</td>
+                <td className={tdRight}>{formatQuoteAmount(line.total)}</td>
+              </tr>
+            ))}
+            <tr className="q-custom-total font-bold">
+              <td className={`${td} border-gray-400`} colSpan={4}>
+                {customAddons.sectionTitle}
+              </td>
+              <td className={`${tdRight} border-gray-400`}>
+                {formatQuoteAmount(customAddons.total)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+
       {/* Grand total */}
       <table className="w-full border-collapse">
         <tbody>
           <tr className="q-grand-total font-bold">
             <td className={`${td} border-gray-400 text-[10pt]`} colSpan={4}>
-              Total (accommodation + tour + seafood bilao + boodle fight)
+              Total (accommodation + tour + seafood bilao + boodle fight
+              {customAddons.total > 0 ? ' + other add-ons' : ''})
             </td>
             <td className={`${tdRight} border-gray-400 text-[10pt]`}>
               {formatQuoteAmount(grandTotal)}

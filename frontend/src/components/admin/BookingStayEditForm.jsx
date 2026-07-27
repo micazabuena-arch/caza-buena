@@ -289,10 +289,18 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
     if (!extrasQuote?.valid) return extrasQuote.message;
     if (form.islandHoppingEnabled) {
-      // Island hopping details are optional for admin bookings (guests may not give
-      // passenger names up front, and partial bookings created via manual booking must
-      // remain editable). Only block on hard errors (e.g. exceeding max passengers).
-      if (islandQuote?.error) return islandQuote.error;
+      if (form.islandHopping?.soa_summary) {
+        const pax = parseInt(form.islandHopping.summary_pax, 10);
+        const amount = parseFloat(form.islandHopping.summary_amount);
+        if (!Number.isFinite(pax) || pax < 1) {
+          return 'Enter the number of island hopping passengers (tab 3).';
+        }
+        if (!Number.isFinite(amount) || amount < 0) {
+          return 'Enter a valid island hopping amount (tab 3).';
+        }
+      } else if (islandQuote?.error) {
+        return islandQuote.error;
+      }
     }
     if (form.payment_option === 'custom') {
       const custom = parseFloat(form.custom_payment_amount);
@@ -522,6 +530,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
             <div className="border-t border-aegean-100 pt-5">
               <IslandHoppingSection
                 embedded
+                optionalFields
                 enabled={form.islandHoppingEnabled}
                 onEnabledChange={(yes) => update({ islandHoppingEnabled: yes })}
                 data={form.islandHopping}

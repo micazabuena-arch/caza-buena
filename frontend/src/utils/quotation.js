@@ -22,10 +22,24 @@ export function emptyQuotationAdditionalPaxLine() {
   return { label: 'Adult', occupants: '', amount: '' };
 }
 
+/** Free-form add-on line (room extension, food, misc charges). */
+export function emptyQuotationCustomAddonLine() {
+  return { label: '', detail: '', rate: '', qty: 1 };
+}
+
+export const CUSTOM_ADDON_LABEL_SUGGESTIONS = [
+  'Room extension',
+  'Food order',
+  'Extra bed',
+  'Late checkout',
+  'Transport / pickup',
+];
+
 export const ADDITIONAL_PAX_LABEL_OPTIONS = ['Adult', 'Child (0–6)', 'Child (7–12)'];
 
 export function emptyQuotation() {
   return {
+    documentTitle: 'Quotation',
     rmNo: '',
     dateLabel: '',
     guestName: '',
@@ -48,6 +62,9 @@ export function emptyQuotation() {
     bilaoLines: [],
     boodleEnabled: false,
     boodleLines: [],
+    customAddonsEnabled: false,
+    customAddonsSectionTitle: 'Other add-ons',
+    customAddonLines: [],
   };
 }
 
@@ -113,14 +130,27 @@ export function normalizeQuotation(quote) {
     additionalPaxLines = [emptyQuotationAdditionalPaxLine()];
   }
 
+  let customAddonLines = quote.customAddonLines;
+  if (!Array.isArray(customAddonLines)) {
+    customAddonLines = [];
+  }
+  const customAddonsEnabled =
+    quote.customAddonsEnabled != null
+      ? Boolean(quote.customAddonsEnabled)
+      : customAddonLines.length > 0;
+
   return {
     ...quote,
+    documentTitle: quote.documentTitle?.trim() || 'Quotation',
     boats,
     bilaoEnabled,
     bilaoLines,
     boodleEnabled,
     boodleLines,
     additionalPaxLines,
+    customAddonsEnabled,
+    customAddonsSectionTitle: quote.customAddonsSectionTitle?.trim() || 'Other add-ons',
+    customAddonLines,
   };
 }
 
@@ -310,15 +340,47 @@ export function computeBoodleFight(quote) {
   };
 }
 
+export function computeCustomAddons(quote) {
+  const q = normalizeQuotation(quote);
+  if (!q.customAddonsEnabled) {
+    return { lines: [], total: 0, sectionTitle: q.customAddonsSectionTitle };
+  }
+
+  const lines = (q.customAddonLines || [])
+    .map((row) => {
+      const label = String(row.label || '').trim();
+      const detail = String(row.detail || '').trim();
+      const rate = parseMoney(row.rate);
+      const qty = Math.max(1, parseIntSafe(row.qty) || 1);
+      if (!label && rate <= 0) return null;
+      const total = rate * qty;
+      return {
+        label: label || 'Add-on',
+        detail,
+        rate,
+        qty,
+        total,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    lines,
+    total: lines.reduce((s, line) => s + line.total, 0),
+    sectionTitle: q.customAddonsSectionTitle,
+  };
+}
+
 export function computeQuotationTotals(quote) {
   const accommodation = computeAccommodation(quote);
   const tour = computeTour(quote);
   const bilao = computeBilao(quote);
   const boodleFight = computeBoodleFight(quote);
-  const addOnsTotal = bilao.total + boodleFight.total;
+  const customAddons = computeCustomAddons(quote);
+  const addOnsTotal = bilao.total + boodleFight.total + customAddons.total;
   const grandTotal = accommodation.balance + tour.total + addOnsTotal;
 
-  return { accommodation, tour, bilao, boodleFight, addOnsTotal, grandTotal };
+  return { accommodation, tour, bilao, boodleFight, customAddons, addOnsTotal, grandTotal };
 }
 
 /** Format for document cells — 2 decimals when needed. */

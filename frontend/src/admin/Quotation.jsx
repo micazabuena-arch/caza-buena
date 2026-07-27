@@ -12,12 +12,14 @@ import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import {
   ADDITIONAL_PAX_LABEL_OPTIONS,
+  CUSTOM_ADDON_LABEL_SUGGESTIONS,
   computeQuotationTotals,
   emptyQuotation,
   emptyQuotationAdditionalPaxLine,
   emptyQuotationBilaoLine,
   emptyQuotationBoat,
   emptyQuotationBoodleLine,
+  emptyQuotationCustomAddonLine,
   emptyQuotationRoom,
   formatQuoteAmount,
   normalizeQuotation,
@@ -232,6 +234,28 @@ export default function AdminQuotation() {
     }));
   };
 
+  const patchCustomAddonLine = (index, fields) => {
+    setQuote((q) => {
+      const next = [...(q.customAddonLines || [])];
+      next[index] = { ...next[index], ...fields };
+      return { ...q, customAddonLines: next };
+    });
+  };
+
+  const addCustomAddonLine = () => {
+    setQuote((q) => ({
+      ...q,
+      customAddonLines: [...(q.customAddonLines || []), emptyQuotationCustomAddonLine()],
+    }));
+  };
+
+  const removeCustomAddonLine = (index) => {
+    setQuote((q) => ({
+      ...q,
+      customAddonLines: (q.customAddonLines || []).filter((_, i) => i !== index),
+    }));
+  };
+
   const applyRoomFromList = (index, roomId) => {
     const room = rooms.find((r) => String(r.id) === String(roomId));
     if (!room) return;
@@ -336,6 +360,18 @@ export default function AdminQuotation() {
         boodleLines: detail.boodle_fight_tier
           ? [{ tierId: detail.boodle_fight_tier, qty: 1 }]
           : [],
+        customAddonsEnabled:
+          Array.isArray(detail.addons) && detail.addons.length > 0,
+        customAddonsSectionTitle: 'Other add-ons',
+        customAddonLines:
+          Array.isArray(detail.addons) && detail.addons.length > 0
+            ? detail.addons.map((addon) => ({
+                label: addon.label || 'Extra charge',
+                detail: addon.description || '',
+                rate: addon.amount ?? '',
+                qty: 1,
+              }))
+            : [],
       });
       setLoadModalOpen(false);
       setLoadRef('');
@@ -679,8 +715,16 @@ export default function AdminQuotation() {
       <div className="grid xl:grid-cols-2 gap-8 items-start">
         <div className="no-print space-y-6">
           <section className="bg-white rounded-xl border border-aegean-100 p-5 space-y-4">
-            <h2 className="font-medium text-aegean-800">Guest & stay</h2>
+            <h2 className="font-medium text-aegean-800">Document & guest</h2>
             <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Document heading">
+                <input
+                  className={inputClass}
+                  value={quote.documentTitle ?? 'Quotation'}
+                  onChange={(e) => patch({ documentTitle: e.target.value })}
+                  placeholder="Quotation"
+                />
+              </Field>
               <Field label="RM No.">
                 <input
                   className={inputClass}
@@ -1198,6 +1242,137 @@ export default function AdminQuotation() {
                 {totals.boodleFight.total > 0 && (
                   <p className="text-sm text-aegean-600">
                     Boodle fight total: ₱{formatQuoteAmount(totals.boodleFight.total)}
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="bg-white rounded-xl border border-aegean-100 p-5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-aegean-800">
+                <input
+                  type="checkbox"
+                  checked={Boolean(quote.customAddonsEnabled)}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    patch({
+                      customAddonsEnabled: enabled,
+                      customAddonLines:
+                        enabled && !(quote.customAddonLines || []).length
+                          ? [emptyQuotationCustomAddonLine()]
+                          : quote.customAddonLines,
+                    });
+                  }}
+                />
+                Include other add-ons
+              </label>
+              {quote.customAddonsEnabled && (
+                <button
+                  type="button"
+                  onClick={addCustomAddonLine}
+                  className="inline-flex items-center gap-1 text-xs text-aegean-600 hover:text-aegean-800"
+                >
+                  <Plus size={14} /> Add line
+                </button>
+              )}
+            </div>
+            {quote.customAddonsEnabled && (
+              <>
+                <p className="text-xs text-aegean-500">
+                  Room extension, food orders, transport, or any extra charge — label and amount are
+                  fully editable.
+                </p>
+                <Field label="Section title on printout">
+                  <input
+                    className={inputClass}
+                    value={quote.customAddonsSectionTitle ?? 'Other add-ons'}
+                    onChange={(e) => patch({ customAddonsSectionTitle: e.target.value })}
+                    placeholder="Other add-ons"
+                  />
+                </Field>
+                {(quote.customAddonLines || []).length === 0 && (
+                  <p className="text-xs text-aegean-500">No add-on lines yet.</p>
+                )}
+                {(quote.customAddonLines || []).map((line, index) => {
+                  const lineTotal =
+                    (parseFloat(line.rate) || 0) * (parseInt(line.qty, 10) || 1);
+                  return (
+                    <div
+                      key={`custom-addon-${index}`}
+                      className="rounded-lg border border-aegean-100 p-3 space-y-3"
+                    >
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs font-medium text-aegean-600">Add-on {index + 1}</p>
+                        <button
+                          type="button"
+                          onClick={() => removeCustomAddonLine(index)}
+                          className="text-red-600 hover:text-red-700"
+                          aria-label="Remove add-on"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <Field label="Item / label">
+                          <input
+                            className={inputClass}
+                            list={`custom-addon-suggestions-${index}`}
+                            value={line.label}
+                            onChange={(e) =>
+                              patchCustomAddonLine(index, { label: e.target.value })
+                            }
+                            placeholder="e.g. Room extension"
+                          />
+                          <datalist id={`custom-addon-suggestions-${index}`}>
+                            {CUSTOM_ADDON_LABEL_SUGGESTIONS.map((s) => (
+                              <option key={s} value={s} />
+                            ))}
+                          </datalist>
+                        </Field>
+                        <Field label="Details (optional)">
+                          <input
+                            className={inputClass}
+                            value={line.detail}
+                            onChange={(e) =>
+                              patchCustomAddonLine(index, { detail: e.target.value })
+                            }
+                            placeholder="e.g. 1 extra night, lunch for 4 pax"
+                          />
+                        </Field>
+                        <Field label="Rate (₱)">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={inputClass}
+                            value={line.rate}
+                            onChange={(e) =>
+                              patchCustomAddonLine(index, { rate: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Qty">
+                          <input
+                            type="number"
+                            min={1}
+                            className={inputClass}
+                            value={line.qty}
+                            onChange={(e) =>
+                              patchCustomAddonLine(index, { qty: e.target.value })
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <p className="text-xs text-aegean-500">
+                        Line total: ₱{formatQuoteAmount(lineTotal)}
+                      </p>
+                    </div>
+                  );
+                })}
+                {totals.customAddons.total > 0 && (
+                  <p className="text-sm text-aegean-600">
+                    Other add-ons total: ₱{formatQuoteAmount(totals.customAddons.total)}
                   </p>
                 )}
               </>
