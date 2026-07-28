@@ -5,6 +5,12 @@ export const MANUAL_ONLY_PAYMENT_METHODS = [
 ];
 
 export const MANUAL_PAYMENT_NOTE_PREFIX = 'Payment method (manual): ';
+export const MANUAL_BOOKING_TAG = 'Manual booking (admin)';
+
+function isSystemAdminNotePart(part) {
+  const trimmed = String(part || '').trim();
+  return trimmed.startsWith(MANUAL_PAYMENT_NOTE_PREFIX) || trimmed === MANUAL_BOOKING_TAG;
+}
 
 export function isManualOnlyPaymentMethodId(id) {
   return MANUAL_ONLY_PAYMENT_METHODS.some((m) => m.id === id);
@@ -45,7 +51,7 @@ export function stripManualPaymentFromNotes(adminNotes) {
   if (!adminNotes) return '';
   return String(adminNotes)
     .split(' — ')
-    .filter((p) => !p.startsWith(MANUAL_PAYMENT_NOTE_PREFIX))
+    .filter((p) => !isSystemAdminNotePart(p))
     .join(' — ')
     .trim();
 }

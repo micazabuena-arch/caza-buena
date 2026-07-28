@@ -1,11 +1,17 @@
 export const MANUAL_PAYMENT_NOTE_PREFIX = 'Payment method (manual): ';
-const MANUAL_BOOKING_TAG = 'Manual booking (admin)';
+export const MANUAL_BOOKING_TAG = 'Manual booking (admin)';
 
+function isSystemAdminNotePart(part) {
+  const trimmed = String(part || '').trim();
+  return trimmed.startsWith(MANUAL_PAYMENT_NOTE_PREFIX) || trimmed === MANUAL_BOOKING_TAG;
+}
+
+/** User-editable admin notes only — strips payment labels and manual-booking tags. */
 export function stripManualPaymentFromNotes(adminNotes) {
   if (!adminNotes) return '';
   return String(adminNotes)
     .split(' — ')
-    .filter((p) => !p.startsWith(MANUAL_PAYMENT_NOTE_PREFIX))
+    .filter((p) => !isSystemAdminNotePart(p))
     .join(' — ')
     .trim();
 }
@@ -25,12 +31,14 @@ export function buildAdminNotesWithManualPayment({
   includeManualBookingTag = false,
 }) {
   const parts = [];
-  const cleanedUser = (userNotes ?? '').trim();
+  const cleanedUser = stripManualPaymentFromNotes(userNotes);
   if (cleanedUser) parts.push(cleanedUser);
   if (manualPaymentLabel?.trim()) {
     parts.push(`${MANUAL_PAYMENT_NOTE_PREFIX}${manualPaymentLabel.trim()}`);
   }
-  if (includeManualBookingTag || String(existingNotes || '').includes(MANUAL_BOOKING_TAG)) {
+  const keepManualBookingTag =
+    includeManualBookingTag || String(existingNotes || '').includes(MANUAL_BOOKING_TAG);
+  if (keepManualBookingTag) {
     parts.push(MANUAL_BOOKING_TAG);
   }
   return parts.length ? parts.join(' — ') : null;
