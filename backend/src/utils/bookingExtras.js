@@ -20,6 +20,88 @@ export function maxPetsForRoomType(roomType) {
   return roomType === 'suite' ? 2 : 1;
 }
 
+function parseFoodLines(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeBilaoLines(payload) {
+  const fromLines = parseFoodLines(payload?.bilao_lines).filter(
+    (line) => line?.package_id && BILAO_PACKAGES[line.package_id]
+  );
+  if (fromLines.length) {
+    return fromLines
+      .map((line) => ({
+        package_id: line.package_id,
+        qty: Math.max(0, parseInt(line.qty, 10) || 0),
+      }))
+      .filter((line) => line.qty > 0);
+  }
+
+  if (payload?.bilao_enabled && payload?.bilao_package && BILAO_PACKAGES[payload.bilao_package]) {
+    return [{ package_id: payload.bilao_package, qty: 1 }];
+  }
+
+  return [];
+}
+
+function normalizeBoodleLines(payload) {
+  const fromLines = parseFoodLines(payload?.boodle_lines).filter(
+    (line) => line?.tier_id && BOODLE_FIGHT_PACKAGES[line.tier_id]
+  );
+  if (fromLines.length) {
+    return fromLines
+      .map((line) => ({
+        tier_id: line.tier_id,
+        qty: Math.max(0, parseInt(line.qty, 10) || 0),
+      }))
+      .filter((line) => line.qty > 0);
+  }
+
+  if (
+    payload?.boodle_fight_enabled &&
+    payload?.boodle_fight_tier &&
+    BOODLE_FIGHT_PACKAGES[payload.boodle_fight_tier]
+  ) {
+    return [{ tier_id: payload.boodle_fight_tier, qty: 1 }];
+  }
+
+  return [];
+}
+
+function summarizeBilaoLines(lines) {
+  let total = 0;
+  for (const line of lines) {
+    const pkg = BILAO_PACKAGES[line.package_id];
+    total += pkg.price * line.qty;
+  }
+  return {
+    total,
+    primaryPackageId: lines[0]?.package_id || null,
+  };
+}
+
+function summarizeBoodleLines(lines) {
+  let total = 0;
+  for (const line of lines) {
+    const pkg = BOODLE_FIGHT_PACKAGES[line.tier_id];
+    total += pkg.price * line.qty;
+  }
+  return {
+    total,
+    primaryTierId: lines[0]?.tier_id || null,
+  };
+}
+
 export function validateBookingExtras(payload, roomType) {
   const bringingCar = Boolean(payload?.bringing_car);
   const carCount = bringingCar ? parseInt(payload?.car_count, 10) || 0 : 0;
@@ -42,25 +124,18 @@ export function validateBookingExtras(payload, roomType) {
     };
   }
 
-  let bilaoPackage = null;
-  let bilaoAmount = 0;
-  if (payload?.bilao_enabled) {
-    bilaoPackage = BILAO_PACKAGES[payload.bilao_package];
-    if (!bilaoPackage) {
-      return { valid: false, message: 'Select a Bilao food package size.' };
-    }
-    bilaoAmount = bilaoPackage.price;
+  const bilaoLines = payload?.bilao_enabled ? normalizeBilaoLines(payload) : [];
+  const boodleLines = payload?.boodle_fight_enabled ? normalizeBoodleLines(payload) : [];
+
+  if (payload?.bilao_enabled && bilaoLines.length === 0) {
+    return { valid: false, message: 'Enter at least one Bilao order quantity.' };
+  }
+  if (payload?.boodle_fight_enabled && boodleLines.length === 0) {
+    return { valid: false, message: 'Enter at least one Boodle Fight order quantity.' };
   }
 
-  let boodleTier = null;
-  let boodleAmount = 0;
-  if (payload?.boodle_fight_enabled) {
-    boodleTier = BOODLE_FIGHT_PACKAGES[payload.boodle_fight_tier];
-    if (!boodleTier) {
-      return { valid: false, message: 'Select a Boodle Fight group size.' };
-    }
-    boodleAmount = boodleTier.price;
-  }
+  const bilaoSummary = summarizeBilaoLines(bilaoLines);
+  const boodleSummary = summarizeBoodleLines(boodleLines);
 
   return {
     valid: true,
@@ -68,11 +143,88 @@ export function validateBookingExtras(payload, roomType) {
     car_count: carCount,
     pet_count: petCount,
     pet_deposit_amount: petCount * PET_DEPOSIT_PER_PET,
-    bilao_package: bilaoPackage ? payload.bilao_package : null,
-    bilao_amount: bilaoAmount,
-    boodle_fight: Boolean(payload?.boodle_fight_enabled),
-    boodle_fight_tier: boodleTier ? payload.boodle_fight_tier : null,
-    boodle_fight_amount: boodleAmount,
-    add_ons_total: bilaoAmount + boodleAmount,
+    bilao_lines: bilaoLines,
+    bilao_package: bilaoSummary.primaryPackageId,
+    bilao_amount: bilaoSummary.total,
+    boodle_fight: boodleLines.length > 0,
+    boodle_lines: boodleLines,
+    boodle_fight_tier: boodleSummary.primaryTierId,
+    boodle_fight_amount: boodleSummary.total,
+    add_ons_total: bilaoSummary.total + boodleSummary.total,
   };
+}
+
+export function serializeFoodLines(lines) {
+  if (!lines?.length) return null;
+  return JSON.stringify(lines);
+}
+
+/** Read stored bilao/boodle line items, falling back to legacy single-package fields. */
+export function foodLinesFromBooking(booking) {
+  const bilaoStored = parseFoodLines(booking?.bilao_lines);
+  const boodleStored = parseFoodLines(booking?.boodle_lines);
+
+  const bilaoLines = bilaoStored.length
+    ? bilaoStored
+        .map((line) => ({
+          package_id: line.package_id,
+          qty: Math.max(0, parseInt(line.qty, 10) || 0),
+        }))
+        .filter((line) => line.package_id && BILAO_PACKAGES[line.package_id] && line.qty > 0)
+    : booking?.bilao_package && BILAO_PACKAGES[booking.bilao_package]
+      ? [{ package_id: booking.bilao_package, qty: 1 }]
+      : [];
+
+  const boodleLines = boodleStored.length
+    ? boodleStored
+        .map((line) => ({
+          tier_id: line.tier_id,
+          qty: Math.max(0, parseInt(line.qty, 10) || 0),
+        }))
+        .filter((line) => line.tier_id && BOODLE_FIGHT_PACKAGES[line.tier_id] && line.qty > 0)
+    : booking?.boodle_fight_tier && BOODLE_FIGHT_PACKAGES[booking.boodle_fight_tier]
+      ? [{ tier_id: booking.boodle_fight_tier, qty: 1 }]
+      : [];
+
+  return { bilaoLines, boodleLines };
+}
+
+/** Itemized SOA lines for bilao orders. */
+export function buildBilaoSoaLineItems(booking) {
+  const { bilaoLines } = foodLinesFromBooking(booking);
+  if (bilaoLines.length === 0) {
+    if (Number(booking?.bilao_amount) > 0) {
+      return [{ label: 'Seafood Bilao', amount: Number(booking.bilao_amount) }];
+    }
+    return [];
+  }
+
+  return bilaoLines.map((line) => {
+    const pkg = BILAO_PACKAGES[line.package_id];
+    const qtyLabel = line.qty > 1 ? ` × ${line.qty}` : '';
+    return {
+      label: `Bilao — ${pkg.label}${qtyLabel}`,
+      amount: pkg.price * line.qty,
+    };
+  });
+}
+
+/** Itemized SOA lines for boodle fight orders. */
+export function buildBoodleSoaLineItems(booking) {
+  const { boodleLines } = foodLinesFromBooking(booking);
+  if (boodleLines.length === 0) {
+    if (Number(booking?.boodle_fight_amount) > 0) {
+      return [{ label: 'Boodle fight', amount: Number(booking.boodle_fight_amount) }];
+    }
+    return [];
+  }
+
+  return boodleLines.map((line) => {
+    const pkg = BOODLE_FIGHT_PACKAGES[line.tier_id];
+    const qtyLabel = line.qty > 1 ? ` × ${line.qty}` : '';
+    return {
+      label: `Boodle fight — ${pkg.label}${qtyLabel}`,
+      amount: pkg.price * line.qty,
+    };
+  });
 }

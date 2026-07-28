@@ -25,9 +25,9 @@ import {
 } from '../data/islandHoppingRates';
 import {
   emptyBookingExtras,
-  getBilaoPackage,
-  getBoodlePackage,
   validateBookingExtras,
+  bilaoLinesFromQty,
+  boodleLinesFromQty,
 } from '../data/bookingAddOns';
 import { getStayDateError, minCheckOutDate, minCheckInDate } from '../utils/stayDates';
 import { digitsOnly } from '../utils/inputSanitizers';
@@ -490,10 +490,12 @@ export default function Booking() {
         car_count: bookingExtras.bringing_car ? parseInt(bookingExtras.car_count, 10) || 1 : 0,
         pet_count: parseInt(bookingExtras.pet_count, 10) || 0,
         bilao_enabled: bookingExtras.bilao_enabled,
-        bilao_package: bookingExtras.bilao_enabled ? bookingExtras.bilao_package : undefined,
+        bilao_lines: bookingExtras.bilao_enabled
+          ? bilaoLinesFromQty(bookingExtras.bilao_qty)
+          : undefined,
         boodle_fight_enabled: bookingExtras.boodle_fight_enabled,
-        boodle_fight_tier: bookingExtras.boodle_fight_enabled
-          ? bookingExtras.boodle_fight_tier
+        boodle_lines: bookingExtras.boodle_fight_enabled
+          ? boodleLinesFromQty(bookingExtras.boodle_qty)
           : undefined,
       });
       const reference = data?.booking?.reference_code;
@@ -832,23 +834,26 @@ export default function Booking() {
                           <span>₱{islandHoppingTotal.toLocaleString()}</span>
                         </div>
                       )}
-                      {bilaoTotal > 0 && (
-                        <div className="flex justify-between text-aegean-700">
-                          <span>
-                            Bilao ({getBilaoPackage(bookingExtras.bilao_package)?.label || 'selected'})
-                          </span>
-                          <span>₱{bilaoTotal.toLocaleString()}</span>
-                        </div>
-                      )}
-                      {boodleTotal > 0 && (
-                        <div className="flex justify-between text-aegean-700">
-                          <span>
-                            Boodle fight (
-                            {getBoodlePackage(bookingExtras.boodle_fight_tier)?.label || 'selected'})
-                          </span>
-                          <span>₱{boodleTotal.toLocaleString()}</span>
-                        </div>
-                      )}
+                      {extrasQuote?.valid &&
+                        extrasQuote.bilao_items?.map(({ package: pkg, qty, subtotal }) => (
+                          <div key={pkg.id} className="flex justify-between text-aegean-700">
+                            <span>
+                              Bilao — {pkg.label}
+                              {qty > 1 ? ` × ${qty}` : ''}
+                            </span>
+                            <span>₱{subtotal.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      {extrasQuote?.valid &&
+                        extrasQuote.boodle_items?.map(({ package: pkg, qty, subtotal }) => (
+                          <div key={pkg.id} className="flex justify-between text-aegean-700">
+                            <span>
+                              Boodle fight — {pkg.label}
+                              {qty > 1 ? ` × ${qty}` : ''}
+                            </span>
+                            <span>₱{subtotal.toLocaleString()}</span>
+                          </div>
+                        ))}
                     </div>
                   )}
 
@@ -870,12 +875,12 @@ export default function Booking() {
                   )}
                   {bookingExtras.bilao_enabled && !bilaoTotal && (
                     <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                      Select a Bilao package size in section 3 to include it in your total.
+                      Enter Bilao quantities in section 3 to include them in your total.
                     </p>
                   )}
                   {bookingExtras.boodle_fight_enabled && !boodleTotal && (
                     <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                      Select a Boodle fight group size in section 3 to include it in your total.
+                      Enter Boodle fight quantities in section 3 to include them in your total.
                     </p>
                   )}
                 </div>

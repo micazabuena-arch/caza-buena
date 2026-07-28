@@ -17,6 +17,8 @@ export const ISLAND_HOPPING_RATES = {
   /** Facilitation fee for Deluxe boat tier (16–20 pax); other tiers use facilitationFee. */
   deluxeFacilitationFee: 500,
   garbageFee: 200,
+  /** Max guests per single boat — larger groups use multiple boats automatically. */
+  maxPassengersPerBoat: 20,
   maxPassengers: 20,
 };
 
@@ -84,6 +86,32 @@ function boatForPax(count) {
   return ISLAND_HOPPING_RATES.boat.find((b) => count >= b.min && count <= b.max) || null;
 }
 
+/** Split a group into one or more boats (20 pax max per boat). */
+export function planBoatsForPax(totalPax) {
+  const pax = parseInt(totalPax, 10);
+  if (!Number.isFinite(pax) || pax < 1) return [];
+
+  const maxPerBoat =
+    ISLAND_HOPPING_RATES.maxPassengersPerBoat ?? ISLAND_HOPPING_RATES.maxPassengers;
+  const allocations = [];
+  let remaining = pax;
+
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, maxPerBoat);
+    const boat = boatForPax(chunk);
+    if (!boat) return null;
+    allocations.push({ boat, pax: chunk });
+    remaining -= chunk;
+  }
+
+  return allocations;
+}
+
+export function formatBoatPlanLabel(allocations) {
+  if (!allocations?.length) return '';
+  return allocations.map((a) => `${a.boat.label} (${a.pax} pax)`).join(' + ');
+}
+
 export function isSeniorPassenger(passenger) {
   const age = parseInt(passenger?.age, 10);
   return Boolean(passenger?.is_senior) || (Number.isFinite(age) && age >= 60);
@@ -107,8 +135,10 @@ export function calculateIslandHopping(passengers) {
   const pax = validPassengers.length;
   if (pax < 1) return null;
 
-  const boat = boatForPax(pax);
-  if (!boat) return { error: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat.` };
+  const boatAllocations = planBoatsForPax(pax);
+  if (!boatAllocations?.length) {
+    return { error: 'Unable to determine boat size for this group.' };
+  }
 
   const breakdown = [];
   let entranceTotal = 0;
@@ -125,14 +155,21 @@ export function calculateIslandHopping(passengers) {
     });
   });
 
-  breakdown.push({
-    description: `Motorboat rental — ${boat.label}`,
-    quantity: 1,
-    unit_price: boat.rate,
-    subtotal: boat.rate,
+  let boatTotal = 0;
+  boatAllocations.forEach((allocation) => {
+    boatTotal += allocation.boat.rate;
+    breakdown.push({
+      description:
+        boatAllocations.length > 1
+          ? `Motorboat rental — ${allocation.boat.label} (${allocation.pax} pax)`
+          : `Motorboat rental — ${allocation.boat.label}`,
+      quantity: 1,
+      unit_price: allocation.boat.rate,
+      subtotal: allocation.boat.rate,
+    });
   });
 
-  const facilitation = resolveFacilitationFee([boat.id]);
+  const facilitation = resolveFacilitationFee(boatAllocations.map((a) => a.boat.id));
 
   breakdown.push({
     description: facilitation.label,
@@ -140,19 +177,22 @@ export function calculateIslandHopping(passengers) {
     unit_price: facilitation.amount,
     subtotal: facilitation.amount,
   });
+
+  const garbageTotal = boatAllocations.length * ISLAND_HOPPING_RATES.garbageFee;
   breakdown.push({
     description: 'Garbage fee (refundable)',
-    quantity: 1,
+    quantity: boatAllocations.length,
     unit_price: ISLAND_HOPPING_RATES.garbageFee,
-    subtotal: ISLAND_HOPPING_RATES.garbageFee,
+    subtotal: garbageTotal,
   });
 
-  const total = entranceTotal + boat.rate + facilitation.amount + ISLAND_HOPPING_RATES.garbageFee;
+  const total = entranceTotal + boatTotal + facilitation.amount + garbageTotal;
 
   return {
     total,
     breakdown,
-    boat_label: boat.label,
+    boat_label: formatBoatPlanLabel(boatAllocations),
+    boat_count: boatAllocations.length,
     passenger_count: pax,
     complete: validPassengers.length === passengers.length && passengers.every((p) => {
       const age = parseInt(p.age, 10);

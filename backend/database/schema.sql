@@ -154,9 +154,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   pet_deposit_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
   bilao_package VARCHAR(20),
   bilao_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  bilao_lines JSON NULL COMMENT 'Bilao orders [{package_id, qty}]',
   boodle_fight TINYINT(1) NOT NULL DEFAULT 0,
   boodle_fight_tier VARCHAR(20),
   boodle_fight_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  boodle_lines JSON NULL COMMENT 'Boodle fight orders [{tier_id, qty}]',
   stay_addons JSON NULL COMMENT 'During-stay charges (room extension, food, etc.)',
   status ENUM(
     'pending',

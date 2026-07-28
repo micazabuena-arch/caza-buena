@@ -4,7 +4,7 @@ import { Settings2, Image, CircleCheck, CircleX, Printer, Plus, Trash2 } from 'l
 import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
 import { isSeniorPassenger, isPwdPassenger } from '../data/islandHoppingRates';
-import { getBilaoPackage, getBoodlePackage } from '../data/bookingAddOns';
+import { describeBilaoBooking, describeBoodleBooking } from '../data/bookingAddOns';
 import { getBookingPaymentMethodLabel } from '../data/manualBookingPayment';
 import PaymentWorkflowSteps from '../components/booking/PaymentWorkflowSteps';
 import Loading from '../components/ui/Loading';
@@ -590,18 +590,16 @@ export default function AdminBookings() {
                       {Number(detail.pet_deposit_amount || 0).toLocaleString()} (refundable)
                     </p>
                   )}
-                  {detail.bilao_package && (
+                  {describeBilaoBooking(detail) && (
                     <p>
-                      <strong>Bilao:</strong>{' '}
-                      {getBilaoPackage(detail.bilao_package)?.label || detail.bilao_package} — ₱
-                      {Number(detail.bilao_amount || 0).toLocaleString()}
+                      <strong>Bilao:</strong> {describeBilaoBooking(detail).label} — ₱
+                      {describeBilaoBooking(detail).amount.toLocaleString()}
                     </p>
                   )}
-                  {detail.boodle_fight && (
+                  {describeBoodleBooking(detail) && (
                     <p>
-                      <strong>Boodle fight:</strong>{' '}
-                      {getBoodlePackage(detail.boodle_fight_tier)?.label || detail.boodle_fight_tier}{' '}
-                      — ₱{Number(detail.boodle_fight_amount || 0).toLocaleString()}
+                      <strong>Boodle fight:</strong> {describeBoodleBooking(detail).label} — ₱
+                      {describeBoodleBooking(detail).amount.toLocaleString()}
                     </p>
                   )}
                   {(() => {

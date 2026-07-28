@@ -8,7 +8,7 @@ import Loading from '../components/ui/Loading';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
-import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
+import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES, foodLinesFromBooking } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import {
   ADDITIONAL_PAX_LABEL_OPTIONS,
@@ -25,6 +25,7 @@ import {
   normalizeQuotation,
 } from '../utils/quotation';
 import { openQuotationPrint } from '../utils/openQuotationPrint';
+import { formatDateTimePHT } from '../utils/datetime';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -323,6 +324,7 @@ export default function AdminQuotation() {
       const pax = island?.passengers?.length || detail.guest_count || 2;
       const boatTier =
         ISLAND_HOPPING_RATES.boat.find((b) => pax >= b.min && pax <= b.max)?.id || 'small';
+      const foodLines = foodLinesFromBooking(detail);
 
       setQuote({
         ...emptyQuotation(),
@@ -352,14 +354,16 @@ export default function AdminQuotation() {
         tourSeniorPwdQty,
         tourInfantQty,
         boats: [{ boatTierId: boatTier }],
-        bilaoEnabled: Boolean(detail.bilao_package),
-        bilaoLines: detail.bilao_package
-          ? [{ packageId: detail.bilao_package, qty: 1 }]
-          : [],
-        boodleEnabled: Boolean(detail.boodle_fight_tier),
-        boodleLines: detail.boodle_fight_tier
-          ? [{ tierId: detail.boodle_fight_tier, qty: 1 }]
-          : [],
+        bilaoEnabled: foodLines.bilaoLines.length > 0,
+        bilaoLines: foodLines.bilaoLines.map((line) => ({
+          packageId: line.package_id,
+          qty: line.qty,
+        })),
+        boodleEnabled: foodLines.boodleLines.length > 0,
+        boodleLines: foodLines.boodleLines.map((line) => ({
+          tierId: line.tier_id,
+          qty: line.qty,
+        })),
         customAddonsEnabled:
           Array.isArray(detail.addons) && detail.addons.length > 0,
         customAddonsSectionTitle: 'Other add-ons',
@@ -574,7 +578,7 @@ export default function AdminQuotation() {
                   <td className="py-2.5 pr-3">{item.guest_name || '—'}</td>
                   <td className="py-2.5 pr-3">₱{formatQuoteAmount(item.grand_total)}</td>
                   <td className="py-2.5 pr-3 text-aegean-500">
-                    {item.updated_at ? new Date(item.updated_at).toLocaleString() : '—'}
+                    {item.updated_at ? formatDateTimePHT(item.updated_at) : '—'}
                   </td>
                   <td className="py-2.5 text-right">
                     <IconActionGroup className="justify-end">

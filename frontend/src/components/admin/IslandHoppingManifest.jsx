@@ -1,5 +1,6 @@
 import { getAssetUrl } from '../../utils/assetUrl';
 import { isSeniorPassenger, isPwdPassenger } from '../../data/islandHoppingRates';
+import { formatDateTimePHT } from '../../utils/datetime';
 
 /** Printable island hopping manifest (booking + parsed island_hopping_data) */
 export default function IslandHoppingManifest({ booking, islandHop }) {
@@ -155,7 +156,7 @@ export default function IslandHoppingManifest({ booking, islandHop }) {
         </section>
       )}
 
-      <p className="text-[11px] text-gray-500">Printed {new Date().toLocaleString()}</p>
+      <p className="text-[11px] text-gray-500">Printed {formatDateTimePHT(new Date())}</p>
     </article>
   );
 }

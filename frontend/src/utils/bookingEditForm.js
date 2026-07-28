@@ -5,6 +5,11 @@ import {
   stripManualPaymentFromNotes,
 } from '../data/manualBookingPayment';
 import { emptyIslandHoppingForm, parseIslandHoppingData } from '../data/islandHoppingRates';
+import {
+  bilaoLinesFromQty,
+  bookingExtrasFromRecord,
+  boodleLinesFromQty,
+} from '../data/bookingAddOns';
 import { roomLinesToPayload } from './bookingRoomLines';
 
 export function bookingToEditState(booking) {
@@ -35,15 +40,7 @@ export function bookingToEditState(booking) {
         ? ''
         : String(booking.discount_amount),
     admin_discount_note: booking?.discount_code ? '' : booking?.discount_note || '',
-    bookingExtras: {
-      bringing_car: Boolean(booking?.bringing_car),
-      car_count: booking?.car_count || 1,
-      pet_count: booking?.pet_count ?? 0,
-      bilao_enabled: Boolean(booking?.bilao_package),
-      bilao_package: booking?.bilao_package || '',
-      boodle_fight_enabled: Boolean(booking?.boodle_fight),
-      boodle_fight_tier: booking?.boodle_fight_tier || '',
-    },
+    bookingExtras: bookingExtrasFromRecord(booking),
     islandHoppingEnabled: Boolean(booking?.island_hopping),
     islandHopping: islandRaw
       ? {
@@ -110,11 +107,13 @@ export function editStateToPayload(state, roomLines = []) {
       : 0,
     pet_count: parseInt(state.bookingExtras.pet_count, 10) || 0,
     bilao_enabled: state.bookingExtras.bilao_enabled,
-    bilao_package: state.bookingExtras.bilao_enabled ? state.bookingExtras.bilao_package : null,
+    bilao_lines: state.bookingExtras.bilao_enabled
+      ? bilaoLinesFromQty(state.bookingExtras.bilao_qty)
+      : [],
     boodle_fight_enabled: state.bookingExtras.boodle_fight_enabled,
-    boodle_fight_tier: state.bookingExtras.boodle_fight_enabled
-      ? state.bookingExtras.boodle_fight_tier
-      : null,
+    boodle_lines: state.bookingExtras.boodle_fight_enabled
+      ? boodleLinesFromQty(state.bookingExtras.boodle_qty)
+      : [],
     island_hopping: state.islandHoppingEnabled,
   };
 

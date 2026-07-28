@@ -1,6 +1,7 @@
 import { formatGuestCount } from './guestCount';
 import { downloadExcel } from './exportExcel';
 import { todayYmd } from './exportCsv';
+import { formatDatePHT } from './datetime';
 
 const GUEST_EXPORT_COLUMNS = [
   { label: 'Reference', key: 'reference_code' },
@@ -21,7 +22,7 @@ const GUEST_EXPORT_COLUMNS = [
   { label: 'Valid ID', key: 'valid_id' },
   { label: 'ETA', key: 'estimated_arrival' },
   { label: 'Island hopping', value: (b) => (b.island_hopping ? 'Yes' : 'No') },
-  { label: 'Booked on', value: (b) => (b.created_at ? String(b.created_at).slice(0, 10) : '') },
+  { label: 'Booked on', value: (b) => formatDatePHT(b.created_at) },
 ];
 
 function exportFilename(count) {

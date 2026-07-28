@@ -3,6 +3,7 @@ import { format, addDays } from 'date-fns';
 import api, { getApiError } from '../../api/client';
 import SubmitButton from '../ui/SubmitButton';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
+import FoodAddOnsOrderSummary from '../booking/FoodAddOnsOrderSummary';
 import BookingRoomLinesSection from '../booking/BookingRoomLinesSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
@@ -13,7 +14,7 @@ import {
 } from '../../data/manualBookingPayment';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
-import { emptyBookingExtras, validateBookingExtras } from '../../data/bookingAddOns';
+import { emptyBookingExtras, validateBookingExtras, bilaoLinesFromQty, boodleLinesFromQty } from '../../data/bookingAddOns';
 import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
@@ -383,10 +384,12 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       car_count: bookingExtras.bringing_car ? parseInt(bookingExtras.car_count, 10) || 1 : 0,
       pet_count: parseInt(bookingExtras.pet_count, 10) || 0,
       bilao_enabled: bookingExtras.bilao_enabled,
-      bilao_package: bookingExtras.bilao_enabled ? bookingExtras.bilao_package : undefined,
+      bilao_lines: bookingExtras.bilao_enabled
+        ? bilaoLinesFromQty(bookingExtras.bilao_qty)
+        : undefined,
       boodle_fight_enabled: bookingExtras.boodle_fight_enabled,
-      boodle_fight_tier: bookingExtras.boodle_fight_enabled
-        ? bookingExtras.boodle_fight_tier
+      boodle_lines: bookingExtras.boodle_fight_enabled
+        ? boodleLinesFromQty(bookingExtras.boodle_qty)
         : undefined,
       admin_discount_amount: form.admin_discount_amount,
       admin_discount_note: form.admin_discount_note.trim() || undefined,
@@ -667,6 +670,13 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               onChange={setBookingExtras}
               roomType={roomType}
             />
+            <div className="border-t border-aegean-100 pt-4 mt-4">
+              <FoodAddOnsOrderSummary
+                extrasQuote={extrasQuote}
+                bookingExtras={bookingExtras}
+                showHints
+              />
+            </div>
             <div className="border-t border-aegean-100 pt-5">
               <IslandHoppingSection
                 embedded
@@ -711,6 +721,11 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               maxAmount={roomSubtotal}
               error={fieldErrors.admin_discount_amount}
             />
+            {(extrasQuote?.bilao_amount > 0 || extrasQuote?.boodle_fight_amount > 0) && (
+              <div className="rounded-lg border border-aegean-100 bg-aegean-50/40 p-4">
+                <FoodAddOnsOrderSummary extrasQuote={extrasQuote} bookingExtras={bookingExtras} />
+              </div>
+            )}
             <PaymentAmountSelect
               totalAmount={totalAmount > 0 ? totalAmount : 0}
               depositPercent={depositPercent}

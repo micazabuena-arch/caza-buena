@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, Pencil, Plus, Settings, UserCheck, UserPlus, UserX } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDatePHT } from '../utils/datetime';
 import api, { getApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -312,7 +312,7 @@ export default function AdminSettings() {
                     <p className="text-aegean-600 mt-1">{account.email}</p>
                     <p className="text-xs text-aegean-500 mt-2 capitalize">
                       {account.role} · {active ? 'Active' : 'Inactive'} · Added{' '}
-                      {format(new Date(account.created_at), 'MMM d, yyyy')}
+                      {formatDatePHT(account.created_at)}
                     </p>
                   </div>
                   {canManageAccounts && (
@@ -372,7 +372,7 @@ export default function AdminSettings() {
                     </span>
                   </td>
                   <td className="py-3 pr-4 text-aegean-500">
-                    {format(new Date(account.created_at), 'MMM d, yyyy')}
+                    {formatDatePHT(account.created_at)}
                   </td>
                   {canManageAccounts && (
                     <td className="py-3">

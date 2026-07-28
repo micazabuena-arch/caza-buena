@@ -4,6 +4,7 @@ import SubmitButton from '../ui/SubmitButton';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
+import FoodAddOnsOrderSummary from '../booking/FoodAddOnsOrderSummary';
 import BookingRoomLinesSection from '../booking/BookingRoomLinesSection';
 import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
@@ -527,6 +528,13 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               onChange={(bookingExtras) => update({ bookingExtras })}
               roomType={roomType}
             />
+            <div className="border-t border-aegean-100 pt-4 mt-4">
+              <FoodAddOnsOrderSummary
+                extrasQuote={extrasQuote}
+                bookingExtras={form.bookingExtras}
+                showHints
+              />
+            </div>
             <div className="border-t border-aegean-100 pt-5">
               <IslandHoppingSection
                 embedded
@@ -587,6 +595,14 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               promoCode={booking.discount_code}
               promoAmount={booking.discount_amount}
             />
+            {(extrasQuote?.bilao_amount > 0 || extrasQuote?.boodle_fight_amount > 0) && (
+              <div className="rounded-lg border border-aegean-100 bg-aegean-50/40 p-4">
+                <FoodAddOnsOrderSummary
+                  extrasQuote={extrasQuote}
+                  bookingExtras={form.bookingExtras}
+                />
+              </div>
+            )}
             <PaymentAmountSelect
               totalAmount={
                 paymentPreviewTotal > 0 ? paymentPreviewTotal : Number(booking.total_amount)

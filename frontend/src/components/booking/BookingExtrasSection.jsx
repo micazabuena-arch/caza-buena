@@ -1,18 +1,74 @@
 import {
   BILAO_PACKAGES,
   BOODLE_FIGHT_PACKAGES,
+  bilaoLinesFromQty,
+  boodleLinesFromQty,
+  emptyBilaoQty,
+  emptyBoodleQty,
   maxPetsForRoomType,
   PET_DEPOSIT_PER_PET,
+  summarizeBilaoLines,
+  summarizeBoodleLines,
 } from '../../data/bookingAddOns';
 import { YesNoChoice } from './FormSection';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
 
+function FoodQtyTable({ packages, qtyMap, onQtyChange, paxColumn = false }) {
+  const updateQty = (id, value) => {
+    onQtyChange({ ...qtyMap, [id]: value });
+  };
+
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-aegean-500">
+            <th className="pb-2 pr-3 font-medium">Size</th>
+            {paxColumn && <th className="pb-2 pr-3 font-medium">Good for</th>}
+            <th className="pb-2 pr-3 font-medium">Price</th>
+            <th className="pb-2 font-medium w-20">Qty</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-aegean-100">
+          {packages.map((pkg) => (
+            <tr key={pkg.id}>
+              <td className="py-2 pr-3 font-medium text-aegean-800">{pkg.label}</td>
+              {paxColumn && <td className="py-2 pr-3 text-aegean-600">{pkg.pax} pax</td>}
+              <td className="py-2 pr-3 text-aegean-600">₱{pkg.price.toLocaleString()}</td>
+              <td className="py-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={qtyMap?.[pkg.id] ?? 0}
+                  onChange={(e) => updateQty(pkg.id, e.target.value)}
+                  className={`${inputClass} max-w-[4.5rem] text-center py-1.5`}
+                  aria-label={`Quantity for ${pkg.label}`}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function BookingExtrasSection({ data, onChange, roomType }) {
   const update = (patch) => onChange({ ...data, ...patch });
   const maxPets = maxPetsForRoomType(roomType);
   const petCount = parseInt(data.pet_count, 10) || 0;
+
+  const bilaoQty = data.bilao_qty || emptyBilaoQty();
+  const boodleQty = data.boodle_qty || emptyBoodleQty();
+  const bilaoSubtotal = data.bilao_enabled
+    ? summarizeBilaoLines(bilaoLinesFromQty(bilaoQty)).total
+    : 0;
+  const boodleSubtotal = data.boodle_fight_enabled
+    ? summarizeBoodleLines(boodleLinesFromQty(boodleQty)).total
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -82,7 +138,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-aegean-800">Bilao food package</p>
               <p className="text-xs text-aegean-500 mt-0.5">
-                Rice, drinks & utensils · from ₱1,500
+                Rice, drinks & utensils · enter quantity per size
               </p>
             </div>
             <YesNoChoice
@@ -90,23 +146,28 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
               value={data.bilao_enabled}
               yesLabel="Add"
               onChange={(yes) =>
-                update({ bilao_enabled: yes, bilao_package: yes ? data.bilao_package : '' })
+                update({
+                  bilao_enabled: yes,
+                  bilao_qty: yes ? bilaoQty : emptyBilaoQty(),
+                  bilao_package: '',
+                })
               }
             />
           </div>
           {data.bilao_enabled && (
-            <select
-              value={data.bilao_package}
-              onChange={(e) => update({ bilao_package: e.target.value })}
-              className={inputClass}
-            >
-              <option value="">Choose package size…</option>
-              {BILAO_PACKAGES.map((pkg) => (
-                <option key={pkg.id} value={pkg.id}>
-                  {pkg.label} — good for {pkg.pax} pax — ₱{pkg.price.toLocaleString()}
-                </option>
-              ))}
-            </select>
+            <>
+              <FoodQtyTable
+                packages={BILAO_PACKAGES}
+                qtyMap={bilaoQty}
+                onQtyChange={(bilao_qty) => update({ bilao_qty })}
+                paxColumn
+              />
+              {bilaoSubtotal > 0 && (
+                <p className="text-xs font-medium text-aegean-700 pt-1">
+                  Bilao subtotal: ₱{bilaoSubtotal.toLocaleString()}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -115,7 +176,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-aegean-800">Boodle fight</p>
               <p className="text-xs text-aegean-500 mt-0.5">
-                Filipino feast on banana leaves · from ₱5,000
+                Filipino feast on banana leaves · enter quantity per group size
               </p>
             </div>
             <YesNoChoice
@@ -125,24 +186,25 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
               onChange={(yes) =>
                 update({
                   boodle_fight_enabled: yes,
-                  boodle_fight_tier: yes ? data.boodle_fight_tier : '',
+                  boodle_qty: yes ? boodleQty : emptyBoodleQty(),
+                  boodle_fight_tier: '',
                 })
               }
             />
           </div>
           {data.boodle_fight_enabled && (
-            <select
-              value={data.boodle_fight_tier}
-              onChange={(e) => update({ boodle_fight_tier: e.target.value })}
-              className={inputClass}
-            >
-              <option value="">Choose group size…</option>
-              {BOODLE_FIGHT_PACKAGES.map((pkg) => (
-                <option key={pkg.id} value={pkg.id}>
-                  {pkg.label} — ₱{pkg.price.toLocaleString()}
-                </option>
-              ))}
-            </select>
+            <>
+              <FoodQtyTable
+                packages={BOODLE_FIGHT_PACKAGES}
+                qtyMap={boodleQty}
+                onQtyChange={(boodle_qty) => update({ boodle_qty })}
+              />
+              {boodleSubtotal > 0 && (
+                <p className="text-xs font-medium text-aegean-700 pt-1">
+                  Boodle fight subtotal: ₱{boodleSubtotal.toLocaleString()}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -17,6 +17,7 @@ export const ISLAND_HOPPING_RATES = {
   /** Facilitation fee for Deluxe boat tier (16–20 pax); other tiers use facilitationFee. */
   deluxeFacilitationFee: 500,
   garbageFee: 200,
+  maxPassengersPerBoat: 20,
   maxPassengers: 20,
 };
 
@@ -85,6 +86,31 @@ function boatForPax(count) {
   return ISLAND_HOPPING_RATES.boat.find((b) => count >= b.min && count <= b.max) || null;
 }
 
+function planBoatsForPax(totalPax) {
+  const pax = parseInt(totalPax, 10);
+  if (!Number.isFinite(pax) || pax < 1) return [];
+
+  const maxPerBoat =
+    ISLAND_HOPPING_RATES.maxPassengersPerBoat ?? ISLAND_HOPPING_RATES.maxPassengers;
+  const allocations = [];
+  let remaining = pax;
+
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, maxPerBoat);
+    const boat = boatForPax(chunk);
+    if (!boat) return null;
+    allocations.push({ boat, pax: chunk });
+    remaining -= chunk;
+  }
+
+  return allocations;
+}
+
+function formatBoatPlanLabel(allocations) {
+  if (!allocations?.length) return '';
+  return allocations.map((a) => `${a.boat.label} (${a.pax} pax)`).join(' + ');
+}
+
 export function isSeniorPassenger(passenger) {
   const age = parseInt(passenger?.age, 10);
   return Boolean(passenger?.is_senior) || (Number.isFinite(age) && age >= 60);
@@ -109,12 +135,6 @@ export function validateIslandHoppingPayload(data) {
   const passengers = data.passengers || [];
   if (passengers.length < 1) {
     return { valid: false, message: 'Add at least one island hopping guest.' };
-  }
-  if (passengers.length > ISLAND_HOPPING_RATES.maxPassengers) {
-    return {
-      valid: false,
-      message: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat. Contact us for larger groups.`,
-    };
   }
 
   for (let i = 0; i < passengers.length; i++) {
@@ -164,12 +184,6 @@ export function validateIslandHoppingPayloadLenient(data) {
     if (!Number.isFinite(pax) || pax < 1) {
       return { valid: false, message: 'Enter the number of island hopping passengers.' };
     }
-    if (pax > ISLAND_HOPPING_RATES.maxPassengers) {
-      return {
-        valid: false,
-        message: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat. Contact us for larger groups.`,
-      };
-    }
     const amount = parseFloat(data.summary_amount);
     if (!Number.isFinite(amount) || amount < 0) {
       return { valid: false, message: 'Enter a valid island hopping amount.' };
@@ -178,12 +192,6 @@ export function validateIslandHoppingPayloadLenient(data) {
   }
 
   const passengers = data.passengers || [];
-  if (passengers.length > ISLAND_HOPPING_RATES.maxPassengers) {
-    return {
-      valid: false,
-      message: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat. Contact us for larger groups.`,
-    };
-  }
   return { valid: true };
 }
 
@@ -195,12 +203,11 @@ export function isIslandHoppingComplete(data) {
 export function calculateIslandHopping(passengers) {
   const pax = passengers?.length || 0;
   if (pax < 1) return { error: 'At least one passenger is required.' };
-  if (pax > ISLAND_HOPPING_RATES.maxPassengers) {
-    return { error: `Maximum ${ISLAND_HOPPING_RATES.maxPassengers} passengers per boat.` };
-  }
 
-  const boat = boatForPax(pax);
-  if (!boat) return { error: 'Unable to determine boat size for this group.' };
+  const boatAllocations = planBoatsForPax(pax);
+  if (!boatAllocations?.length) {
+    return { error: 'Unable to determine boat size for this group.' };
+  }
 
   const breakdown = [];
   let entranceTotal = 0;
@@ -220,15 +227,22 @@ export function calculateIslandHopping(passengers) {
     });
   });
 
-  breakdown.push({
-    category: 'boat',
-    description: `Motorboat rental — ${boat.label}`,
-    quantity: 1,
-    unit_price: boat.rate,
-    subtotal: boat.rate,
+  let boatTotal = 0;
+  boatAllocations.forEach((allocation) => {
+    boatTotal += allocation.boat.rate;
+    breakdown.push({
+      category: 'boat',
+      description:
+        boatAllocations.length > 1
+          ? `Motorboat rental — ${allocation.boat.label} (${allocation.pax} pax)`
+          : `Motorboat rental — ${allocation.boat.label}`,
+      quantity: 1,
+      unit_price: allocation.boat.rate,
+      subtotal: allocation.boat.rate,
+    });
   });
 
-  const facilitation = resolveFacilitationFee([boat.id]);
+  const facilitation = resolveFacilitationFee(boatAllocations.map((a) => a.boat.id));
 
   breakdown.push({
     category: 'fee',
@@ -238,25 +252,26 @@ export function calculateIslandHopping(passengers) {
     subtotal: facilitation.amount,
   });
 
+  const garbageTotal = boatAllocations.length * ISLAND_HOPPING_RATES.garbageFee;
   breakdown.push({
     category: 'fee',
     description: 'Garbage fee (refundable)',
-    quantity: 1,
+    quantity: boatAllocations.length,
     unit_price: ISLAND_HOPPING_RATES.garbageFee,
-    subtotal: ISLAND_HOPPING_RATES.garbageFee,
+    subtotal: garbageTotal,
   });
 
-  const total =
-    entranceTotal + boat.rate + facilitation.amount + ISLAND_HOPPING_RATES.garbageFee;
+  const total = entranceTotal + boatTotal + facilitation.amount + garbageTotal;
 
   return {
     total: Math.round(total * 100) / 100,
     breakdown,
-    boat_tier: boat.id,
-    boat_label: boat.label,
+    boat_tier: boatAllocations[0].boat.id,
+    boat_label: formatBoatPlanLabel(boatAllocations),
+    boat_count: boatAllocations.length,
     passenger_count: pax,
     entrance_total: entranceTotal,
-    boat_amount: boat.rate,
+    boat_amount: boatTotal,
   };
 }
 
@@ -274,6 +289,7 @@ export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) 
   if (ihData.soa_summary) {
     const pax = parseInt(ihData.summary_pax, 10);
     const amount = Math.round(parseFloat(ihData.summary_amount) * 100) / 100;
+    const boatAllocations = planBoatsForPax(pax);
     return {
       amount,
       stored: {
@@ -282,6 +298,8 @@ export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) 
         summary_amount: amount,
         total: amount,
         passenger_count: pax,
+        boat_plan: formatBoatPlanLabel(boatAllocations),
+        boat_count: boatAllocations?.length || 0,
         passengers: [],
         passenger_address: '',
         payor_name: '',

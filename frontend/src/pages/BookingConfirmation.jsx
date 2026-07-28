@@ -13,7 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { images } from '../data/placeholders';
 import { parseIslandHoppingData } from '../data/islandHoppingRates';
-import { getBilaoPackage, getBoodlePackage } from '../data/bookingAddOns';
+import { describeBilaoBooking, describeBoodleBooking } from '../data/bookingAddOns';
 
 function workflowStep(status) {
   if (status === 'confirmed') return 5;
@@ -108,6 +108,8 @@ export default function BookingConfirmation() {
         }
       : null);
   const islandHop = booking?.island_hopping ? parseIslandHoppingData(booking.island_hopping_data) : null;
+  const bilaoDesc = booking ? describeBilaoBooking(booking) : null;
+  const boodleDesc = booking ? describeBoodleBooking(booking) : null;
 
   const handleSeniorIdUpdated = (passengerIndex, seniorIdUrl) => {
     setBooking((prev) => {
@@ -183,8 +185,8 @@ export default function BookingConfirmation() {
             </p>
             {(booking.bringing_car ||
               Number(booking.pet_count) > 0 ||
-              booking.bilao_package ||
-              booking.boodle_fight) && (
+              bilaoDesc ||
+              boodleDesc) && (
               <div className="text-sm pt-2 border-t border-aegean-200/80 space-y-1">
                 <p className="font-medium text-aegean-800">Stay extras</p>
                 {booking.bringing_car ? (
@@ -200,17 +202,14 @@ export default function BookingConfirmation() {
                     {Number(booking.pet_deposit_amount || 0).toLocaleString()} (on arrival)
                   </p>
                 )}
-                {booking.bilao_package && (
+                {bilaoDesc && (
                   <p>
-                    Bilao: {getBilaoPackage(booking.bilao_package)?.label || booking.bilao_package} — ₱
-                    {Number(booking.bilao_amount || 0).toLocaleString()}
+                    Bilao: {bilaoDesc.label} — ₱{bilaoDesc.amount.toLocaleString()}
                   </p>
                 )}
-                {booking.boodle_fight && (
+                {boodleDesc && (
                   <p>
-                    Boodle fight:{' '}
-                    {getBoodlePackage(booking.boodle_fight_tier)?.label || booking.boodle_fight_tier} — ₱
-                    {Number(booking.boodle_fight_amount || 0).toLocaleString()}
+                    Boodle fight: {boodleDesc.label} — ₱{boodleDesc.amount.toLocaleString()}
                   </p>
                 )}
               </div>

@@ -133,14 +133,24 @@ async function run() {
   );
   await addColumn(
     'bookings',
+    'bilao_lines',
+    "JSON NULL COMMENT 'Bilao orders [{package_id, qty}]' AFTER `bilao_amount`"
+  );
+  await addColumn(
+    'bookings',
     'boodle_fight',
-    'TINYINT(1) NOT NULL DEFAULT 0 AFTER `bilao_amount`'
+    'TINYINT(1) NOT NULL DEFAULT 0 AFTER `bilao_lines`'
   );
   await addColumn('bookings', 'boodle_fight_tier', 'VARCHAR(20) NULL AFTER `boodle_fight`');
   await addColumn(
     'bookings',
     'boodle_fight_amount',
     'DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER `boodle_fight_tier`'
+  );
+  await addColumn(
+    'bookings',
+    'boodle_lines',
+    "JSON NULL COMMENT 'Boodle fight orders [{tier_id, qty}]' AFTER `boodle_fight_amount`"
   );
   await addColumn(
     'bookings',

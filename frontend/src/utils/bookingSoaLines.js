@@ -1,5 +1,9 @@
 import { parseStayAddons, stayAddonsTotal } from './stayAddons.js';
 import { parseIslandHoppingData } from '../data/islandHoppingRates.js';
+import {
+  buildBilaoSoaLineItems,
+  buildBoodleSoaLineItems,
+} from '../data/bookingAddOns.js';
 
 function customAddonsTotal(addons) {
   if (!Array.isArray(addons)) return 0;
@@ -98,15 +102,8 @@ export function buildBookingSoaLineItems(booking, docType = 'soa') {
       amount: Number(booking.island_hopping_amount),
     });
   }
-  if (Number(booking.bilao_amount) > 0) {
-    lines.push({ label: 'Seafood Bilao', amount: Number(booking.bilao_amount) });
-  }
-  if (Number(booking.boodle_fight_amount) > 0) {
-    lines.push({
-      label: 'Boodle fight',
-      amount: Number(booking.boodle_fight_amount),
-    });
-  }
+  lines.push(...buildBilaoSoaLineItems(booking));
+  lines.push(...buildBoodleSoaLineItems(booking));
 
   return lines;
 }

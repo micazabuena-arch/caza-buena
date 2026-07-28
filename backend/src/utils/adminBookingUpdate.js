@@ -36,8 +36,10 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     pet_count,
     bilao_enabled,
     bilao_package,
+    bilao_lines,
     boodle_fight_enabled,
     boodle_fight_tier,
+    boodle_lines,
     island_hopping: islandHoppingFlag,
     island_hopping_data: islandHoppingData,
     admin_discount_amount,
@@ -169,7 +171,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     islandHoppingStored = resolved.stored;
   }
 
-  const { validateBookingExtras } = await import('./bookingExtras.js');
+  const { validateBookingExtras, serializeFoodLines } = await import('./bookingExtras.js');
   const extrasValidation = validateBookingExtras(
     {
       bringing_car,
@@ -177,8 +179,10 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       pet_count,
       bilao_enabled,
       bilao_package,
+      bilao_lines,
       boodle_fight_enabled,
       boodle_fight_tier,
+      boodle_lines,
     },
     hasSuite ? 'suite' : room.room_type
   );
@@ -268,9 +272,11 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       pet_deposit_amount: extrasValidation.pet_deposit_amount,
       bilao_package: extrasValidation.bilao_package,
       bilao_amount: extrasValidation.bilao_amount,
+      bilao_lines: serializeFoodLines(extrasValidation.bilao_lines),
       boodle_fight: extrasValidation.boodle_fight ? 1 : 0,
       boodle_fight_tier: extrasValidation.boodle_fight_tier,
       boodle_fight_amount: extrasValidation.boodle_fight_amount,
+      boodle_lines: serializeFoodLines(extrasValidation.boodle_lines),
       payment_method_id: storedPayment.payment_method_id,
       payment_option: payOption,
       amount_to_pay: payResolved.amount,

@@ -8,10 +8,10 @@ import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import AdminTableShell from '../components/ui/AdminTableShell';
 import { usePagination } from '../hooks/usePagination';
+import { formatDateTimePHT } from '../utils/datetime';
 
 function formatInquiryDate(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString();
+  return formatDateTimePHT(value);
 }
 
 export default function AdminInquiries() {

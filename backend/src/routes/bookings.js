@@ -237,8 +237,10 @@ router.post(
     body('pet_count').optional().toInt().isInt({ min: 0, max: 2 }),
     body('bilao_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('bilao_package').optional().trim(),
+    body('bilao_lines').optional().isArray(),
     body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('boodle_fight_tier').optional().trim(),
+    body('boodle_lines').optional().isArray(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -280,8 +282,10 @@ router.post(
       pet_count: petCountBody,
       bilao_enabled: bilaoEnabledFlag,
       bilao_package: bilaoPackageBody,
+      bilao_lines: bilaoLinesBody,
       boodle_fight_enabled: boodleFightEnabledFlag,
       boodle_fight_tier: boodleFightTierBody,
+      boodle_lines: boodleLinesBody,
       room_lines: roomLinesBody,
     } = req.body;
 
@@ -365,7 +369,7 @@ router.post(
       }
     }
 
-    const { validateBookingExtras } = await import('../utils/bookingExtras.js');
+    const { validateBookingExtras, serializeFoodLines } = await import('../utils/bookingExtras.js');
     const extrasValidation = validateBookingExtras(
       {
         bringing_car: bringingCarFlag,
@@ -373,8 +377,10 @@ router.post(
         pet_count: petCountBody,
         bilao_enabled: bilaoEnabledFlag,
         bilao_package: bilaoPackageBody,
+        bilao_lines: bilaoLinesBody,
         boodle_fight_enabled: boodleFightEnabledFlag,
         boodle_fight_tier: boodleFightTierBody,
+        boodle_lines: boodleLinesBody,
       },
       priced.hasSuite ? 'suite' : room.room_type
     );
@@ -415,9 +421,9 @@ router.post(
         room_rate, discount_amount, discount_code, total_amount, extra_person_charges,
         island_hopping, island_hopping_amount, island_hopping_data,
         bringing_car, car_count, pet_count, pet_deposit_amount,
-        bilao_package, bilao_amount, boodle_fight, boodle_fight_tier, boodle_fight_amount,
+        bilao_package, bilao_amount, bilao_lines, boodle_fight, boodle_fight_tier, boodle_fight_amount, boodle_lines,
         status, payment_method_id, payment_option, amount_to_pay
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
       [
         reference,
         pricedLines[0].room_id,
@@ -448,9 +454,11 @@ router.post(
         extrasValidation.pet_deposit_amount,
         extrasValidation.bilao_package,
         extrasValidation.bilao_amount,
+        serializeFoodLines(extrasValidation.bilao_lines),
         extrasValidation.boodle_fight ? 1 : 0,
         extrasValidation.boodle_fight_tier,
         extrasValidation.boodle_fight_amount,
+        serializeFoodLines(extrasValidation.boodle_lines),
         payment_method_id || null,
         payment_option,
         amountToPay,
@@ -530,8 +538,10 @@ router.post(
     body('pet_count').optional().toInt().isInt({ min: 0, max: 2 }),
     body('bilao_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('bilao_package').optional().trim(),
+    body('bilao_lines').optional().isArray(),
     body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('boodle_fight_tier').optional().trim(),
+    body('boodle_lines').optional().isArray(),
     body('admin_discount_amount').optional().isFloat({ min: 0 }),
     body('admin_discount_note').optional().trim().isLength({ max: 255 }),
   ],
@@ -638,8 +648,8 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
         discount_code = ?, discount_note = ?, total_amount = ?, extra_person_charges = ?,
         island_hopping = ?, island_hopping_amount = ?, island_hopping_data = ?,
         bringing_car = ?, car_count = ?, pet_count = ?, pet_deposit_amount = ?,
-        bilao_package = ?, bilao_amount = ?, boodle_fight = ?, boodle_fight_tier = ?,
-        boodle_fight_amount = ?, payment_method_id = ?, payment_option = ?, amount_to_pay = ?
+        bilao_package = ?, bilao_amount = ?, bilao_lines = ?, boodle_fight = ?, boodle_fight_tier = ?,
+        boodle_fight_amount = ?, boodle_lines = ?, payment_method_id = ?, payment_option = ?, amount_to_pay = ?
        WHERE id = ?`,
       [
         v.room_id,
@@ -672,9 +682,11 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
         v.pet_deposit_amount,
         v.bilao_package,
         v.bilao_amount,
+        v.bilao_lines,
         v.boodle_fight,
         v.boodle_fight_tier,
         v.boodle_fight_amount,
+        v.boodle_lines,
         v.payment_method_id,
         v.payment_option,
         v.amount_to_pay,

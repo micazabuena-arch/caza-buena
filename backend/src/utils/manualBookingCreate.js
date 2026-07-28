@@ -42,8 +42,10 @@ export async function createManualBooking(body) {
     pet_count: petCountBody,
     bilao_enabled: bilaoEnabledFlag,
     bilao_package: bilaoPackageBody,
+    bilao_lines: body.bilao_lines,
     boodle_fight_enabled: boodleFightEnabledFlag,
     boodle_fight_tier: boodleFightTierBody,
+    boodle_lines: body.boodle_lines,
     admin_discount_amount,
     admin_discount_note,
   } = body;
@@ -100,7 +102,7 @@ export async function createManualBooking(body) {
     islandHoppingStored = resolved.stored;
   }
 
-  const { validateBookingExtras } = await import('./bookingExtras.js');
+  const { validateBookingExtras, serializeFoodLines } = await import('./bookingExtras.js');
   const extrasValidation = validateBookingExtras(
     {
       bringing_car: bringingCarFlag,
@@ -108,8 +110,10 @@ export async function createManualBooking(body) {
       pet_count: petCountBody,
       bilao_enabled: bilaoEnabledFlag,
       bilao_package: bilaoPackageBody,
+      bilao_lines: body.bilao_lines,
       boodle_fight_enabled: boodleFightEnabledFlag,
       boodle_fight_tier: boodleFightTierBody,
+      boodle_lines: body.boodle_lines,
     },
     hasSuite ? 'suite' : room.room_type
   );
@@ -156,9 +160,9 @@ export async function createManualBooking(body) {
       room_rate, discount_amount, discount_code, discount_note, total_amount, extra_person_charges,
       island_hopping, island_hopping_amount, island_hopping_data,
       bringing_car, car_count, pet_count, pet_deposit_amount,
-      bilao_package, bilao_amount, boodle_fight, boodle_fight_tier, boodle_fight_amount,
+      bilao_package, bilao_amount, bilao_lines, boodle_fight, boodle_fight_tier, boodle_fight_amount, boodle_lines,
       status, admin_notes, payment_method_id, payment_option, amount_to_pay, confirmed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reference,
       pricedLines[0].room_id,
@@ -190,9 +194,11 @@ export async function createManualBooking(body) {
       extrasValidation.pet_deposit_amount,
       extrasValidation.bilao_package,
       extrasValidation.bilao_amount,
+      serializeFoodLines(extrasValidation.bilao_lines),
       extrasValidation.boodle_fight ? 1 : 0,
       extrasValidation.boodle_fight_tier,
       extrasValidation.boodle_fight_amount,
+      serializeFoodLines(extrasValidation.boodle_lines),
       status,
       notes || null,
       payment_method_id || null,

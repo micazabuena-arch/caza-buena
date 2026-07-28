@@ -3,7 +3,9 @@ import { getAssetUrl } from '../../utils/assetUrl';
 import {
   calculateIslandHopping,
   emptyPassenger,
+  formatBoatPlanLabel,
   ISLAND_HOPPING_RATES,
+  planBoatsForPax,
 } from '../../data/islandHoppingRates';
 import { YesNoChoice } from './FormSection';
 import { digitsOnly } from '../../utils/inputSanitizers';
@@ -69,7 +71,6 @@ export default function IslandHoppingSection({
   );
 
   const addPassenger = () => {
-    if (data.passengers.length >= ISLAND_HOPPING_RATES.maxPassengers) return;
     update({ passengers: [...data.passengers, emptyPassenger()] });
   };
 
@@ -78,7 +79,11 @@ export default function IslandHoppingSection({
     update({ passengers: data.passengers.filter((_, i) => i !== index) });
   };
 
-  const quote = enabled ? calculateIslandHopping(data.passengers) : null;
+  const quote = enabled && !data.soa_summary ? calculateIslandHopping(data.passengers) : null;
+  const summaryBoatPlan =
+    data.soa_summary && data.summary_pax
+      ? planBoatsForPax(parseInt(data.summary_pax, 10))
+      : null;
   const formComplete =
     enabled &&
     data.passenger_address?.trim() &&
@@ -150,7 +155,6 @@ export default function IslandHoppingSection({
                     <input
                       type="number"
                       min={1}
-                      max={ISLAND_HOPPING_RATES.maxPassengers}
                       value={data.summary_pax}
                       onChange={(e) => update({ summary_pax: e.target.value })}
                       className="w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm bg-white"
@@ -312,15 +316,16 @@ export default function IslandHoppingSection({
                 </div>
               ))}
             </div>
-            {data.passengers.length < ISLAND_HOPPING_RATES.maxPassengers && (
-              <button
-                type="button"
-                onClick={addPassenger}
-                className="mt-3 text-sm text-aegean-600 hover:text-aegean-800 flex items-center gap-1"
-              >
-                <Plus size={16} /> Add guest
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={addPassenger}
+              className="mt-3 text-sm text-aegean-600 hover:text-aegean-800 flex items-center gap-1"
+            >
+              <Plus size={16} /> Add guest
+              {data.passengers.length >= ISLAND_HOPPING_RATES.maxPassengersPerBoat
+                ? ' (extra boats added automatically for large groups)'
+                : ''}
+            </button>
           </div>
 
           <div>
@@ -442,6 +447,11 @@ export default function IslandHoppingSection({
               <p className="text-xs text-aegean-500 mt-2">
                 This will appear on the SOA as one line with pax count and amount.
               </p>
+              {summaryBoatPlan?.length > 0 && (
+                <p className="text-xs text-aegean-600 mt-2">
+                  Boats: {formatBoatPlanLabel(summaryBoatPlan)}
+                </p>
+              )}
             </div>
           )}
         </div>

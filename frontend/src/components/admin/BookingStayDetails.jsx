@@ -8,7 +8,10 @@ import {
   isPwdPassenger,
   parseIslandHoppingData,
 } from '../../data/islandHoppingRates';
-import { getBilaoPackage, getBoodlePackage } from '../../data/bookingAddOns';
+import {
+  describeBilaoBooking,
+  describeBoodleBooking,
+} from '../../data/bookingAddOns';
 import {
   getOpenIslandHoppingPrintError,
   openIslandHoppingPrint,
@@ -63,6 +66,8 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
   // edited on the booking edit page.
   const customAddons = Array.isArray(booking.addons) ? booking.addons : [];
   const customAddonsTotal = customAddons.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+  const bilaoDesc = describeBilaoBooking(booking);
+  const boodleDesc = describeBoodleBooking(booking);
 
   return (
     <div className="flex flex-col">
@@ -142,18 +147,18 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
                   : 'None'
               }
             />
-            {booking.bilao_package ? (
+            {bilaoDesc ? (
               <Row
                 label="Bilao"
-                value={`${getBilaoPackage(booking.bilao_package)?.label || booking.bilao_package} — ₱${Number(booking.bilao_amount || 0).toLocaleString()}`}
+                value={`${bilaoDesc.label} — ₱${bilaoDesc.amount.toLocaleString()}`}
               />
             ) : (
               <Row label="Bilao" value="None" />
             )}
-            {booking.boodle_fight ? (
+            {boodleDesc ? (
               <Row
                 label="Boodle fight"
-                value={`${getBoodlePackage(booking.boodle_fight_tier)?.label || booking.boodle_fight_tier} — ₱${Number(booking.boodle_fight_amount || 0).toLocaleString()}`}
+                value={`${boodleDesc.label} — ₱${boodleDesc.amount.toLocaleString()}`}
               />
             ) : (
               <Row label="Boodle fight" value="None" />
