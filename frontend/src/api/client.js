@@ -77,6 +77,7 @@ function formatValidatorError(field, msg) {
     valid_id: 'Valid ID is required.',
     payment_method_id: 'Please select a payment method.',
     custom_payment_amount: 'Please enter a valid custom payment amount.',
+    admin_discount_amount: 'Enter a valid discount amount (zero or greater), or leave the field blank.',
   };
   if (field && friendly[field]) return friendly[field];
   if (msg && msg !== 'Invalid value') return msg;

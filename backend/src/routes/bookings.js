@@ -542,7 +542,7 @@ router.post(
     body('boodle_fight_enabled').optional({ values: 'falsy' }).isBoolean().toBoolean(),
     body('boodle_fight_tier').optional().trim(),
     body('boodle_lines').optional().isArray(),
-    body('admin_discount_amount').optional().isFloat({ min: 0 }),
+    body('admin_discount_amount').optional({ values: 'falsy' }).isFloat({ min: 0 }),
     body('admin_discount_note').optional().trim().isLength({ max: 255 }),
   ],
   async (req, res) => {

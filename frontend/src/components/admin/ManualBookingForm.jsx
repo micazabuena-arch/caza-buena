@@ -391,7 +391,10 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       boodle_lines: bookingExtras.boodle_fight_enabled
         ? boodleLinesFromQty(bookingExtras.boodle_qty)
         : undefined,
-      admin_discount_amount: form.admin_discount_amount,
+      admin_discount_amount:
+        form.admin_discount_amount === '' || form.admin_discount_amount == null
+          ? undefined
+          : form.admin_discount_amount,
       admin_discount_note: form.admin_discount_note.trim() || undefined,
     };
   };

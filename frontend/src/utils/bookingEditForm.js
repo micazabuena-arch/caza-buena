@@ -99,7 +99,10 @@ export function editStateToPayload(state, roomLines = []) {
       ? getManualOnlyPaymentMethodName(state.payment_method_id)
       : null,
     payment_option: state.payment_option,
-    admin_discount_amount: state.admin_discount_amount,
+    admin_discount_amount:
+      state.admin_discount_amount === '' || state.admin_discount_amount == null
+        ? undefined
+        : state.admin_discount_amount,
     admin_discount_note: state.admin_discount_note,
     bringing_car: state.bookingExtras.bringing_car,
     car_count: state.bookingExtras.bringing_car
