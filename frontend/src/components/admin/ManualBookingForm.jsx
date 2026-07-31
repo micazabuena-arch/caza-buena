@@ -24,11 +24,9 @@ import {
 } from '../../data/islandHoppingRates';
 import { validateManualBookingFields } from '../../utils/manualBookingValidation';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
-import AdminModal from './AdminModal';
 import ManualBookingPriceSummary from './ManualBookingPriceSummary';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
-import { mapQuotationToManualBooking } from '../../utils/quotationToManualBooking';
 import {
   createRoomLine,
   roomLinesToPayload,
@@ -116,10 +114,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
-  const [loadModalOpen, setLoadModalOpen] = useState(false);
-  const [loadRef, setLoadRef] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [loadLoading, setLoadLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -330,56 +324,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
   const validateAll = () => applyValidationResult(runValidation('all'));
 
-  const openLoadModal = () => {
-    setLoadRef('');
-    setLoadError('');
-    setLoadModalOpen(true);
-  };
-
-  const loadFromQuotation = async (ref) => {
-    const code = ref?.trim();
-    if (!code) {
-      setLoadError('Enter a quotation reference code.');
-      return;
-    }
-
-    setLoadLoading(true);
-    setLoadError('');
-    try {
-      const { data: list } = await api.get('/quotations/admin');
-      const item = (list || []).find(
-        (q) => q.reference_code?.toUpperCase() === code.toUpperCase()
-      );
-      if (!item) {
-        setLoadError('Quotation not found. Check the reference code and try again.');
-        return;
-      }
-
-      const { data: saved } = await api.get(`/quotations/admin/${item.id}`);
-      const mapped = mapQuotationToManualBooking(saved, { rooms });
-
-      setForm({
-        ...emptyForm(),
-        ...mapped.form,
-      });
-      setRoomLines(mapped.roomLines);
-      setLineQuotes({});
-      setBookingExtras(mapped.bookingExtras);
-      setIslandHoppingEnabled(mapped.islandHoppingEnabled);
-      setIslandHopping(mapped.islandHopping);
-      setFieldErrors({});
-      setError('');
-      setActiveTab('stay');
-      setLoadModalOpen(false);
-      setLoadRef('');
-      toast.success(`Loaded quotation ${saved.reference_code}.`);
-    } catch (err) {
-      setLoadError(getApiError(err));
-    } finally {
-      setLoadLoading(false);
-    }
-  };
-
   const buildPayload = () => {
     const linesPayload = roomLinesToPayload(roomLines);
     const primary = linesPayload[0] || {};
@@ -541,19 +485,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-aegean-600">
-          Start from an approved quotation, or fill in the booking manually.
-        </p>
-        <button
-          type="button"
-          onClick={openLoadModal}
-          className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
-        >
-          Load from quotation
-        </button>
-      </div>
-
       <div className="flex gap-1 p-1 bg-aegean-50 rounded-xl mb-5">
         {TABS.map((tab) => (
           <button
@@ -885,65 +816,6 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
           )}
         </div>
       </div>
-
-      <AdminModal
-        open={loadModalOpen}
-        onClose={() => {
-          if (!loadLoading) setLoadModalOpen(false);
-        }}
-        title="Load from quotation"
-        description="Enter a saved quotation reference to pre-fill this booking."
-        size="sm"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            loadFromQuotation(loadRef);
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label htmlFor="load-quotation-ref" className="block text-sm font-medium text-aegean-800 mb-1">
-              Quotation reference
-            </label>
-            <input
-              id="load-quotation-ref"
-              type="text"
-              className={inputClass}
-              value={loadRef}
-              onChange={(e) => {
-                setLoadRef(e.target.value);
-                if (loadError) setLoadError('');
-              }}
-              placeholder="QT-20260731-A1B2"
-              autoFocus
-              disabled={loadLoading}
-            />
-          </div>
-          {loadError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {loadError}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setLoadModalOpen(false)}
-              disabled={loadLoading}
-              className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loadLoading || !loadRef.trim()}
-              className="px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700 disabled:opacity-50"
-            >
-              {loadLoading ? 'Loading…' : 'Load quotation'}
-            </button>
-          </div>
-        </form>
-      </AdminModal>
     </form>
   );
 }
