@@ -10,10 +10,13 @@ import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES, foodLinesFromBooking } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
+import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import {
   ADDITIONAL_PAX_LABEL_OPTIONS,
   CUSTOM_ADDON_LABEL_SUGGESTIONS,
   computeQuotationTotals,
+  describeAdditionalPaxLine,
+  describeQuotationDateRange,
   emptyQuotation,
   emptyQuotationAdditionalPaxLine,
   emptyQuotationBilaoLine,
@@ -21,11 +24,16 @@ import {
   emptyQuotationBoodleLine,
   emptyQuotationCustomAddonLine,
   emptyQuotationRoom,
+  formatQuotationDateLabel,
   formatQuoteAmount,
+  getAdditionalPaxContext,
+  getQuotationStayNights,
   normalizeQuotation,
+  parseQuotationDateRange,
 } from '../utils/quotation';
 import { openQuotationPrint } from '../utils/openQuotationPrint';
 import { formatDateTimePHT } from '../utils/datetime';
+import { format } from 'date-fns';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -57,6 +65,7 @@ export default function AdminQuotation() {
   const [listLoading, setListLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rooms, setRooms] = useState([]);
+  const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
   const [loadModalOpen, setLoadModalOpen] = useState(false);
   const [loadRef, setLoadRef] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -111,13 +120,46 @@ export default function AdminQuotation() {
   }, [routeId, isNewEditor, loadSavedQuote]);
 
   useEffect(() => {
-    api
-      .get('/rooms/admin/all')
-      .then((r) => setRooms(r.data || []))
-      .catch(() => setRooms([]));
+    Promise.all([api.get('/rooms/admin/all'), api.get('/settings/public')])
+      .then(([roomsRes, settingsRes]) => {
+        setRooms(roomsRes.data || []);
+        if (settingsRes.data?.extra_person_rates) {
+          setExtraPersonRates(settingsRes.data.extra_person_rates);
+        }
+      })
+      .catch(() => {
+        setRooms([]);
+      });
   }, []);
 
-  const totals = useMemo(() => computeQuotationTotals(quote), [quote]);
+  const paxContext = useMemo(
+    () => getAdditionalPaxContext(quote, { extraPersonRates }),
+    [quote, extraPersonRates]
+  );
+
+  const totals = useMemo(
+    () => computeQuotationTotals(quote, { extraPersonRates }),
+    [quote, extraPersonRates]
+  );
+  const stayNights = useMemo(() => getQuotationStayNights(quote), [quote]);
+  const dateRangePreview = useMemo(
+    () => describeQuotationDateRange(quote.dateLabel),
+    [quote.dateLabel]
+  );
+
+  const patchDateLabel = (dateLabel) => {
+    const preview = describeQuotationDateRange(dateLabel);
+    const range = parseQuotationDateRange(dateLabel);
+    const nights = preview?.nights ?? 1;
+    setQuote((q) => ({
+      ...q,
+      dateLabel,
+      checkIn: range ? format(range.start, 'yyyy-MM-dd') : q.checkIn,
+      checkOut: range ? format(range.end, 'yyyy-MM-dd') : q.checkOut,
+      nights,
+      rooms: (q.rooms || []).map((row) => ({ ...row, nights })),
+    }));
+  };
 
   const patch = (fields) => setQuote((q) => ({ ...q, ...fields }));
 
@@ -130,7 +172,10 @@ export default function AdminQuotation() {
   };
 
   const addRoom = () => {
-    setQuote((q) => ({ ...q, rooms: [...q.rooms, emptyQuotationRoom()] }));
+    setQuote((q) => {
+      const nights = getQuotationStayNights(q);
+      return { ...q, rooms: [...q.rooms, { ...emptyQuotationRoom(), nights }] };
+    });
   };
 
   const removeRoom = (index) => {
@@ -165,19 +210,23 @@ export default function AdminQuotation() {
   const patchAdditionalPaxLine = (index, fields) => {
     setQuote((q) => {
       const next = [...(q.additionalPaxLines || [])];
-      next[index] = { ...next[index], ...fields };
+      const prev = next[index] || emptyQuotationAdditionalPaxLine();
+      next[index] = { ...prev, ...fields };
       return { ...q, additionalPaxLines: next };
     });
   };
 
   const addAdditionalPaxLine = () => {
-    setQuote((q) => ({
-      ...q,
-      additionalPaxLines: [
-        ...(q.additionalPaxLines || []),
-        emptyQuotationAdditionalPaxLine(),
-      ],
-    }));
+    setQuote((q) => {
+      const defaultNights = getQuotationStayNights(q) || 1;
+      return {
+        ...q,
+        additionalPaxLines: [
+          ...(q.additionalPaxLines || []),
+          emptyQuotationAdditionalPaxLine(defaultNights),
+        ],
+      };
+    });
   };
 
   const removeAdditionalPaxLine = (index) => {
@@ -258,9 +307,14 @@ export default function AdminQuotation() {
   };
 
   const applyRoomFromList = (index, roomId) => {
+    if (!roomId) {
+      patchRoom(index, { roomId: '' });
+      return;
+    }
     const room = rooms.find((r) => String(r.id) === String(roomId));
     if (!room) return;
     patchRoom(index, {
+      roomId: String(room.id),
       roomType: room.name?.toUpperCase() || '',
       rate: room.price_per_night ?? '',
       occupants: room.included_adults ?? room.min_guests ?? 2,
@@ -289,6 +343,7 @@ export default function AdminQuotation() {
       const roomLines =
         detail.room_lines?.length > 0
           ? detail.room_lines.map((line) => ({
+              roomId: line.room_id ? String(line.room_id) : '',
               roomType: line.room_name?.toUpperCase() || '',
               occupants: line.guest_count || line.adults || 2,
               rate: line.room_rate || line.subtotal / Math.max(1, line.nights) || '',
@@ -296,6 +351,7 @@ export default function AdminQuotation() {
             }))
           : [
               {
+                roomId: detail.room_id ? String(detail.room_id) : '',
                 roomType: detail.room_name?.toUpperCase() || '',
                 occupants: detail.guest_count || detail.adults || 2,
                 rate: detail.room_rate || '',
@@ -325,11 +381,18 @@ export default function AdminQuotation() {
       const boatTier =
         ISLAND_HOPPING_RATES.boat.find((b) => pax >= b.min && pax <= b.max)?.id || 'small';
       const foodLines = foodLinesFromBooking(detail);
+      const stayN = Math.max(1, detail.nights || roomLines[0]?.nights || 1);
 
       setQuote({
         ...emptyQuotation(),
         rmNo: detail.room_name ? `RM. ${detail.room_name.replace(/\D/g, '').slice(-3) || detail.room_name}` : '',
-        dateLabel: `${detail.check_in} – ${detail.check_out}`,
+        dateLabel: formatQuotationDateLabel(
+          detail.check_in?.slice?.(0, 10),
+          detail.check_out?.slice?.(0, 10)
+        ),
+        checkIn: detail.check_in?.slice?.(0, 10) || '',
+        checkOut: detail.check_out?.slice?.(0, 10) || '',
+        nights: stayN,
         guestName: detail.guest_name?.toUpperCase() || '',
         bookingPlatform: '',
         pax: detail.guest_count || 2,
@@ -339,11 +402,11 @@ export default function AdminQuotation() {
             ? [
                 {
                   label: 'Adult',
-                  occupants: '',
-                  amount: detail.extra_person_charges,
+                  occupants: 1,
+                  nights: stayN,
                 },
               ]
-            : [emptyQuotationAdditionalPaxLine()],
+            : [emptyQuotationAdditionalPaxLine(stayN)],
         discountAmount: detail.discount_amount || '',
         discountLabel: detail.discount_code || detail.discount_note || '',
         downPaymentAmount: detail.amount_to_pay < detail.total_amount ? detail.amount_to_pay : '',
@@ -741,9 +804,20 @@ export default function AdminQuotation() {
                 <input
                   className={inputClass}
                   value={quote.dateLabel}
-                  onChange={(e) => patch({ dateLabel: e.target.value })}
-                  placeholder="May 22–24, 2026"
+                  onChange={(e) => patchDateLabel(e.target.value)}
+                  placeholder="Aug 1 - Aug 3 or Aug 1-3, 2026"
                 />
+                {dateRangePreview ? (
+                  <p className="text-xs text-aegean-500 mt-1">
+                    Check-in {dateRangePreview.checkInLabel} → Check-out{' '}
+                    {dateRangePreview.checkOutLabel} ({dateRangePreview.nights} night
+                    {dateRangePreview.nights !== 1 ? 's' : ''})
+                  </p>
+                ) : quote.dateLabel?.trim() ? (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Could not read dates — try &quot;Aug 1 - Aug 3&quot; or &quot;Aug 1-3, 2026&quot;
+                  </p>
+                ) : null}
               </Field>
               <Field label="Guest name">
                 <input
@@ -797,6 +871,12 @@ export default function AdminQuotation() {
                 <Plus size={14} /> Add room
               </button>
             </div>
+            {dateRangePreview && (
+              <p className="text-xs text-aegean-600 bg-aegean-50 rounded-lg px-3 py-2">
+                Main stay: <strong>{dateRangePreview.nights} night{dateRangePreview.nights !== 1 ? 's' : ''}</strong>{' '}
+                (check-out on {dateRangePreview.checkOutLabel})
+              </p>
+            )}
             {quote.rooms.map((row, index) => (
               <div key={index} className="rounded-lg border border-aegean-100 p-3 space-y-3">
                 <div className="flex justify-between items-center">
@@ -816,7 +896,7 @@ export default function AdminQuotation() {
                   <Field label="Fill from room list">
                     <select
                       className={inputClass}
-                      value=""
+                      value={row.roomId || ''}
                       onChange={(e) => applyRoomFromList(index, e.target.value)}
                     >
                       <option value="">Select room…</option>
@@ -856,21 +936,12 @@ export default function AdminQuotation() {
                       onChange={(e) => patchRoom(index, { rate: e.target.value })}
                     />
                   </Field>
-                  <Field label="Nights">
-                    <input
-                      type="number"
-                      min={1}
-                      className={inputClass}
-                      value={row.nights}
-                      onChange={(e) => patchRoom(index, { nights: e.target.value })}
-                    />
-                  </Field>
                 </div>
                 <p className="text-xs text-aegean-500">
                   Line total: ₱
-                  {formatQuoteAmount(
-                    (parseFloat(row.rate) || 0) * (parseInt(row.nights, 10) || 1)
-                  )}
+                  {formatQuoteAmount((parseFloat(row.rate) || 0) * stayNights)}
+                  {' · '}
+                  {stayNights} night{stayNights !== 1 ? 's' : ''}
                 </p>
               </div>
             ))}
@@ -905,7 +976,7 @@ export default function AdminQuotation() {
                       </button>
                     )}
                   </div>
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <Field label="Type">
                       <select
                         className={inputClass}
@@ -935,20 +1006,35 @@ export default function AdminQuotation() {
                         placeholder="Optional"
                       />
                     </Field>
-                    <Field label="Amount (₱)">
+                    <Field label="Nights">
                       <input
                         type="number"
-                        min={0}
-                        step="0.01"
+                        min={1}
                         className={inputClass}
-                        value={paxRow.amount}
+                        value={paxRow.nights ?? (stayNights || 1)}
                         onChange={(e) =>
-                          patchAdditionalPaxLine(index, { amount: e.target.value })
+                          patchAdditionalPaxLine(index, { nights: e.target.value })
                         }
-                        placeholder="Manual total"
                       />
                     </Field>
                   </div>
+                  <p className="text-xs text-aegean-500">
+                    {(() => {
+                      const summary = describeAdditionalPaxLine(paxRow, paxContext);
+                      return (
+                        <>
+                          Line total: ₱{formatQuoteAmount(summary.lineTotal)}
+                          {summary.lineTotal > 0 || parseInt(paxRow.occupants, 10) > 0 ? (
+                            <>
+                              {' · '}
+                              {summary.paxPart}
+                              {summary.detailPart}
+                            </>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </p>
                 </div>
               ))}
             </div>

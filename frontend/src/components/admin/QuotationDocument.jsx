@@ -5,6 +5,7 @@ import {
   computeQuotationTotals,
   formatQuoteAmount,
   formatQuoteParen,
+  getQuotationDateLabel,
 } from '../../utils/quotation';
 
 const CONTACT = {
@@ -92,7 +93,7 @@ export default function QuotationDocument({ quote }) {
 
       <section className="grid sm:grid-cols-2 gap-x-8 gap-y-1 mb-4 uppercase">
         <MetaRow label="RM No.:" value={quote.rmNo} valueClass="text-red-600 font-bold" />
-        <MetaRow label="Date:" value={quote.dateLabel} />
+        <MetaRow label="Date:" value={getQuotationDateLabel(quote)} />
         <MetaRow label="Check-in:" value={quote.checkInTime} />
         <MetaRow label="Check-out:" value={quote.checkOutTime} />
         <MetaRow label="Name:" value={quote.guestName} />
