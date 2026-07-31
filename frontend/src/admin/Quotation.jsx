@@ -8,7 +8,7 @@ import Loading from '../components/ui/Loading';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
-import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES, foodLinesFromBooking } from '../data/bookingAddOns';
+import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import {
@@ -24,7 +24,6 @@ import {
   emptyQuotationBoodleLine,
   emptyQuotationCustomAddonLine,
   emptyQuotationRoom,
-  formatQuotationDateLabel,
   formatQuoteAmount,
   getAdditionalPaxContext,
   getQuotationStayNights,
@@ -66,10 +65,6 @@ export default function AdminQuotation() {
   const [saving, setSaving] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
-  const [loadModalOpen, setLoadModalOpen] = useState(false);
-  const [loadRef, setLoadRef] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [loadLoading, setLoadLoading] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
@@ -319,141 +314,6 @@ export default function AdminQuotation() {
       rate: room.price_per_night ?? '',
       occupants: room.included_adults ?? room.min_guests ?? 2,
     });
-  };
-
-  const loadFromBooking = async (ref) => {
-    const code = ref?.trim();
-    if (!code) {
-      setLoadError('Enter a booking reference code.');
-      return;
-    }
-
-    setLoadLoading(true);
-    setLoadError('');
-    try {
-      const { data: list } = await api.get('/bookings/admin/all');
-      const booking = list.find(
-        (b) => b.reference_code?.toUpperCase() === code.toUpperCase()
-      );
-      if (!booking) {
-        setLoadError('Booking not found. Check the reference code and try again.');
-        return;
-      }
-      const detail = (await api.get(`/bookings/admin/${booking.id}`)).data;
-      const roomLines =
-        detail.room_lines?.length > 0
-          ? detail.room_lines.map((line) => ({
-              roomId: line.room_id ? String(line.room_id) : '',
-              roomType: line.room_name?.toUpperCase() || '',
-              occupants: line.guest_count || line.adults || 2,
-              rate: line.room_rate || line.subtotal / Math.max(1, line.nights) || '',
-              nights: line.nights || detail.nights || 1,
-            }))
-          : [
-              {
-                roomId: detail.room_id ? String(detail.room_id) : '',
-                roomType: detail.room_name?.toUpperCase() || '',
-                occupants: detail.guest_count || detail.adults || 2,
-                rate: detail.room_rate || '',
-                nights: detail.nights || 1,
-              },
-            ];
-
-      const island = detail.island_hopping_data
-        ? typeof detail.island_hopping_data === 'string'
-          ? JSON.parse(detail.island_hopping_data)
-          : detail.island_hopping_data
-        : null;
-
-      let tourRegularQty = 0;
-      let tourSeniorPwdQty = 0;
-      let tourInfantQty = 0;
-      if (island?.passengers?.length) {
-        island.passengers.forEach((p) => {
-          const age = parseInt(p.age, 10);
-          if (Number.isFinite(age) && age <= 4) tourInfantQty += 1;
-          else if (p.is_pwd || p.is_senior || age >= 60) tourSeniorPwdQty += 1;
-          else tourRegularQty += 1;
-        });
-      }
-
-      const pax = island?.passengers?.length || detail.guest_count || 2;
-      const boatTier =
-        ISLAND_HOPPING_RATES.boat.find((b) => pax >= b.min && pax <= b.max)?.id || 'small';
-      const foodLines = foodLinesFromBooking(detail);
-      const stayN = Math.max(1, detail.nights || roomLines[0]?.nights || 1);
-
-      setQuote({
-        ...emptyQuotation(),
-        rmNo: detail.room_name ? `RM. ${detail.room_name.replace(/\D/g, '').slice(-3) || detail.room_name}` : '',
-        dateLabel: formatQuotationDateLabel(
-          detail.check_in?.slice?.(0, 10),
-          detail.check_out?.slice?.(0, 10)
-        ),
-        checkIn: detail.check_in?.slice?.(0, 10) || '',
-        checkOut: detail.check_out?.slice?.(0, 10) || '',
-        nights: stayN,
-        guestName: detail.guest_name?.toUpperCase() || '',
-        bookingPlatform: '',
-        pax: detail.guest_count || 2,
-        rooms: roomLines,
-        additionalPaxLines:
-          detail.extra_person_charges > 0
-            ? [
-                {
-                  label: 'Adult',
-                  occupants: 1,
-                  nights: stayN,
-                },
-              ]
-            : [emptyQuotationAdditionalPaxLine(stayN)],
-        discountAmount: detail.discount_amount || '',
-        discountLabel: detail.discount_code || detail.discount_note || '',
-        downPaymentAmount: detail.amount_to_pay < detail.total_amount ? detail.amount_to_pay : '',
-        downPaymentLabel:
-          detail.amount_to_pay < detail.total_amount ? 'Amount paid / down payment' : '',
-        tourEnabled: Boolean(detail.island_hopping),
-        tourRegularQty,
-        tourSeniorPwdQty,
-        tourInfantQty,
-        boats: [{ boatTierId: boatTier }],
-        bilaoEnabled: foodLines.bilaoLines.length > 0,
-        bilaoLines: foodLines.bilaoLines.map((line) => ({
-          packageId: line.package_id,
-          qty: line.qty,
-        })),
-        boodleEnabled: foodLines.boodleLines.length > 0,
-        boodleLines: foodLines.boodleLines.map((line) => ({
-          tierId: line.tier_id,
-          qty: line.qty,
-        })),
-        customAddonsEnabled:
-          Array.isArray(detail.addons) && detail.addons.length > 0,
-        customAddonsSectionTitle: 'Other add-ons',
-        customAddonLines:
-          Array.isArray(detail.addons) && detail.addons.length > 0
-            ? detail.addons.map((addon) => ({
-                label: addon.label || 'Extra charge',
-                detail: addon.description || '',
-                rate: addon.amount ?? '',
-                qty: 1,
-              }))
-            : [],
-      });
-      setLoadModalOpen(false);
-      setLoadRef('');
-      setLoadError('');
-    } catch (err) {
-      setLoadError(getApiError(err));
-    } finally {
-      setLoadLoading(false);
-    }
-  };
-
-  const openLoadModal = () => {
-    setLoadRef('');
-    setLoadError('');
-    setLoadModalOpen(true);
   };
 
   const openPrint = () => openQuotationPrint(quote);
@@ -738,13 +598,6 @@ export default function AdminQuotation() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={openLoadModal}
-            className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
-          >
-            Load from booking
-          </button>
           <button
             type="button"
             onClick={saveQuote}
@@ -1488,65 +1341,6 @@ export default function AdminQuotation() {
           Back to bookings
         </Link>
       </p>
-
-      <AdminModal
-        open={loadModalOpen}
-        onClose={() => {
-          if (!loadLoading) setLoadModalOpen(false);
-        }}
-        title="Load from booking"
-        description="Enter the guest's booking reference code to pre-fill this quotation."
-        size="sm"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            loadFromBooking(loadRef);
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label htmlFor="load-booking-ref" className="block text-sm font-medium text-aegean-800 mb-1">
-              Reference code
-            </label>
-            <input
-              id="load-booking-ref"
-              type="text"
-              className={inputClass}
-              value={loadRef}
-              onChange={(e) => {
-                setLoadRef(e.target.value);
-                if (loadError) setLoadError('');
-              }}
-              placeholder="CB-20260627-8B0C"
-              autoFocus
-              disabled={loadLoading}
-            />
-          </div>
-          {loadError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {loadError}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setLoadModalOpen(false)}
-              disabled={loadLoading}
-              className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loadLoading || !loadRef.trim()}
-              className="px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700 disabled:opacity-50"
-            >
-              {loadLoading ? 'Loading…' : 'Load booking'}
-            </button>
-          </div>
-        </form>
-      </AdminModal>
 
       {viewQuoteModal}
     </div>
