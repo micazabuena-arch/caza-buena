@@ -14,17 +14,51 @@ const ASSET_MIME = {
   '.woff2': 'font/woff2',
 };
 
+function isInsideDir(parentDir, filePath) {
+  const parent = path.resolve(parentDir);
+  const file = path.resolve(filePath);
+  return file === parent || file.startsWith(`${parent}${path.sep}`);
+}
+
+function readIndexHtml(distAbs) {
+  const indexPath = path.join(distAbs, 'index.html');
+  try {
+    const stat = fs.statSync(indexPath);
+    if (!stat.isFile() || stat.size < 50) return null;
+    return fs.readFileSync(indexPath, 'utf8');
+  } catch (err) {
+    console.error(`Failed to read ${indexPath}:`, err.message);
+    return null;
+  }
+}
+
+function sendSpaIndex(distAbs, res) {
+  const html = readIndexHtml(distAbs);
+  if (!html) {
+    res.status(503).type('text/plain').send(
+      'Caza Buena API is running, but frontend/dist/index.html is missing or invalid.\n' +
+        'Redeploy with build command: npm run build'
+    );
+    return;
+  }
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(html);
+}
+
 /**
  * Serve the React SPA from the same origin as /api.
  * Avoids cross-origin preflight (OPTIONS) blocked by Hostinger CDN on home IPs.
  */
 export function mountFrontend(app) {
   const dist = findFrontendDistDir();
-  const indexHtml = dist ? path.join(dist, 'index.html') : null;
+  const distAbs = dist ? path.resolve(dist) : null;
+  const indexHtml = distAbs ? path.join(distAbs, 'index.html') : null;
 
-  if (!indexHtml || !fs.existsSync(indexHtml)) {
-    console.warn('Frontend not mounted — frontend/dist/index.html not found');
-    app.get('/', (_req, res) => {
+  if (!distAbs || !readIndexHtml(distAbs)) {
+    console.warn('Frontend not mounted — frontend/dist/index.html not found or unreadable');
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
       res.status(503).type('text/plain').send(
         'Caza Buena API is running, but the website build is missing.\n' +
           'In Hostinger set:\n' +
@@ -36,7 +70,7 @@ export function mountFrontend(app) {
     return false;
   }
 
-  const assetsDir = path.join(dist, 'assets');
+  const assetsDir = path.join(distAbs, 'assets');
 
   // Hostinger HTTP/2 can fail on range requests / parallel preloads — serve assets explicitly.
   app.use('/assets', (req, res, next) => {
@@ -45,8 +79,8 @@ export function mountFrontend(app) {
     const rel = String(req.path || '').replace(/^\/+/, '');
     if (!rel || rel.includes('..')) return res.status(400).end();
 
-    const filePath = path.join(assetsDir, rel);
-    if (!filePath.startsWith(assetsDir) || !fs.existsSync(filePath)) return next();
+    const filePath = path.resolve(assetsDir, rel);
+    if (!isInsideDir(assetsDir, filePath) || !fs.existsSync(filePath)) return next();
 
     const ext = path.extname(filePath).toLowerCase();
     res.setHeader('Content-Type', ASSET_MIME[ext] || 'application/octet-stream');
@@ -58,7 +92,7 @@ export function mountFrontend(app) {
   });
 
   app.use(
-    express.static(dist, {
+    express.static(distAbs, {
       index: false,
       dotfiles: 'ignore',
       setHeaders(res, filePath) {
@@ -72,10 +106,9 @@ export function mountFrontend(app) {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
-    res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(indexHtml, { acceptRanges: false });
+    sendSpaIndex(distAbs, res);
   });
 
-  console.log(`Serving frontend from ${dist}`);
+  console.log(`Serving frontend from ${distAbs} (index: ${indexHtml})`);
   return true;
 }

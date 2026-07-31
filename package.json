@@ -10,7 +10,7 @@
   "scripts": {
     "prestart": "node scripts/ensure-frontend-built.mjs",
     "start": "node server.js",
-    "build": "node scripts/clean-frontend-dist.mjs && npm install --prefix frontend --include=dev && npm run build --prefix frontend",
+    "build": "npm install --prefix frontend --include=dev && npm run build --prefix frontend",
     "dev:api": "npm run dev --prefix backend",
     "dev:web": "npm run dev --prefix frontend",
     "build:web": "npm run build --prefix frontend"

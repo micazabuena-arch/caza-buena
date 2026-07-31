@@ -25,7 +25,14 @@ export function findFrontendDistDir() {
   ];
 
   for (const dir of candidates) {
-    if (fs.existsSync(path.join(dir, 'index.html'))) return dir;
+    const distAbs = path.resolve(dir);
+    const indexPath = path.join(distAbs, 'index.html');
+    try {
+      const stat = fs.statSync(indexPath);
+      if (stat.isFile() && stat.size > 50) return distAbs;
+    } catch {
+      // try next candidate
+    }
   }
   return null;
 }
