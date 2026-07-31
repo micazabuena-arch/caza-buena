@@ -69,10 +69,6 @@ export default function AdminQuotation() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
-  const [loadModalOpen, setLoadModalOpen] = useState(false);
-  const [loadRef, setLoadRef] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [loadLoading, setLoadLoading] = useState(false);
 
   const loadSavedList = useCallback(() => {
     setListLoading(true);
@@ -335,44 +331,18 @@ export default function AdminQuotation() {
 
   const openPrint = () => openQuotationPrint(quote);
 
-  const openLoadModal = () => {
-    setLoadRef('');
-    setLoadError('');
-    setLoadModalOpen(true);
-  };
-
-  const loadFromQuotation = async (ref) => {
-    const code = ref?.trim();
-    if (!code) {
-      setLoadError('Enter a quotation reference code.');
-      return;
-    }
-
-    setLoadLoading(true);
-    setLoadError('');
-    try {
-      const { data: list } = await api.get('/quotations/admin');
-      const item = (list || []).find(
-        (q) => q.reference_code?.toUpperCase() === code.toUpperCase()
-      );
-      if (!item) {
-        setLoadError('Quotation not found. Check the reference code and try again.');
-        return;
-      }
-
-      const { data: saved } = await api.get(`/quotations/admin/${item.id}`);
-      setQuote(normalizeQuotation(saved.quote_data));
-      setSavedId(saved.id);
-      setReferenceCode(saved.reference_code || '');
-      setLoadModalOpen(false);
-      setLoadRef('');
-      navigate(`/admin/quotation/${saved.id}`, { replace: true });
-      toast.success(`Loaded quotation ${saved.reference_code}.`);
-    } catch (err) {
-      setLoadError(getApiError(err));
-    } finally {
-      setLoadLoading(false);
-    }
+  /** Open manual booking pre-filled from the quotation currently on screen. */
+  const loadToBookingFromQuote = () => {
+    navigate('/admin/bookings', {
+      state: {
+        fromQuotation: {
+          id: savedId,
+          reference_code: referenceCode,
+          quote_data: quote,
+          guest_name: quote.guestName?.trim() || '',
+        },
+      },
+    });
   };
 
   const startNewQuote = () => {
@@ -657,8 +627,9 @@ export default function AdminQuotation() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={openLoadModal}
+            onClick={loadToBookingFromQuote}
             className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50"
+            title="Create a manual booking from this quotation"
           >
             Load from quotation
           </button>
@@ -1410,65 +1381,6 @@ export default function AdminQuotation() {
           Back to bookings
         </Link>
       </p>
-
-      <AdminModal
-        open={loadModalOpen}
-        onClose={() => {
-          if (!loadLoading) setLoadModalOpen(false);
-        }}
-        title="Load from quotation"
-        description="Enter a saved quotation reference to open it for editing or printing."
-        size="sm"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            loadFromQuotation(loadRef);
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label htmlFor="load-quotation-ref" className="block text-sm font-medium text-aegean-800 mb-1">
-              Quotation reference
-            </label>
-            <input
-              id="load-quotation-ref"
-              type="text"
-              className={inputClass}
-              value={loadRef}
-              onChange={(e) => {
-                setLoadRef(e.target.value);
-                if (loadError) setLoadError('');
-              }}
-              placeholder="QT-20260731-A1B2"
-              autoFocus
-              disabled={loadLoading}
-            />
-          </div>
-          {loadError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {loadError}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setLoadModalOpen(false)}
-              disabled={loadLoading}
-              className="px-4 py-2 rounded-lg border border-aegean-200 text-sm hover:bg-aegean-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loadLoading || !loadRef.trim()}
-              className="px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700 disabled:opacity-50"
-            >
-              {loadLoading ? 'Loading…' : 'Load quotation'}
-            </button>
-          </div>
-        </form>
-      </AdminModal>
 
       {viewQuoteModal}
     </div>

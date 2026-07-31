@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Settings2, Image, CircleCheck, CircleX, Printer, Plus, Trash2 } from 'lucide-react';
 import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
@@ -68,6 +68,7 @@ function parseIslandHoppingData(detail) {
 
 export default function AdminBookings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const confirm = useConfirm();
   const [bookings, setBookings] = useState([]);
@@ -81,6 +82,7 @@ export default function AdminBookings() {
   const [actionLoading, setActionLoading] = useState(null);
   const [detailTab, setDetailTab] = useState('booking');
   const [showManualForm, setShowManualForm] = useState(false);
+  const [quotationSeed, setQuotationSeed] = useState(null);
   const [paymentProofUrl, setPaymentProofUrl] = useState(null);
 
   const load = () => {
@@ -100,6 +102,14 @@ export default function AdminBookings() {
   useEffect(() => {
     load();
   }, [filter]);
+
+  useEffect(() => {
+    const seed = location.state?.fromQuotation;
+    if (!seed) return;
+    setQuotationSeed(seed);
+    setShowManualForm(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const {
     page,
@@ -143,7 +153,10 @@ export default function AdminBookings() {
 
   const openManualForm = () => setShowManualForm(true);
 
-  const closeManualForm = () => setShowManualForm(false);
+  const closeManualForm = () => {
+    setShowManualForm(false);
+    setQuotationSeed(null);
+  };
 
   const handleManualBookingCreated = (booking) => {
     closeManualForm();
@@ -318,7 +331,11 @@ export default function AdminBookings() {
           padding={false}
           bodyClassName="p-6"
         >
-          <ManualBookingForm onSuccess={handleManualBookingCreated} onCancel={closeManualForm} />
+          <ManualBookingForm
+            quotationSeed={quotationSeed}
+            onSuccess={handleManualBookingCreated}
+            onCancel={closeManualForm}
+          />
         </AdminModal>
       )}
 

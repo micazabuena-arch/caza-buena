@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, addDays } from 'date-fns';
 import api, { getApiError } from '../../api/client';
 import SubmitButton from '../ui/SubmitButton';
@@ -27,6 +27,7 @@ import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import ManualBookingPriceSummary from './ManualBookingPriceSummary';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
+import { mapQuotationToManualBooking } from '../../utils/quotationToManualBooking';
 import {
   createRoomLine,
   roomLinesToPayload,
@@ -97,9 +98,10 @@ const emptyForm = () => ({
   admin_discount_note: '',
 });
 
-export default function ManualBookingForm({ onSuccess, onCancel }) {
+export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed = null }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const appliedQuotationKey = useRef(null);
   const [rooms, setRooms] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [depositPercent, setDepositPercent] = useState(20);
@@ -130,6 +132,34 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!quotationSeed || rooms.length === 0) return;
+
+    const seedKey =
+      quotationSeed.id ||
+      quotationSeed.reference_code ||
+      JSON.stringify(quotationSeed.quote_data || {});
+    if (appliedQuotationKey.current === seedKey) return;
+    appliedQuotationKey.current = seedKey;
+
+    const mapped = mapQuotationToManualBooking(quotationSeed, { rooms });
+    setForm({
+      ...emptyForm(),
+      ...mapped.form,
+    });
+    setRoomLines(mapped.roomLines);
+    setLineQuotes({});
+    setBookingExtras(mapped.bookingExtras);
+    setIslandHoppingEnabled(mapped.islandHoppingEnabled);
+    setIslandHopping(mapped.islandHopping);
+    setFieldErrors({});
+    setError('');
+    setActiveTab('stay');
+
+    const label = quotationSeed.reference_code || 'quotation';
+    toast.success(`Loaded from ${label}. Add guest contact details, then create the booking.`);
+  }, [quotationSeed, rooms, toast]);
 
   // Price each selected room for the shared check-in / check-out dates.
   useEffect(() => {
