@@ -43,7 +43,53 @@ function resolveRoomId(roomEntry, rooms) {
   return partial ? String(partial.id) : '';
 }
 
-function quoteRoomsToLines(quoteRooms, rooms) {
+function parsePaxCount(value) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function classifyAdditionalPaxLabel(label) {
+  const normalized = String(label || 'Adult').trim();
+  if (normalized === 'Child (0–6)' || normalized === 'Child (0-6)') return 'under6';
+  if (normalized === 'Child (7–12)') return '7_12';
+  return 'adult';
+}
+
+/** Merge quotation additional-pax lines into the primary room guest counts. */
+function applyAdditionalPaxToRoomLines(roomLines, additionalPaxLines) {
+  if (!roomLines.length) return roomLines;
+
+  let extraAdults = 0;
+  let extraUnder6 = 0;
+  let extra7_12 = 0;
+
+  for (const paxRow of additionalPaxLines || []) {
+    const count = parsePaxCount(paxRow?.occupants);
+    if (count <= 0) continue;
+    const kind = classifyAdditionalPaxLabel(paxRow?.label);
+    if (kind === 'under6') extraUnder6 += count;
+    else if (kind === '7_12') extra7_12 += count;
+    else extraAdults += count;
+  }
+
+  if (extraAdults === 0 && extraUnder6 === 0 && extra7_12 === 0) {
+    return roomLines;
+  }
+
+  const targetIndex = roomLines.findIndex((line) => line.room_id);
+  const index = targetIndex >= 0 ? targetIndex : 0;
+  const line = { ...roomLines[index] };
+
+  line.adults = (parseInt(line.adults, 10) || 1) + extraAdults;
+  line.children_under6 = (parseInt(line.children_under6, 10) || 0) + extraUnder6;
+  line.children_7_12 = (parseInt(line.children_7_12, 10) || 0) + extra7_12;
+
+  const next = [...roomLines];
+  next[index] = line;
+  return next;
+}
+
+function quoteRoomsToLines(quoteRooms, rooms, additionalPaxLines = []) {
   const lines = (quoteRooms || [])
     .filter((entry) => entry?.roomId || entry?.roomType)
     .map((entry) => {
@@ -56,7 +102,8 @@ function quoteRoomsToLines(quoteRooms, rooms) {
       });
     });
 
-  return lines.length > 0 ? lines : [createRoomLine()];
+  const baseLines = lines.length > 0 ? lines : [createRoomLine()];
+  return applyAdditionalPaxToRoomLines(baseLines, additionalPaxLines);
 }
 
 function quoteExtrasToBookingExtras(quote) {
@@ -150,7 +197,7 @@ export function mapQuotationToManualBooking(savedQuote, { rooms = [] } = {}) {
           : String(quote.discountAmount),
       admin_discount_note: String(quote.discountLabel || '').trim(),
     },
-    roomLines: quoteRoomsToLines(quote.rooms, rooms),
+    roomLines: quoteRoomsToLines(quote.rooms, rooms, quote.additionalPaxLines),
     bookingExtras: quoteExtrasToBookingExtras(quote),
     islandHoppingEnabled: island.enabled,
     islandHopping: island.data,
