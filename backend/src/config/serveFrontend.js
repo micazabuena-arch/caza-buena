@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
 import { findFrontendDistDir } from './ensureFrontendBuilt.js';
 
 const ASSET_MIME = {
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -12,12 +12,19 @@ const ASSET_MIME = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 function isInsideDir(parentDir, filePath) {
   const parent = path.resolve(parentDir);
   const file = path.resolve(filePath);
   return file === parent || file.startsWith(`${parent}${path.sep}`);
+}
+
+function getMime(filePath) {
+  return ASSET_MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
 
 function readIndexHtml(distAbs) {
@@ -46,6 +53,35 @@ function sendSpaIndex(distAbs, res) {
 }
 
 /**
+ * Hostinger's filesystem rejects express sendFile for dist assets (403 Forbidden)
+ * while fs.readFile works — use readFile for every static response.
+ */
+function sendDistFile(filePath, req, res) {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+
+    const body = fs.readFileSync(filePath);
+    res.setHeader('Content-Type', getMime(filePath));
+    res.setHeader('Cache-Control', filePath.endsWith('.html')
+      ? 'no-cache'
+      : 'public, max-age=31536000, immutable');
+
+    if (req.method === 'HEAD') {
+      res.setHeader('Content-Length', body.length);
+      res.end();
+      return true;
+    }
+
+    res.end(body);
+    return true;
+  } catch (err) {
+    console.error(`Failed to serve ${filePath}:`, err.message);
+    return false;
+  }
+}
+
+/**
  * Serve the React SPA from the same origin as /api.
  * Avoids cross-origin preflight (OPTIONS) blocked by Hostinger CDN on home IPs.
  */
@@ -70,42 +106,36 @@ export function mountFrontend(app) {
     return false;
   }
 
-  const assetsDir = path.join(distAbs, 'assets');
-
-  // Hostinger HTTP/2 can fail on range requests / parallel preloads — serve assets explicitly.
-  app.use('/assets', (req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-
-    const rel = String(req.path || '').replace(/^\/+/, '');
-    if (!rel || rel.includes('..')) return res.status(400).end();
-
-    const filePath = path.resolve(assetsDir, rel);
-    if (!isInsideDir(assetsDir, filePath) || !fs.existsSync(filePath)) return next();
-
-    const ext = path.extname(filePath).toLowerCase();
-    res.setHeader('Content-Type', ASSET_MIME[ext] || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-
-    res.sendFile(filePath, { acceptRanges: false, dotfiles: 'deny' }, (err) => {
-      if (err && !res.headersSent) next(err);
-    });
-  });
-
-  app.use(
-    express.static(distAbs, {
-      index: false,
-      dotfiles: 'ignore',
-      setHeaders(res, filePath) {
-        if (filePath.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
-        }
-      },
-    })
-  );
-
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+
+    const rel = decodeURIComponent(req.path).replace(/^\/+/, '');
+
+    if (!rel) {
+      sendSpaIndex(distAbs, res);
+      return;
+    }
+
+    if (rel.includes('..')) {
+      res.status(400).type('text/plain').send('Bad request');
+      return;
+    }
+
+    const filePath = path.resolve(distAbs, rel);
+    if (!isInsideDir(distAbs, filePath)) {
+      res.status(403).type('text/plain').send('Forbidden');
+      return;
+    }
+
+    if (sendDistFile(filePath, req, res)) return;
+
+    // Real missing asset — do not return index.html (that causes a blank white page).
+    if (path.extname(rel)) {
+      res.status(404).type('text/plain').send('Not found');
+      return;
+    }
+
     sendSpaIndex(distAbs, res);
   });
 
