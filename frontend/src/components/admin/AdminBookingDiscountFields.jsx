@@ -59,7 +59,7 @@ export default function AdminBookingDiscountFields({
             value={amount}
             onChange={(e) => onAmountChange(e.target.value)}
             className={inputClass}
-            placeholder="Leave blank for none"
+            placeholder="0"
           />
         </Field>
         <Field label="Reason / note" hint="Shown internally and on SOA when set.">

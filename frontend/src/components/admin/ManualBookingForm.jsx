@@ -24,6 +24,7 @@ import {
 } from '../../data/islandHoppingRates';
 import { validateManualBookingFields } from '../../utils/manualBookingValidation';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
+import ManualBookingPriceSummary from './ManualBookingPriceSummary';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
 import { digitsOnly } from '../../utils/inputSanitizers';
 import {
@@ -724,11 +725,19 @@ export default function ManualBookingForm({ onSuccess, onCancel }) {
               maxAmount={roomSubtotal}
               error={fieldErrors.admin_discount_amount}
             />
-            {(extrasQuote?.bilao_amount > 0 || extrasQuote?.boodle_fight_amount > 0) && (
-              <div className="rounded-lg border border-aegean-100 bg-aegean-50/40 p-4">
-                <FoodAddOnsOrderSummary extrasQuote={extrasQuote} bookingExtras={bookingExtras} />
-              </div>
-            )}
+            <ManualBookingPriceSummary
+              roomLines={roomLines}
+              lineQuotes={lineQuotes}
+              rooms={rooms}
+              nights={nights}
+              roomSubtotal={roomSubtotal}
+              manualDiscount={manualDiscount}
+              islandTotal={islandTotal}
+              islandHoppingEnabled={islandHoppingEnabled}
+              extrasQuote={extrasQuote}
+              bookingExtras={bookingExtras}
+              totalAmount={totalAmount}
+            />
             <PaymentAmountSelect
               totalAmount={totalAmount > 0 ? totalAmount : 0}
               depositPercent={depositPercent}
