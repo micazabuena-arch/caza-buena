@@ -16,6 +16,7 @@ import {
   CUSTOM_ADDON_LABEL_SUGGESTIONS,
   computeQuotationTotals,
   describeAdditionalPaxLine,
+  clampAdditionalPaxLineNights,
   describeQuotationDateRange,
   emptyQuotation,
   emptyQuotationAdditionalPaxLine,
@@ -153,6 +154,13 @@ export default function AdminQuotation() {
       checkOut: range ? format(range.end, 'yyyy-MM-dd') : q.checkOut,
       nights,
       rooms: (q.rooms || []).map((row) => ({ ...row, nights })),
+      additionalPaxLines: (q.additionalPaxLines || []).map((line) => ({
+        ...line,
+        nights: clampAdditionalPaxLineNights(
+          line.nights !== '' && line.nights != null ? line.nights : nights,
+          nights
+        ),
+      })),
     }));
   };
 
@@ -204,9 +212,14 @@ export default function AdminQuotation() {
 
   const patchAdditionalPaxLine = (index, fields) => {
     setQuote((q) => {
+      const maxNights = getQuotationStayNights(q) || 1;
+      const patch = { ...fields };
+      if (Object.prototype.hasOwnProperty.call(patch, 'nights')) {
+        patch.nights = clampAdditionalPaxLineNights(patch.nights, maxNights);
+      }
       const next = [...(q.additionalPaxLines || [])];
       const prev = next[index] || emptyQuotationAdditionalPaxLine();
-      next[index] = { ...prev, ...fields };
+      next[index] = { ...prev, ...patch };
       return { ...q, additionalPaxLines: next };
     });
   };
@@ -863,12 +876,17 @@ export default function AdminQuotation() {
                       <input
                         type="number"
                         min={1}
+                        max={stayNights || 1}
                         className={inputClass}
                         value={paxRow.nights ?? (stayNights || 1)}
                         onChange={(e) =>
                           patchAdditionalPaxLine(index, { nights: e.target.value })
                         }
                       />
+                      <p className="text-xs text-aegean-500 mt-1">
+                        Cannot exceed main stay ({stayNights || 1} night
+                        {(stayNights || 1) !== 1 ? 's' : ''}).
+                      </p>
                     </Field>
                   </div>
                   <p className="text-xs text-aegean-500">

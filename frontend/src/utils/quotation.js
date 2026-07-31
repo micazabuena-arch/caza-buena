@@ -310,7 +310,21 @@ export function getAdditionalPaxContext(quote, options = {}) {
 }
 
 function resolveAdditionalPaxLineNights(row, fallbackNights = 1) {
-  return Math.max(1, parseIntSafe(row?.nights) || fallbackNights || 1);
+  const maxNights = Math.max(1, parseIntSafe(fallbackNights) || 1);
+  const requested =
+    row?.nights !== '' && row?.nights != null
+      ? parseIntSafe(row.nights) || maxNights
+      : maxNights;
+  return Math.min(Math.max(1, requested), maxNights);
+}
+
+/** Cap additional-pax nights to the main stay length (for form input). */
+export function clampAdditionalPaxLineNights(value, maxNights) {
+  const max = Math.max(1, parseIntSafe(maxNights) || 1);
+  if (value === '' || value == null) return '';
+  const requested = parseIntSafe(value);
+  if (requested < 1) return '1';
+  return String(Math.min(requested, max));
 }
 
 /** Additional pax line total from resort extra-person rates × pax × nights. */
@@ -498,12 +512,14 @@ export function normalizeQuotation(quote) {
   }
   additionalPaxLines = additionalPaxLines.map((line) => ({
     ...line,
-    nights:
+    nights: clampAdditionalPaxLineNights(
       line.nights !== '' && line.nights != null
         ? line.nights
         : mainNights > 0
           ? mainNights
           : 1,
+      mainNights > 0 ? mainNights : 1
+    ),
   }));
 
   let customAddonLines = quote.customAddonLines;
