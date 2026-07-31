@@ -144,6 +144,82 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
   };
 }
 
+/**
+ * Replace API-calculated stay totals with amounts quoted to the guest.
+ * Used when creating a manual booking from a quotation.
+ */
+export function applyQuotedStayPricing(priced, { quotedStaySubtotal, quotedLineSubtotals } = {}) {
+  const stayTotal = Number(quotedStaySubtotal);
+  if (!Number.isFinite(stayTotal) || stayTotal < 0) return priced;
+
+  const lines = priced.lines.map((line) => ({ ...line }));
+
+  if (Array.isArray(quotedLineSubtotals) && quotedLineSubtotals.length === lines.length) {
+    let combined = 0;
+    lines.forEach((line, index) => {
+      const sub = Number(quotedLineSubtotals[index]);
+      const safeSub = Number.isFinite(sub) && sub >= 0 ? sub : 0;
+      line.subtotal = safeSub;
+      line.room_subtotal = safeSub;
+      line.extra_person_charges = 0;
+      line.room_rate = priced.nights > 0 ? safeSub / priced.nights : safeSub;
+      combined += safeSub;
+    });
+
+    return {
+      ...priced,
+      lines,
+      combinedSubtotal: combined,
+      combinedRoomSubtotal: combined,
+      combinedExtraCharges: 0,
+    };
+  }
+
+  if (lines.length === 1) {
+    const line = lines[0];
+    line.subtotal = stayTotal;
+    line.room_subtotal = stayTotal;
+    line.extra_person_charges = 0;
+    line.room_rate = priced.nights > 0 ? stayTotal / priced.nights : stayTotal;
+    return {
+      ...priced,
+      lines,
+      combinedSubtotal: stayTotal,
+      combinedRoomSubtotal: stayTotal,
+      combinedExtraCharges: 0,
+    };
+  }
+
+  const apiTotal = priced.combinedSubtotal || 0;
+  let combined = 0;
+  lines.forEach((line, index) => {
+    const ratio = apiTotal > 0 ? line.subtotal / apiTotal : 1 / lines.length;
+    const sub = Math.round(stayTotal * ratio * 100) / 100;
+    line.subtotal = sub;
+    line.room_subtotal = sub;
+    line.extra_person_charges = 0;
+    line.room_rate = priced.nights > 0 ? sub / priced.nights : sub;
+    combined += sub;
+  });
+
+  if (lines.length > 0 && Math.abs(combined - stayTotal) > 0.01) {
+    const diff = stayTotal - combined;
+    const last = lines[lines.length - 1];
+    last.subtotal += diff;
+    last.room_subtotal += diff;
+    last.room_rate = priced.nights > 0 ? last.subtotal / priced.nights : last.subtotal;
+    combined = stayTotal;
+  }
+
+  return {
+    ...priced,
+    lines,
+    combinedSubtotal: combined,
+    combinedRoomSubtotal: combined,
+    combinedExtraCharges: 0,
+  };
+}
+
 export async function insertBookingRooms(pool, bookingId, pricedLines) {
   for (const line of pricedLines) {
     await pool.query(

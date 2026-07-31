@@ -16,6 +16,7 @@ export default function ManualBookingPriceSummary({
   nights,
   roomSubtotal,
   manualDiscount = 0,
+  discountNote = '',
   islandTotal = 0,
   islandHoppingEnabled = false,
   extrasQuote,
@@ -74,7 +75,7 @@ export default function ManualBookingPriceSummary({
 
       {manualDiscount > 0 && (
         <div className={`${rowClass} text-green-700`}>
-          <span>Special discount</span>
+          <span>{discountNote?.trim() ? `Discount (${discountNote.trim()})` : 'Special discount'}</span>
           <span>−₱{manualDiscount.toLocaleString()}</span>
         </div>
       )}

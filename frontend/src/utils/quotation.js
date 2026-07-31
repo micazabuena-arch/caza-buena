@@ -277,6 +277,72 @@ export function isWeekendNight(dateStr) {
   return day === 0 || day === 5 || day === 6;
 }
 
+/** Resolve check-in date from quotation fields. */
+export function getQuotationCheckIn(quote) {
+  const direct = String(quote?.checkIn || '').slice(0, 10);
+  if (direct) return direct;
+  const range = parseQuotationDateRange(quote?.dateLabel);
+  return range?.start ? format(range.start, 'yyyy-MM-dd') : '';
+}
+
+/** Nightly room rate for one date (holiday > weekend > weekday). */
+export function resolveRoomNightlyPrice(room, dateStr) {
+  if (!room) return 0;
+  const night = String(dateStr || '').slice(0, 10);
+  const holiday = (room.holiday_rates || []).find(
+    (row) => night >= String(row.start_date).slice(0, 10) && night <= String(row.end_date).slice(0, 10)
+  );
+  if (holiday) return parseMoney(holiday.price_per_night);
+
+  if (isWeekendNight(night)) {
+    const weekend =
+      room.price_weekend != null ? Number(room.price_weekend) : Number(room.price_per_night);
+    if (Number.isFinite(weekend)) return weekend;
+  }
+
+  return parseMoney(room.price_per_night);
+}
+
+/** Sum nightly room rates across the stay (check-out day not counted). */
+export function calculateQuotedRoomStaySubtotal(room, checkIn, nights) {
+  const nightCount = Math.max(0, parseIntSafe(nights));
+  if (!room || nightCount === 0) return 0;
+
+  const start = parseISO(String(checkIn || '').slice(0, 10));
+  if (!isValid(start)) return parseMoney(room.price_per_night) * nightCount;
+
+  let total = 0;
+  for (let i = 0; i < nightCount; i += 1) {
+    total += resolveRoomNightlyPrice(room, format(addDays(start, i), 'yyyy-MM-dd'));
+  }
+  return total;
+}
+
+/** Average nightly rate for the stay (for the single rate field on quotation rooms). */
+export function getQuotedRoomNightlyRate(room, checkIn, nights) {
+  const nightCount = Math.max(1, parseIntSafe(nights) || 1);
+  const subtotal = calculateQuotedRoomStaySubtotal(room, checkIn, nightCount);
+  return subtotal / nightCount;
+}
+
+/** Dropdown label: date-aware rate when stay dates are set, otherwise weekday–weekend range. */
+export function formatRoomListOptionLabel(room, quote) {
+  const nights = getQuotationStayNights(quote);
+  const checkIn = getQuotationCheckIn(quote);
+
+  if (checkIn && nights > 0) {
+    const nightly = getQuotedRoomNightlyRate(room, checkIn, nights);
+    return `${room.name} — ₱${Number(nightly).toLocaleString()}/night`;
+  }
+
+  const weekday = Number(room.price_per_night || 0).toLocaleString();
+  const weekend = Number(room.price_weekend ?? room.price_per_night ?? 0).toLocaleString();
+  if (weekday !== weekend) {
+    return `${room.name} — ₱${weekday}–₱${weekend}/night`;
+  }
+  return `${room.name} — ₱${weekday}/night`;
+}
+
 /** Count weekday vs weekend nights for a span starting at check-in. */
 export function countWeekdayWeekendNights(checkIn, nightCount) {
   const nights = Math.max(0, parseIntSafe(nightCount));

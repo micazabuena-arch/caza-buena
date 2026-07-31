@@ -6,11 +6,22 @@ import {
 } from '../data/bookingAddOns';
 import { emptyIslandHoppingForm } from '../data/islandHoppingRates';
 import { createRoomLine } from './bookingRoomLines';
-import { computeTour, parseQuotationDateRange } from './quotation';
+import {
+  computeAccommodation,
+  computeQuotationTotals,
+  computeTour,
+  normalizeQuotation,
+  parseQuotationDateRange,
+} from './quotation';
 
 function parseMoney(value) {
   const n = parseFloat(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function formatDiscountAmount(value) {
+  const amount = parseMoney(value);
+  return amount > 0 ? String(amount) : '';
 }
 
 function resolveStayDates(quote) {
@@ -108,26 +119,34 @@ function quoteRoomsToLines(quoteRooms, rooms, additionalPaxLines = []) {
 
 function quoteExtrasToBookingExtras(quote) {
   const extras = emptyBookingExtras();
+  const bilaoQty = bilaoQtyFromLines(quote.bilaoLines || []);
+  const boodleQty = boodleQtyFromLines(quote.boodleLines || []);
+  const hasBilao =
+    quote.bilaoEnabled || Object.values(bilaoQty).some((qty) => qty > 0);
+  const hasBoodle =
+    quote.boodleEnabled || Object.values(boodleQty).some((qty) => qty > 0);
 
-  if (quote?.bilaoEnabled && quote.bilaoLines?.length) {
+  if (hasBilao) {
     extras.bilao_enabled = true;
-    extras.bilao_qty = bilaoQtyFromLines(quote.bilaoLines);
+    extras.bilao_qty = bilaoQty;
   }
 
-  if (quote?.boodleEnabled && quote.boodleLines?.length) {
+  if (hasBoodle) {
     extras.boodle_fight_enabled = true;
-    extras.boodle_qty = boodleQtyFromLines(quote.boodleLines);
+    extras.boodle_qty = boodleQty;
   }
 
   return extras;
 }
 
 function quoteIslandHoppingToForm(quote) {
-  if (!quote?.tourEnabled) {
+  const tour = computeTour(quote);
+  const hasTour = tour.total > 0;
+
+  if (!hasTour) {
     return { enabled: false, data: emptyIslandHoppingForm() };
   }
 
-  const tour = computeTour(quote);
   const totalPax = tour.regularQty + tour.seniorPwdQty + tour.infantQty;
 
   return {
@@ -136,47 +155,98 @@ function quoteIslandHoppingToForm(quote) {
       ...emptyIslandHoppingForm(),
       soa_summary: true,
       summary_pax: String(totalPax > 0 ? totalPax : quote.pax || 1),
-      summary_amount: String(tour.total || 0),
+      summary_amount: String(tour.total),
     },
   };
 }
 
-function buildSpecialRequests(quote, quotationReference) {
-  const notes = [];
-
-  if (quotationReference) {
-    notes.push(`From quotation ${quotationReference}`);
-  }
-  if (quote?.bookingPlatform?.trim()) {
-    notes.push(`Booking platform: ${quote.bookingPlatform.trim()}`);
-  }
-  if (quote?.customAddonsEnabled && Array.isArray(quote.customAddonLines)) {
-    quote.customAddonLines.forEach((line) => {
-      const label = String(line?.label || '').trim();
-      const detail = String(line?.detail || '').trim();
-      const rate = parseMoney(line?.rate);
-      if (!label && rate <= 0) return;
-      const amount = rate > 0 ? ` — ₱${rate.toLocaleString()}` : '';
-      notes.push(`${label || 'Add-on'}${detail ? ` (${detail})` : ''}${amount}`);
-    });
+function resolvePaymentFields(quote, totals, depositPercent = 20) {
+  const downPayment = parseMoney(quote.downPaymentAmount);
+  if (downPayment <= 0) {
+    return { payment_option: 'full', custom_payment_amount: '' };
   }
 
-  return notes.join('\n');
+  const pct = Number(depositPercent) || 20;
+  const depositFromQuotedTotal =
+    totals.grandTotal > 0
+      ? Math.round(((totals.grandTotal * pct) / 100) * 100) / 100
+      : 0;
+
+  if (depositFromQuotedTotal > 0 && Math.abs(downPayment - depositFromQuotedTotal) < 0.01) {
+    return { payment_option: 'deposit', custom_payment_amount: '' };
+  }
+
+  return {
+    payment_option: 'custom',
+    custom_payment_amount: String(downPayment),
+  };
+}
+
+function buildQuotedAccommodationPricing(quote, bookingRoomLines) {
+  const normalized = normalizeQuotation(quote);
+  const accommodation = computeAccommodation(normalized);
+  const mainNights = normalized.nights > 0 ? normalized.nights : 1;
+
+  const quoteRooms = (normalized.rooms || []).filter(
+    (entry) => entry?.roomId || entry?.roomType
+  );
+  const quoteRoomTotals = quoteRooms.map((row) => parseMoney(row.rate) * mainNights);
+  const roomOnlyTotal = quoteRoomTotals.reduce((sum, total) => sum + total, 0);
+  const additionalPaxTotal = Math.max(0, accommodation.roomSubtotal - roomOnlyTotal);
+
+  const bookedLines = (bookingRoomLines || []).filter((line) => line.room_id);
+  const lineSubtotals = bookedLines.map((_, index) => {
+    let subtotal = quoteRoomTotals[index] || 0;
+    if (index === 0) subtotal += additionalPaxTotal;
+    return subtotal;
+  });
+
+  const lineSubtotalsByLineId = {};
+  bookedLines.forEach((line, index) => {
+    lineSubtotalsByLineId[line.id] = lineSubtotals[index];
+  });
+
+  return {
+    accommodationSubtotal: accommodation.roomSubtotal,
+    lineSubtotals,
+    lineSubtotalsByLineId,
+    discount: accommodation.discount,
+    afterDiscount: accommodation.afterDiscount,
+  };
 }
 
 /**
- * Map a saved quotation into manual booking form state.
+ * Map a saved or in-progress quotation into manual booking form state.
+ *
+ * Quotation field → booking field:
+ * - guestName → guest_name
+ * - dateLabel/checkIn/checkOut → check_in, check_out
+ * - rooms + additionalPaxLines → roomLines (guest counts)
+ * - discountAmount/Label → admin_discount_amount/note (room stay only)
+ * - downPaymentAmount → payment_option / custom_payment_amount
+ * - tour* → island hopping SOA summary
+ * - bilao/boodle → bookingExtras
  */
-export function mapQuotationToManualBooking(savedQuote, { rooms = [] } = {}) {
-  const quote = savedQuote?.quote_data || savedQuote || {};
+export function mapQuotationToManualBooking(
+  savedQuote,
+  { rooms = [], depositPercent = 20 } = {}
+) {
+  const quote = normalizeQuotation(savedQuote?.quote_data || savedQuote || {});
+  const totals = computeQuotationTotals(quote);
   const dates = resolveStayDates(quote);
-  const downPayment = parseMoney(quote.downPaymentAmount);
   const island = quoteIslandHoppingToForm(quote);
+  const payment = resolvePaymentFields(quote, totals, depositPercent);
   const quotationReference = savedQuote?.reference_code || null;
+  const discountAmount = formatDiscountAmount(quote.discountAmount);
+  const discountNote = String(quote.discountLabel || '').trim();
+  const roomLines = quoteRoomsToLines(quote.rooms, rooms, quote.additionalPaxLines);
+  const quotedAccommodation = buildQuotedAccommodationPricing(quote, roomLines);
 
   return {
     quotationId: savedQuote?.id || null,
     quotationReference,
+    quotedGrandTotal: totals.grandTotal,
+    quotationPricing: quotedAccommodation,
     form: {
       guest_name: String(quote.guestName || savedQuote?.guest_name || '').trim(),
       guest_email: '',
@@ -186,18 +256,15 @@ export function mapQuotationToManualBooking(savedQuote, { rooms = [] } = {}) {
       check_in: dates.check_in,
       check_out: dates.check_out,
       status: 'confirmed',
-      special_requests: buildSpecialRequests(quote, quotationReference),
+      special_requests: '',
       send_confirmation_email: false,
       payment_method_id: '',
-      payment_option: downPayment > 0 ? 'custom' : 'full',
-      custom_payment_amount: downPayment > 0 ? String(downPayment) : '',
-      admin_discount_amount:
-        quote.discountAmount === '' || quote.discountAmount == null
-          ? ''
-          : String(quote.discountAmount),
-      admin_discount_note: String(quote.discountLabel || '').trim(),
+      payment_option: payment.payment_option,
+      custom_payment_amount: payment.custom_payment_amount,
+      admin_discount_amount: discountAmount,
+      admin_discount_note: discountNote,
     },
-    roomLines: quoteRoomsToLines(quote.rooms, rooms, quote.additionalPaxLines),
+    roomLines,
     bookingExtras: quoteExtrasToBookingExtras(quote),
     islandHoppingEnabled: island.enabled,
     islandHopping: island.data,

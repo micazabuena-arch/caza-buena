@@ -544,6 +544,10 @@ router.post(
     body('boodle_lines').optional().isArray(),
     body('admin_discount_amount').optional({ values: 'falsy' }).isFloat({ min: 0 }),
     body('admin_discount_note').optional().trim().isLength({ max: 255 }),
+    body('quoted_stay_subtotal').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+    body('quoted_room_line_subtotals').optional().isArray(),
+    body('quoted_room_line_subtotals.*').optional().isFloat({ min: 0 }),
+    body('quotation_id').optional({ values: 'falsy' }).toInt().isInt({ min: 1 }),
   ],
   async (req, res) => {
     const errors = validationResult(req);

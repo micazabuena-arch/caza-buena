@@ -26,7 +26,10 @@ import {
   emptyQuotationCustomAddonLine,
   emptyQuotationRoom,
   formatQuoteAmount,
+  formatRoomListOptionLabel,
   getAdditionalPaxContext,
+  getQuotationCheckIn,
+  getQuotedRoomNightlyRate,
   getQuotationStayNights,
   normalizeQuotation,
   parseQuotationDateRange,
@@ -147,13 +150,23 @@ export default function AdminQuotation() {
     const preview = describeQuotationDateRange(dateLabel);
     const range = parseQuotationDateRange(dateLabel);
     const nights = preview?.nights ?? 1;
+    const checkIn = range ? format(range.start, 'yyyy-MM-dd') : '';
     setQuote((q) => ({
       ...q,
       dateLabel,
       checkIn: range ? format(range.start, 'yyyy-MM-dd') : q.checkIn,
       checkOut: range ? format(range.end, 'yyyy-MM-dd') : q.checkOut,
       nights,
-      rooms: (q.rooms || []).map((row) => ({ ...row, nights })),
+      rooms: (q.rooms || []).map((row) => {
+        const next = { ...row, nights };
+        if (!row.roomId) return next;
+        const room = rooms.find((r) => String(r.id) === String(row.roomId));
+        if (!room || !checkIn) return next;
+        return {
+          ...next,
+          rate: getQuotedRoomNightlyRate(room, checkIn, nights),
+        };
+      }),
       additionalPaxLines: (q.additionalPaxLines || []).map((line) => ({
         ...line,
         nights: clampAdditionalPaxLineNights(
@@ -321,10 +334,12 @@ export default function AdminQuotation() {
     }
     const room = rooms.find((r) => String(r.id) === String(roomId));
     if (!room) return;
+    const nights = getQuotationStayNights(quote) || 1;
+    const checkIn = getQuotationCheckIn(quote);
     patchRoom(index, {
       roomId: String(room.id),
       roomType: room.name?.toUpperCase() || '',
-      rate: room.price_per_night ?? '',
+      rate: checkIn ? getQuotedRoomNightlyRate(room, checkIn, nights) : room.price_per_night ?? '',
       occupants: room.included_adults ?? room.min_guests ?? 2,
     });
   };
@@ -338,7 +353,7 @@ export default function AdminQuotation() {
         fromQuotation: {
           id: savedId,
           reference_code: referenceCode,
-          quote_data: quote,
+          quote_data: normalizeQuotation(quote),
           guest_name: quote.guestName?.trim() || '',
         },
       },
@@ -790,7 +805,7 @@ export default function AdminQuotation() {
                       <option value="">Select room…</option>
                       {rooms.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} — ₱{Number(r.price_per_night).toLocaleString()}/night
+                          {formatRoomListOptionLabel(r, quote)}
                         </option>
                       ))}
                     </select>

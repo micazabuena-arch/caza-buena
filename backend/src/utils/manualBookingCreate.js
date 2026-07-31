@@ -6,6 +6,7 @@ import {
   normalizeRoomLines,
   validateAndPriceRoomLines,
   insertBookingRooms,
+  applyQuotedStayPricing,
 } from './bookingRooms.js';
 
 /**
@@ -42,12 +43,15 @@ export async function createManualBooking(body) {
     pet_count: petCountBody,
     bilao_enabled: bilaoEnabledFlag,
     bilao_package: bilaoPackageBody,
-    bilao_lines: body.bilao_lines,
+    bilao_lines: bilaoLinesBody,
     boodle_fight_enabled: boodleFightEnabledFlag,
     boodle_fight_tier: boodleFightTierBody,
-    boodle_lines: body.boodle_lines,
+    boodle_lines: boodleLinesBody,
     admin_discount_amount,
     admin_discount_note,
+    quoted_stay_subtotal,
+    quoted_room_line_subtotals,
+    quotation_id,
   } = body;
 
   const hasRoomLines = Array.isArray(roomLinesBody) && roomLinesBody.length > 0;
@@ -74,6 +78,16 @@ export async function createManualBooking(body) {
   });
   if (priced.error) return { error: priced.error };
 
+  const quotedStaySubtotal = Number(quoted_stay_subtotal);
+  const hasQuotedStay =
+    Number.isFinite(quotedStaySubtotal) && quotedStaySubtotal >= 0 && quoted_stay_subtotal != null;
+  const pricedWithQuote = hasQuotedStay
+    ? applyQuotedStayPricing(priced, {
+        quotedStaySubtotal,
+        quotedLineSubtotals: quoted_room_line_subtotals,
+      })
+    : priced;
+
   const {
     nights,
     lines: pricedLines,
@@ -85,7 +99,7 @@ export async function createManualBooking(body) {
     totalGuests: guest_count,
     primaryRoom: room,
     hasSuite,
-  } = priced;
+  } = pricedWithQuote;
 
   const avgNightlyRate = nights > 0 ? subtotal / nights : Number(room.price_per_night);
 
@@ -110,10 +124,10 @@ export async function createManualBooking(body) {
       pet_count: petCountBody,
       bilao_enabled: bilaoEnabledFlag,
       bilao_package: bilaoPackageBody,
-      bilao_lines: body.bilao_lines,
+      bilao_lines: bilaoLinesBody,
       boodle_fight_enabled: boodleFightEnabledFlag,
       boodle_fight_tier: boodleFightTierBody,
-      boodle_lines: body.boodle_lines,
+      boodle_lines: boodleLinesBody,
     },
     hasSuite ? 'suite' : room.room_type
   );

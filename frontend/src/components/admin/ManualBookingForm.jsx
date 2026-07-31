@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 import api, { getApiError } from '../../api/client';
 import SubmitButton from '../ui/SubmitButton';
 import BookingExtrasSection from '../booking/BookingExtrasSection';
@@ -109,6 +109,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
   const [roomLines, setRoomLines] = useState(() => [createRoomLine()]);
   const [lineQuotes, setLineQuotes] = useState({});
   const [lineQuotesLoading, setLineQuotesLoading] = useState(false);
+  const [quotationPricing, setQuotationPricing] = useState(null);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
@@ -143,13 +144,18 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     if (appliedQuotationKey.current === seedKey) return;
     appliedQuotationKey.current = seedKey;
 
-    const mapped = mapQuotationToManualBooking(quotationSeed, { rooms });
+    const mapped = mapQuotationToManualBooking(quotationSeed, { rooms, depositPercent });
     setForm({
       ...emptyForm(),
       ...mapped.form,
     });
     setRoomLines(mapped.roomLines);
     setLineQuotes({});
+    setQuotationPricing(
+      mapped.quotationPricing
+        ? { ...mapped.quotationPricing, quotationId: mapped.quotationId }
+        : null
+    );
     setBookingExtras(mapped.bookingExtras);
     setIslandHoppingEnabled(mapped.islandHoppingEnabled);
     setIslandHopping(mapped.islandHopping);
@@ -158,8 +164,13 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     setActiveTab('stay');
 
     const label = quotationSeed.reference_code || 'quotation';
-    toast.success(`Loaded from ${label}. Add guest contact details, then create the booking.`);
-  }, [quotationSeed, rooms, toast]);
+    const discountPart = mapped.form.admin_discount_amount
+      ? ` · Discount ₱${Number(mapped.form.admin_discount_amount).toLocaleString()}`
+      : '';
+    toast.success(
+      `Loaded from ${label}${discountPart}. Add guest contact details, then create the booking.`
+    );
+  }, [quotationSeed, rooms, depositPercent, toast]);
 
   // Price each selected room for the shared check-in / check-out dates.
   useEffect(() => {
@@ -213,6 +224,32 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     };
   }, [roomLines, form.check_in, form.check_out]);
 
+  const quotedNights =
+    form.check_in && form.check_out
+      ? Math.max(
+          0,
+          differenceInCalendarDays(parseISO(form.check_out), parseISO(form.check_in))
+        )
+      : 0;
+
+  const displayLineQuotes = useMemo(() => {
+    if (!quotationPricing?.lineSubtotalsByLineId) return lineQuotes;
+
+    const next = { ...lineQuotes };
+    roomLines.forEach((line) => {
+      const quotedSubtotal = quotationPricing.lineSubtotalsByLineId[line.id];
+      if (quotedSubtotal == null) return;
+      next[line.id] = {
+        ...(next[line.id] || {}),
+        available: next[line.id]?.available ?? true,
+        nights: next[line.id]?.nights || quotedNights,
+        subtotal: quotedSubtotal,
+        quoted_from_quotation: true,
+      };
+    });
+    return next;
+  }, [lineQuotes, quotationPricing, roomLines, quotedNights]);
+
   const anteDate = isPastStayDate(form.check_in);
   const guestCount = totalGuestsFromLines(roomLines);
   const primaryLine = roomLines[0];
@@ -226,15 +263,18 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     ? 'suite'
     : 'queen';
 
-  const roomSubtotal = roomLines.reduce((sum, line) => {
-    const quote = lineQuotes[line.id];
-    if (!quote || quote.occupancy_error) return sum;
-    if (!(quote.available || anteDate)) return sum;
-    if (quote.subtotal == null) return sum;
-    return sum + Number(quote.subtotal);
-  }, 0);
+  const roomSubtotal = quotationPricing?.accommodationSubtotal
+    ? Number(quotationPricing.accommodationSubtotal)
+    : roomLines.reduce((sum, line) => {
+        const quote = lineQuotes[line.id];
+        if (!quote || quote.occupancy_error) return sum;
+        if (!(quote.available || anteDate)) return sum;
+        if (quote.subtotal == null) return sum;
+        return sum + Number(quote.subtotal);
+      }, 0);
 
-  const nights = Object.values(lineQuotes).find((q) => q?.nights)?.nights || 0;
+  const nights =
+    Object.values(displayLineQuotes).find((q) => q?.nights)?.nights || quotedNights || 0;
 
   const extrasQuote = selectedRoom || roomLines.some((l) => l.room_id)
     ? validateBookingExtras(bookingExtras, roomType)
@@ -308,7 +348,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
   const validationContext = useMemo(
     () => ({
       roomLines,
-      lineQuotes,
+      lineQuotes: displayLineQuotes,
       lineQuotesLoading,
       rooms,
       paymentMethods,
@@ -323,7 +363,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     }),
     [
       roomLines,
-      lineQuotes,
+      displayLineQuotes,
       lineQuotesLoading,
       rooms,
       paymentMethods,
@@ -427,6 +467,11 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
           ? undefined
           : form.admin_discount_amount,
       admin_discount_note: form.admin_discount_note.trim() || undefined,
+      quotation_id: quotationPricing?.quotationId || undefined,
+      quoted_stay_subtotal: quotationPricing?.accommodationSubtotal || undefined,
+      quoted_room_line_subtotals: quotationPricing?.lineSubtotals?.length
+        ? quotationPricing.lineSubtotals
+        : undefined,
     };
   };
 
@@ -578,10 +623,16 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               </p>
             )}
 
+            {quotationPricing && (
+              <p className="text-xs text-aegean-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+                Using accommodation rates from the quotation (not live weekday/weekend pricing).
+              </p>
+            )}
+
             <BookingRoomLinesSection
               lines={roomLines}
               rooms={rooms}
-              lineQuotes={lineQuotes}
+              lineQuotes={displayLineQuotes}
               quotesLoading={lineQuotesLoading}
               onLineChange={handleLineChange}
               onAddLine={handleAddLine}
@@ -757,11 +808,12 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
             />
             <ManualBookingPriceSummary
               roomLines={roomLines}
-              lineQuotes={lineQuotes}
+              lineQuotes={displayLineQuotes}
               rooms={rooms}
               nights={nights}
               roomSubtotal={roomSubtotal}
               manualDiscount={manualDiscount}
+              discountNote={form.admin_discount_note}
               islandTotal={islandTotal}
               islandHoppingEnabled={islandHoppingEnabled}
               extrasQuote={extrasQuote}
