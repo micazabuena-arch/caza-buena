@@ -333,12 +333,37 @@ router.get('/settings', authenticateAdmin, async (_req, res) => {
 
 router.put('/settings', authenticateAdmin, requireAdminRole, async (req, res) => {
   const { validateExtraPersonRatesInput } = await import('../utils/extraPersonRates.js');
-  const { errors, parsed } = validateExtraPersonRatesInput(req.body);
-  if (errors.length > 0) {
-    return res.status(400).json({ message: errors[0] });
+  const { validateIslandHoppingRatesInput, islandHoppingRatesToSettings } = await import(
+    '../utils/islandHoppingRatesStore.js'
+  );
+  const { validateFoodAddOnRatesInput, foodAddOnRatesToSettings } = await import(
+    '../utils/foodAddOnRatesStore.js'
+  );
+
+  const extraRates = validateExtraPersonRatesInput(req.body);
+  if (extraRates.errors.length > 0) {
+    return res.status(400).json({ message: extraRates.errors[0] });
   }
 
-  const entries = { ...req.body, ...parsed };
+  const islandRates = validateIslandHoppingRatesInput(req.body);
+  if (islandRates.errors.length > 0) {
+    return res.status(400).json({ message: islandRates.errors[0] });
+  }
+
+  const foodRates = validateFoodAddOnRatesInput(req.body);
+  if (foodRates.errors.length > 0) {
+    return res.status(400).json({ message: foodRates.errors[0] });
+  }
+
+  const entries = {
+    ...req.body,
+    ...extraRates.parsed,
+    ...(islandRates.parsed ? islandHoppingRatesToSettings(islandRates.parsed) : {}),
+    ...(foodRates.parsed ? foodAddOnRatesToSettings(foodRates.parsed) : {}),
+  };
+
+  delete entries.island_hopping_rates;
+  delete entries.food_add_on_rates;
 
   for (const [key, value] of Object.entries(entries)) {
     await pool.query(

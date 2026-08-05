@@ -109,14 +109,18 @@ export async function createManualBooking(body) {
 
   if (islandHopping) {
     const { resolveAdminIslandHoppingPricing } = await import('./islandHopping.js');
+    const { getIslandHoppingRates } = await import('./islandHoppingRatesStore.js');
     const ihData = islandHoppingData || {};
-    const resolved = resolveAdminIslandHoppingPricing(ihData);
+    const islandRates = await getIslandHoppingRates(pool);
+    const resolved = resolveAdminIslandHoppingPricing(ihData, null, islandRates);
     if (resolved.error) return { error: resolved.error };
     islandHoppingAmount = resolved.amount;
     islandHoppingStored = resolved.stored;
   }
 
   const { validateBookingExtras, serializeFoodLines } = await import('./bookingExtras.js');
+  const { getFoodAddOnRates } = await import('./foodAddOnRatesStore.js');
+  const foodRates = await getFoodAddOnRates(pool);
   const extrasValidation = validateBookingExtras(
     {
       bringing_car: bringingCarFlag,
@@ -129,7 +133,8 @@ export async function createManualBooking(body) {
       boodle_fight_tier: boodleFightTierBody,
       boodle_lines: boodleLinesBody,
     },
-    hasSuite ? 'suite' : room.room_type
+    hasSuite ? 'suite' : room.room_type,
+    foodRates
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 

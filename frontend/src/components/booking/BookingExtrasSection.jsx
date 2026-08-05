@@ -56,18 +56,21 @@ function FoodQtyTable({ packages, qtyMap, onQtyChange, paxColumn = false }) {
   );
 }
 
-export default function BookingExtrasSection({ data, onChange, roomType }) {
+export default function BookingExtrasSection({ data, onChange, roomType, foodRates }) {
   const update = (patch) => onChange({ ...data, ...patch });
   const maxPets = maxPetsForRoomType(roomType);
   const petCount = parseInt(data.pet_count, 10) || 0;
+  const bilaoPackages = foodRates?.bilaoPackages || BILAO_PACKAGES;
+  const boodlePackages = foodRates?.boodlePackages || BOODLE_FIGHT_PACKAGES;
+  const petDepositPerPet = foodRates?.petDepositPerPet ?? PET_DEPOSIT_PER_PET;
 
-  const bilaoQty = data.bilao_qty || emptyBilaoQty();
-  const boodleQty = data.boodle_qty || emptyBoodleQty();
+  const bilaoQty = data.bilao_qty || emptyBilaoQty(bilaoPackages);
+  const boodleQty = data.boodle_qty || emptyBoodleQty(boodlePackages);
   const bilaoSubtotal = data.bilao_enabled
-    ? summarizeBilaoLines(bilaoLinesFromQty(bilaoQty)).total
+    ? summarizeBilaoLines(bilaoLinesFromQty(bilaoQty, bilaoPackages), bilaoPackages).total
     : 0;
   const boodleSubtotal = data.boodle_fight_enabled
-    ? summarizeBoodleLines(boodleLinesFromQty(boodleQty)).total
+    ? summarizeBoodleLines(boodleLinesFromQty(boodleQty, boodlePackages), boodlePackages).total
     : 0;
 
   return (
@@ -103,7 +106,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
             <p className="text-sm font-medium text-aegean-800">Bringing pets?</p>
             <p className="text-xs text-aegean-500 mt-0.5">
               Up to {maxPets} small–medium pet{maxPets !== 1 ? 's' : ''} · ₱
-              {PET_DEPOSIT_PER_PET.toLocaleString()} refundable deposit each
+              {petDepositPerPet.toLocaleString()} refundable deposit each
             </p>
           </div>
           <div>
@@ -123,7 +126,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
             )}
             {petCount > 0 && (
               <p className="text-xs text-aegean-600 mt-2">
-                Deposit on arrival: ₱{(petCount * PET_DEPOSIT_PER_PET).toLocaleString()} (refundable)
+                Deposit on arrival: ₱{(petCount * petDepositPerPet).toLocaleString()} (refundable)
               </p>
             )}
           </div>
@@ -148,7 +151,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
               onChange={(yes) =>
                 update({
                   bilao_enabled: yes,
-                  bilao_qty: yes ? bilaoQty : emptyBilaoQty(),
+                  bilao_qty: yes ? bilaoQty : emptyBilaoQty(bilaoPackages),
                   bilao_package: '',
                 })
               }
@@ -157,7 +160,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
           {data.bilao_enabled && (
             <>
               <FoodQtyTable
-                packages={BILAO_PACKAGES}
+                packages={bilaoPackages}
                 qtyMap={bilaoQty}
                 onQtyChange={(bilao_qty) => update({ bilao_qty })}
                 paxColumn
@@ -186,7 +189,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
               onChange={(yes) =>
                 update({
                   boodle_fight_enabled: yes,
-                  boodle_qty: yes ? boodleQty : emptyBoodleQty(),
+                  boodle_qty: yes ? boodleQty : emptyBoodleQty(boodlePackages),
                   boodle_fight_tier: '',
                 })
               }
@@ -195,7 +198,7 @@ export default function BookingExtrasSection({ data, onChange, roomType }) {
           {data.boodle_fight_enabled && (
             <>
               <FoodQtyTable
-                packages={BOODLE_FIGHT_PACKAGES}
+                packages={boodlePackages}
                 qtyMap={boodleQty}
                 onQtyChange={(boodle_qty) => update({ boodle_qty })}
               />

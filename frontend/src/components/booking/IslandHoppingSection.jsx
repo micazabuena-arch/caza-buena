@@ -19,6 +19,7 @@ export default function IslandHoppingSection({
   // Admin manual booking / edit: guests may not supply passenger details up front,
   // so fields are not enforced. Public guest booking keeps them required.
   optionalFields = false,
+  rates = ISLAND_HOPPING_RATES,
 }) {
   const update = (patch) => onChange({ ...data, ...patch });
 
@@ -79,10 +80,10 @@ export default function IslandHoppingSection({
     update({ passengers: data.passengers.filter((_, i) => i !== index) });
   };
 
-  const quote = enabled && !data.soa_summary ? calculateIslandHopping(data.passengers) : null;
+  const quote = enabled && !data.soa_summary ? calculateIslandHopping(data.passengers, rates) : null;
   const summaryBoatPlan =
     data.soa_summary && data.summary_pax
-      ? planBoatsForPax(parseInt(data.summary_pax, 10))
+      ? planBoatsForPax(parseInt(data.summary_pax, 10), rates)
       : null;
   const formComplete =
     enabled &&
@@ -322,7 +323,7 @@ export default function IslandHoppingSection({
               className="mt-3 text-sm text-aegean-600 hover:text-aegean-800 flex items-center gap-1"
             >
               <Plus size={16} /> Add guest
-              {data.passengers.length >= ISLAND_HOPPING_RATES.maxPassengersPerBoat
+              {data.passengers.length >= rates.maxPassengersPerBoat
                 ? ' (extra boats added automatically for large groups)'
                 : ''}
             </button>

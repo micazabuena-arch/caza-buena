@@ -10,7 +10,9 @@ import IslandHoppingSection from '../booking/IslandHoppingSection';
 import PaymentAmountSelect from '../booking/PaymentAmountSelect';
 import { validateBookingExtras } from '../../data/bookingAddOns';
 import { MANUAL_ONLY_PAYMENT_METHODS } from '../../data/manualBookingPayment';
-import { calculateIslandHopping, getAdminIslandHoppingTotal } from '../../data/islandHoppingRates';
+import { calculateIslandHopping, getAdminIslandHoppingTotal, ISLAND_HOPPING_RATES } from '../../data/islandHoppingRates';
+import { islandHoppingRatesFromSettings } from '../../utils/islandHoppingRatesConfig';
+import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../../utils/foodAddOnRatesConfig';
 import { bookingToEditState, editStateToPayload } from '../../utils/bookingEditForm';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import RebookPricePreview, { rebookConfirmMessage } from './RebookPricePreview';
@@ -68,6 +70,8 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const [rooms, setRooms] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [depositPercent, setDepositPercent] = useState(20);
+  const [islandHoppingRates, setIslandHoppingRates] = useState(ISLAND_HOPPING_RATES);
+  const [foodAddOnRates, setFoodAddOnRates] = useState(defaultFoodAddOnRates);
   const [form, setForm] = useState(() => bookingToEditState(booking));
   const [roomLines, setRoomLines] = useState(() => bookingToRoomLines(booking));
   const [lineQuotes, setLineQuotes] = useState({});
@@ -193,6 +197,12 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         if (settingsRes.data?.booking_deposit_percent) {
           setDepositPercent(settingsRes.data.booking_deposit_percent);
         }
+        if (settingsRes.data?.island_hopping_rates) {
+          setIslandHoppingRates(islandHoppingRatesFromSettings(settingsRes.data));
+        }
+        if (settingsRes.data?.food_add_on_rates) {
+          setFoodAddOnRates(foodAddOnRatesFromSettings(settingsRes.data));
+        }
       })
       .catch(() => {});
   }, []);
@@ -211,12 +221,14 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     return sum + Number(quote.subtotal);
   }, 0);
 
-  const extrasQuote = validateBookingExtras(form.bookingExtras, roomType);
+  const extrasQuote = validateBookingExtras(form.bookingExtras, roomType, foodAddOnRates);
   const islandQuote =
     form.islandHoppingEnabled && !form.islandHopping.soa_summary && form.islandHopping.passengers?.length
-      ? calculateIslandHopping(form.islandHopping.passengers)
+      ? calculateIslandHopping(form.islandHopping.passengers, islandHoppingRates)
       : null;
-  const islandTotal = form.islandHoppingEnabled ? getAdminIslandHoppingTotal(form.islandHopping) : 0;
+  const islandTotal = form.islandHoppingEnabled
+    ? getAdminIslandHoppingTotal(form.islandHopping, islandHoppingRates)
+    : 0;
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const estimatedAddOns = islandTotal + addOnsTotal;
 
@@ -527,6 +539,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               data={form.bookingExtras}
               onChange={(bookingExtras) => update({ bookingExtras })}
               roomType={roomType}
+              foodRates={foodAddOnRates}
             />
             <div className="border-t border-aegean-100 pt-4 mt-4">
               <FoodAddOnsOrderSummary
@@ -543,6 +556,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 onEnabledChange={(yes) => update({ islandHoppingEnabled: yes })}
                 data={form.islandHopping}
                 onChange={(islandHopping) => update({ islandHopping })}
+                rates={islandHoppingRates}
               />
             </div>
           </Panel>

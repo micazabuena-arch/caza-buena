@@ -1,34 +1,17 @@
 /** Hundred Islands hopping rates & computation */
 
-export const ISLAND_HOPPING_RATES = {
-  entrance: {
-    infant: { maxAge: 4, label: 'Entrance fee (0–4 years old)', rate: 20 },
-    regular: { minAge: 5, maxAge: 59, label: 'Entrance fee (5–59 years old)', rate: 130 },
-    senior: { label: 'Senior citizen (with 20% discount)', rate: 108 },
-    pwd: { label: 'PWD (with 20% discount)', rate: 108 },
-  },
-  boat: [
-    { id: 'small', label: 'SMALL (1–5 PAX)', min: 1, max: 5, rate: 1600 },
-    { id: 'medium', label: 'MEDIUM (6–10 PAX)', min: 6, max: 10, rate: 2000 },
-    { id: 'large', label: 'LARGE (11–15 PAX)', min: 11, max: 15, rate: 2400 },
-    { id: 'deluxe', label: 'DELUXE (16–20 PAX)', min: 16, max: 20, rate: 2800 },
-  ],
-  facilitationFee: 300,
-  /** Facilitation fee for Deluxe boat tier (16–20 pax); other tiers use facilitationFee. */
-  deluxeFacilitationFee: 500,
-  garbageFee: 200,
-  maxPassengersPerBoat: 20,
-  maxPassengers: 20,
-};
+import { DEFAULT_ISLAND_HOPPING_RATES } from './islandHoppingRatesStore.js';
+
+export const ISLAND_HOPPING_RATES = DEFAULT_ISLAND_HOPPING_RATES;
 
 const BOAT_TIER_NAMES = { small: 'Small', medium: 'Medium', large: 'Large', deluxe: 'Deluxe' };
 
 /**
  * One flat facilitation fee per tour (not per boat).
- * - 1 standard boat (Small/Medium/Large): ₱300
- * - Deluxe boat OR 2+ boats: ₱500
+ * - 1 standard boat (Small/Medium/Large): standard fee
+ * - Deluxe boat OR 2+ boats: deluxe fee
  */
-export function resolveFacilitationFee(boatTierIds) {
+export function resolveFacilitationFee(boatTierIds, rates = ISLAND_HOPPING_RATES) {
   const ids = (Array.isArray(boatTierIds) ? boatTierIds : [boatTierIds]).filter(Boolean);
   if (ids.length === 0) return { amount: 0, label: 'Facilitation fee' };
 
@@ -38,66 +21,65 @@ export function resolveFacilitationFee(boatTierIds) {
   if (multiBoat || hasDeluxe) {
     if (hasDeluxe && ids.length === 1) {
       return {
-        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        amount: rates.deluxeFacilitationFee,
         label: 'Facilitation fee (Deluxe)',
       };
     }
     if (multiBoat && !hasDeluxe) {
       return {
-        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        amount: rates.deluxeFacilitationFee,
         label: 'Facilitation fee (Multiple boats)',
       };
     }
     return {
-      amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+      amount: rates.deluxeFacilitationFee,
       label: 'Facilitation fee',
     };
   }
 
   const size = BOAT_TIER_NAMES[ids[0]];
   return {
-    amount: ISLAND_HOPPING_RATES.facilitationFee,
+    amount: rates.facilitationFee,
     label: size ? `Facilitation fee (${size})` : 'Facilitation fee',
   };
 }
 
 /** @deprecated Prefer resolveFacilitationFee — kept for single-boat callers. */
-export function getFacilitationFee(boatTierId) {
-  return resolveFacilitationFee([boatTierId]).amount;
+export function getFacilitationFee(boatTierId, rates = ISLAND_HOPPING_RATES) {
+  return resolveFacilitationFee([boatTierId], rates).amount;
 }
 
-function entranceForPassenger(passenger) {
+function entranceForPassenger(passenger, rates = ISLAND_HOPPING_RATES) {
   const age = parseInt(passenger.age, 10);
   if (!Number.isFinite(age) || age < 0) return null;
 
-  if (age <= ISLAND_HOPPING_RATES.entrance.infant.maxAge) {
-    return { ...ISLAND_HOPPING_RATES.entrance.infant, age };
+  if (age <= rates.entrance.infant.maxAge) {
+    return { ...rates.entrance.infant, age };
   }
   if (passenger.is_pwd) {
-    return { ...ISLAND_HOPPING_RATES.entrance.pwd, age };
+    return { ...rates.entrance.pwd, age };
   }
   if (passenger.is_senior || age >= 60) {
-    return { ...ISLAND_HOPPING_RATES.entrance.senior, age };
+    return { ...rates.entrance.senior, age };
   }
-  return { ...ISLAND_HOPPING_RATES.entrance.regular, age };
+  return { ...rates.entrance.regular, age };
 }
 
-function boatForPax(count) {
-  return ISLAND_HOPPING_RATES.boat.find((b) => count >= b.min && count <= b.max) || null;
+function boatForPax(count, rates = ISLAND_HOPPING_RATES) {
+  return rates.boat.find((b) => count >= b.min && count <= b.max) || null;
 }
 
-function planBoatsForPax(totalPax) {
+function planBoatsForPax(totalPax, rates = ISLAND_HOPPING_RATES) {
   const pax = parseInt(totalPax, 10);
   if (!Number.isFinite(pax) || pax < 1) return [];
 
-  const maxPerBoat =
-    ISLAND_HOPPING_RATES.maxPassengersPerBoat ?? ISLAND_HOPPING_RATES.maxPassengers;
+  const maxPerBoat = rates.maxPassengersPerBoat ?? rates.maxPassengers;
   const allocations = [];
   let remaining = pax;
 
   while (remaining > 0) {
     const chunk = Math.min(remaining, maxPerBoat);
-    const boat = boatForPax(chunk);
+    const boat = boatForPax(chunk, rates);
     if (!boat) return null;
     allocations.push({ boat, pax: chunk });
     remaining -= chunk;
@@ -170,12 +152,6 @@ export function validateIslandHoppingPayload(data) {
   return { valid: true };
 }
 
-/**
- * Lenient validation for admin-entered island hopping.
- * Admins may record a tour before the guest provides full passenger / payor /
- * emergency details, so only hard constraints (max passengers) are enforced here.
- * The remaining details can be completed later from the booking.
- */
 export function validateIslandHoppingPayloadLenient(data) {
   if (!data) return { valid: true };
 
@@ -191,20 +167,18 @@ export function validateIslandHoppingPayloadLenient(data) {
     return { valid: true };
   }
 
-  const passengers = data.passengers || [];
   return { valid: true };
 }
 
-/** True when the payload has every field needed to price the tour. */
 export function isIslandHoppingComplete(data) {
   return validateIslandHoppingPayload(data).valid;
 }
 
-export function calculateIslandHopping(passengers) {
+export function calculateIslandHopping(passengers, rates = ISLAND_HOPPING_RATES) {
   const pax = passengers?.length || 0;
   if (pax < 1) return { error: 'At least one passenger is required.' };
 
-  const boatAllocations = planBoatsForPax(pax);
+  const boatAllocations = planBoatsForPax(pax, rates);
   if (!boatAllocations?.length) {
     return { error: 'Unable to determine boat size for this group.' };
   }
@@ -213,7 +187,7 @@ export function calculateIslandHopping(passengers) {
   let entranceTotal = 0;
 
   passengers.forEach((p, index) => {
-    const entrance = entranceForPassenger(p);
+    const entrance = entranceForPassenger(p, rates);
     if (!entrance) {
       throw new Error(`Invalid age for guest ${index + 1}`);
     }
@@ -242,7 +216,10 @@ export function calculateIslandHopping(passengers) {
     });
   });
 
-  const facilitation = resolveFacilitationFee(boatAllocations.map((a) => a.boat.id));
+  const facilitation = resolveFacilitationFee(
+    boatAllocations.map((a) => a.boat.id),
+    rates
+  );
 
   breakdown.push({
     category: 'fee',
@@ -252,12 +229,12 @@ export function calculateIslandHopping(passengers) {
     subtotal: facilitation.amount,
   });
 
-  const garbageTotal = boatAllocations.length * ISLAND_HOPPING_RATES.garbageFee;
+  const garbageTotal = boatAllocations.length * rates.garbageFee;
   breakdown.push({
     category: 'fee',
     description: 'Garbage fee (refundable)',
     quantity: boatAllocations.length,
-    unit_price: ISLAND_HOPPING_RATES.garbageFee,
+    unit_price: rates.garbageFee,
     subtotal: garbageTotal,
   });
 
@@ -275,10 +252,11 @@ export function calculateIslandHopping(passengers) {
   };
 }
 
-/**
- * Admin manual booking / edit — full passenger list OR SOA summary (pax + amount only).
- */
-export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) {
+export function resolveAdminIslandHoppingPricing(
+  ihData,
+  existingIsland = null,
+  rates = ISLAND_HOPPING_RATES
+) {
   if (!ihData) return { amount: 0, stored: null };
 
   const validation = validateIslandHoppingPayloadLenient(ihData);
@@ -289,7 +267,7 @@ export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) 
   if (ihData.soa_summary) {
     const pax = parseInt(ihData.summary_pax, 10);
     const amount = Math.round(parseFloat(ihData.summary_amount) * 100) / 100;
-    const boatAllocations = planBoatsForPax(pax);
+    const boatAllocations = planBoatsForPax(pax, rates);
     return {
       amount,
       stored: {
@@ -334,7 +312,7 @@ export function resolveAdminIslandHoppingPricing(ihData, existingIsland = null) 
 
   if (isIslandHoppingComplete(ihData)) {
     try {
-      const computed = calculateIslandHopping(ihData.passengers);
+      const computed = calculateIslandHopping(ihData.passengers, rates);
       if (computed.error) return { error: computed.error };
       return {
         amount: computed.total,

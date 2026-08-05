@@ -229,10 +229,10 @@ function buildQuotedAccommodationPricing(quote, bookingRoomLines) {
  */
 export function mapQuotationToManualBooking(
   savedQuote,
-  { rooms = [], depositPercent = 20 } = {}
+  { rooms = [], depositPercent = 20, islandHoppingRates, foodAddOnRates } = {}
 ) {
   const quote = normalizeQuotation(savedQuote?.quote_data || savedQuote || {});
-  const totals = computeQuotationTotals(quote);
+  const totals = computeQuotationTotals(quote, { islandHoppingRates, foodAddOnRates });
   const dates = resolveStayDates(quote);
   const island = quoteIslandHoppingToForm(quote);
   const payment = resolvePaymentFields(quote, totals, depositPercent);

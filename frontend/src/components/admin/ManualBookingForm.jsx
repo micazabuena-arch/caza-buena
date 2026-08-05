@@ -19,9 +19,12 @@ import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
   getAdminIslandHoppingTotal,
+  ISLAND_HOPPING_RATES,
   isSeniorPassenger,
   isPwdPassenger,
 } from '../../data/islandHoppingRates';
+import { islandHoppingRatesFromSettings } from '../../utils/islandHoppingRatesConfig';
+import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../../utils/foodAddOnRatesConfig';
 import { validateManualBookingFields } from '../../utils/manualBookingValidation';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import ManualBookingPriceSummary from './ManualBookingPriceSummary';
@@ -112,6 +115,8 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
   const [quotationPricing, setQuotationPricing] = useState(null);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
+  const [islandHoppingRates, setIslandHoppingRates] = useState(ISLAND_HOPPING_RATES);
+  const [foodAddOnRates, setFoodAddOnRates] = useState(defaultFoodAddOnRates);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
   const [activeTab, setActiveTab] = useState('stay');
   const [saving, setSaving] = useState(false);
@@ -130,6 +135,12 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
         if (settingsRes.data?.booking_deposit_percent) {
           setDepositPercent(settingsRes.data.booking_deposit_percent);
         }
+        if (settingsRes.data?.island_hopping_rates) {
+          setIslandHoppingRates(islandHoppingRatesFromSettings(settingsRes.data));
+        }
+        if (settingsRes.data?.food_add_on_rates) {
+          setFoodAddOnRates(foodAddOnRatesFromSettings(settingsRes.data));
+        }
       })
       .catch(() => {});
   }, []);
@@ -144,7 +155,12 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     if (appliedQuotationKey.current === seedKey) return;
     appliedQuotationKey.current = seedKey;
 
-    const mapped = mapQuotationToManualBooking(quotationSeed, { rooms, depositPercent });
+    const mapped = mapQuotationToManualBooking(quotationSeed, {
+      rooms,
+      depositPercent,
+      islandHoppingRates,
+      foodAddOnRates,
+    });
     setForm({
       ...emptyForm(),
       ...mapped.form,
@@ -170,7 +186,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     toast.success(
       `Loaded from ${label}${discountPart}. Add guest contact details, then create the booking.`
     );
-  }, [quotationSeed, rooms, depositPercent, toast]);
+  }, [quotationSeed, rooms, depositPercent, islandHoppingRates, foodAddOnRates, toast]);
 
   // Price each selected room for the shared check-in / check-out dates.
   useEffect(() => {
@@ -277,13 +293,15 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     Object.values(displayLineQuotes).find((q) => q?.nights)?.nights || quotedNights || 0;
 
   const extrasQuote = selectedRoom || roomLines.some((l) => l.room_id)
-    ? validateBookingExtras(bookingExtras, roomType)
+    ? validateBookingExtras(bookingExtras, roomType, foodAddOnRates)
     : null;
   const islandQuote =
     islandHoppingEnabled && !islandHopping.soa_summary && islandHopping.passengers?.length
-      ? calculateIslandHopping(islandHopping.passengers)
+      ? calculateIslandHopping(islandHopping.passengers, islandHoppingRates)
       : null;
-  const islandTotal = islandHoppingEnabled ? getAdminIslandHoppingTotal(islandHopping) : 0;
+  const islandTotal = islandHoppingEnabled
+    ? getAdminIslandHoppingTotal(islandHopping, islandHoppingRates)
+    : 0;
   const addOnsTotal = extrasQuote?.valid ? extrasQuote.add_ons_total : 0;
   const manualDiscountRaw = parseFloat(form.admin_discount_amount);
   const manualDiscount =
@@ -754,6 +772,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               data={bookingExtras}
               onChange={setBookingExtras}
               roomType={roomType}
+              foodRates={foodAddOnRates}
             />
             <div className="border-t border-aegean-100 pt-4 mt-4">
               <FoodAddOnsOrderSummary
@@ -770,6 +789,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
                 onEnabledChange={setIslandHoppingEnabled}
                 data={islandHopping}
                 onChange={setIslandHopping}
+                rates={islandHoppingRates}
               />
             </div>
           </Panel>

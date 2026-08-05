@@ -343,12 +343,14 @@ router.post(
       const { validateIslandHoppingPayload, calculateIslandHopping } = await import(
         '../utils/islandHopping.js'
       );
+      const { getIslandHoppingRates } = await import('../utils/islandHoppingRatesStore.js');
       const validation = validateIslandHoppingPayload(islandHoppingData);
       if (!validation.valid) {
         return res.status(400).json({ message: validation.message });
       }
       try {
-        const computed = calculateIslandHopping(islandHoppingData.passengers);
+        const islandRates = await getIslandHoppingRates(pool);
+        const computed = calculateIslandHopping(islandHoppingData.passengers, islandRates);
         if (computed.error) return res.status(400).json({ message: computed.error });
         islandHoppingAmount = computed.total;
         islandHoppingStored = {
@@ -370,6 +372,8 @@ router.post(
     }
 
     const { validateBookingExtras, serializeFoodLines } = await import('../utils/bookingExtras.js');
+    const { getFoodAddOnRates } = await import('../utils/foodAddOnRatesStore.js');
+    const foodRates = await getFoodAddOnRates(pool);
     const extrasValidation = validateBookingExtras(
       {
         bringing_car: bringingCarFlag,
@@ -382,7 +386,8 @@ router.post(
         boodle_fight_tier: boodleFightTierBody,
         boodle_lines: boodleLinesBody,
       },
-      priced.hasSuite ? 'suite' : room.room_type
+      priced.hasSuite ? 'suite' : room.room_type,
+      foodRates
     );
     if (!extrasValidation.valid) {
       return res.status(400).json({ message: extrasValidation.message });

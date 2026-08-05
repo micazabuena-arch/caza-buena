@@ -29,7 +29,7 @@ const BOAT_TIER_NAMES = { small: 'Small', medium: 'Medium', large: 'Large', delu
  * - 1 standard boat (Small/Medium/Large): ₱300
  * - Deluxe boat OR 2+ boats: ₱500
  */
-export function resolveFacilitationFee(boatTierIds) {
+export function resolveFacilitationFee(boatTierIds, rates = ISLAND_HOPPING_RATES) {
   const ids = (Array.isArray(boatTierIds) ? boatTierIds : [boatTierIds]).filter(Boolean);
   if (ids.length === 0) return { amount: 0, label: 'Facilitation fee' };
 
@@ -39,13 +39,13 @@ export function resolveFacilitationFee(boatTierIds) {
   if (multiBoat || hasDeluxe) {
     if (hasDeluxe && ids.length === 1) {
       return {
-        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        amount: rates.deluxeFacilitationFee,
         label: 'Facilitation fee (Deluxe)',
       };
     }
     if (multiBoat && !hasDeluxe) {
       return {
-        amount: ISLAND_HOPPING_RATES.deluxeFacilitationFee,
+        amount: rates.deluxeFacilitationFee,
         label: 'Facilitation fee (Multiple boats)',
       };
     }
@@ -57,48 +57,47 @@ export function resolveFacilitationFee(boatTierIds) {
 
   const size = BOAT_TIER_NAMES[ids[0]];
   return {
-    amount: ISLAND_HOPPING_RATES.facilitationFee,
+    amount: rates.facilitationFee,
     label: size ? `Facilitation fee (${size})` : 'Facilitation fee',
   };
 }
 
 /** @deprecated Prefer resolveFacilitationFee — kept for single-boat callers. */
-export function getFacilitationFee(boatTierId) {
-  return resolveFacilitationFee([boatTierId]).amount;
+export function getFacilitationFee(boatTierId, rates = ISLAND_HOPPING_RATES) {
+  return resolveFacilitationFee([boatTierId], rates).amount;
 }
 
-function entranceForPassenger(passenger) {
+function entranceForPassenger(passenger, rates = ISLAND_HOPPING_RATES) {
   const age = parseInt(passenger.age, 10);
   if (!Number.isFinite(age) || age < 0) return null;
-  if (age <= ISLAND_HOPPING_RATES.entrance.infant.maxAge) {
-    return ISLAND_HOPPING_RATES.entrance.infant;
+  if (age <= rates.entrance.infant.maxAge) {
+    return rates.entrance.infant;
   }
   if (passenger.is_pwd) {
-    return ISLAND_HOPPING_RATES.entrance.pwd;
+    return rates.entrance.pwd;
   }
   if (passenger.is_senior || age >= 60) {
-    return ISLAND_HOPPING_RATES.entrance.senior;
+    return rates.entrance.senior;
   }
-  return ISLAND_HOPPING_RATES.entrance.regular;
+  return rates.entrance.regular;
 }
 
-function boatForPax(count) {
-  return ISLAND_HOPPING_RATES.boat.find((b) => count >= b.min && count <= b.max) || null;
+function boatForPax(count, rates = ISLAND_HOPPING_RATES) {
+  return rates.boat.find((b) => count >= b.min && count <= b.max) || null;
 }
 
 /** Split a group into one or more boats (20 pax max per boat). */
-export function planBoatsForPax(totalPax) {
+export function planBoatsForPax(totalPax, rates = ISLAND_HOPPING_RATES) {
   const pax = parseInt(totalPax, 10);
   if (!Number.isFinite(pax) || pax < 1) return [];
 
-  const maxPerBoat =
-    ISLAND_HOPPING_RATES.maxPassengersPerBoat ?? ISLAND_HOPPING_RATES.maxPassengers;
+  const maxPerBoat = rates.maxPassengersPerBoat ?? rates.maxPassengers;
   const allocations = [];
   let remaining = pax;
 
   while (remaining > 0) {
     const chunk = Math.min(remaining, maxPerBoat);
-    const boat = boatForPax(chunk);
+    const boat = boatForPax(chunk, rates);
     if (!boat) return null;
     allocations.push({ boat, pax: chunk });
     remaining -= chunk;
@@ -130,12 +129,12 @@ export function parseIslandHoppingData(raw) {
   }
 }
 
-export function calculateIslandHopping(passengers) {
+export function calculateIslandHopping(passengers, rates = ISLAND_HOPPING_RATES) {
   const validPassengers = (passengers || []).filter((p) => p.full_name?.trim());
   const pax = validPassengers.length;
   if (pax < 1) return null;
 
-  const boatAllocations = planBoatsForPax(pax);
+  const boatAllocations = planBoatsForPax(pax, rates);
   if (!boatAllocations?.length) {
     return { error: 'Unable to determine boat size for this group.' };
   }
@@ -144,7 +143,7 @@ export function calculateIslandHopping(passengers) {
   let entranceTotal = 0;
 
   validPassengers.forEach((p) => {
-    const entrance = entranceForPassenger(p);
+    const entrance = entranceForPassenger(p, rates);
     if (!entrance) return;
     entranceTotal += entrance.rate;
     breakdown.push({
@@ -169,7 +168,7 @@ export function calculateIslandHopping(passengers) {
     });
   });
 
-  const facilitation = resolveFacilitationFee(boatAllocations.map((a) => a.boat.id));
+  const facilitation = resolveFacilitationFee(boatAllocations.map((a) => a.boat.id), rates);
 
   breakdown.push({
     description: facilitation.label,
@@ -178,11 +177,11 @@ export function calculateIslandHopping(passengers) {
     subtotal: facilitation.amount,
   });
 
-  const garbageTotal = boatAllocations.length * ISLAND_HOPPING_RATES.garbageFee;
+  const garbageTotal = boatAllocations.length * rates.garbageFee;
   breakdown.push({
     description: 'Garbage fee (refundable)',
     quantity: boatAllocations.length,
-    unit_price: ISLAND_HOPPING_RATES.garbageFee,
+    unit_price: rates.garbageFee,
     subtotal: garbageTotal,
   });
 
@@ -235,13 +234,13 @@ export const emptyIslandHoppingForm = () => ({
 });
 
 /** Admin manual booking: total from summary mode or computed passenger list. */
-export function getAdminIslandHoppingTotal(data) {
+export function getAdminIslandHoppingTotal(data, rates = ISLAND_HOPPING_RATES) {
   if (!data) return 0;
   if (data.soa_summary) {
     const amount = parseFloat(data.summary_amount);
     return Number.isFinite(amount) && amount >= 0 ? amount : 0;
   }
-  const quote = calculateIslandHopping(data.passengers);
+  const quote = calculateIslandHopping(data.passengers, rates);
   if (!quote || quote.error || !quote.complete) return 0;
   return quote.total;
 }

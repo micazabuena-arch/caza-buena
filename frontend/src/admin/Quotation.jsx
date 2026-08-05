@@ -8,8 +8,9 @@ import Loading from '../components/ui/Loading';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
-import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
+import { islandHoppingRatesFromSettings } from '../utils/islandHoppingRatesConfig';
+import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../utils/foodAddOnRatesConfig';
 import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import {
   ADDITIONAL_PAX_LABEL_OPTIONS,
@@ -69,6 +70,8 @@ export default function AdminQuotation() {
   const [saving, setSaving] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
+  const [islandHoppingRates, setIslandHoppingRates] = useState(ISLAND_HOPPING_RATES);
+  const [foodAddOnRates, setFoodAddOnRates] = useState(defaultFoodAddOnRates);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
@@ -125,6 +128,12 @@ export default function AdminQuotation() {
         if (settingsRes.data?.extra_person_rates) {
           setExtraPersonRates(settingsRes.data.extra_person_rates);
         }
+        if (settingsRes.data?.island_hopping_rates) {
+          setIslandHoppingRates(islandHoppingRatesFromSettings(settingsRes.data));
+        }
+        if (settingsRes.data?.food_add_on_rates) {
+          setFoodAddOnRates(foodAddOnRatesFromSettings(settingsRes.data));
+        }
       })
       .catch(() => {
         setRooms([]);
@@ -137,8 +146,13 @@ export default function AdminQuotation() {
   );
 
   const totals = useMemo(
-    () => computeQuotationTotals(quote, { extraPersonRates }),
-    [quote, extraPersonRates]
+    () =>
+      computeQuotationTotals(quote, {
+        extraPersonRates,
+        islandHoppingRates,
+        foodAddOnRates,
+      }),
+    [quote, extraPersonRates, islandHoppingRates, foodAddOnRates]
   );
   const stayNights = useMemo(() => getQuotationStayNights(quote), [quote]);
   const dateRangePreview = useMemo(
@@ -344,7 +358,12 @@ export default function AdminQuotation() {
     });
   };
 
-  const openPrint = () => openQuotationPrint(quote);
+  const openPrint = () =>
+    openQuotationPrint(quote, {
+      extraPersonRates,
+      islandHoppingRates,
+      foodAddOnRates,
+    });
 
   /** Open manual booking pre-filled from the quotation currently on screen. */
   const loadToBookingFromQuote = () => {
@@ -484,12 +503,23 @@ export default function AdminQuotation() {
       ) : viewQuote?.quote_data ? (
         <div className="space-y-4">
           <div className="overflow-x-auto rounded-xl border border-aegean-100 p-4 bg-white">
-            <QuotationDocument quote={viewQuote.quote_data} />
+            <QuotationDocument
+              quote={viewQuote.quote_data}
+              extraPersonRates={extraPersonRates}
+              islandHoppingRates={islandHoppingRates}
+              foodAddOnRates={foodAddOnRates}
+            />
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
             <button
               type="button"
-              onClick={() => openQuotationPrint(viewQuote.quote_data)}
+              onClick={() =>
+                openQuotationPrint(viewQuote.quote_data, {
+                  extraPersonRates,
+                  islandHoppingRates,
+                  foodAddOnRates,
+                })
+              }
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aegean-600 text-white text-sm hover:bg-aegean-700"
             >
               <Printer size={16} /> Print / PDF
@@ -1065,7 +1095,7 @@ export default function AdminQuotation() {
                           value={boatRow.boatTierId}
                           onChange={(e) => patchBoat(index, { boatTierId: e.target.value })}
                         >
-                          {ISLAND_HOPPING_RATES.boat.map((b) => (
+                          {islandHoppingRates.boat.map((b) => (
                             <option key={b.id} value={b.id}>
                               {b.label} — ₱{b.rate.toLocaleString()}
                             </option>
@@ -1130,7 +1160,7 @@ export default function AdminQuotation() {
                         onChange={(e) => patchBilaoLine(index, { packageId: e.target.value })}
                       >
                         <option value="">Select…</option>
-                        {BILAO_PACKAGES.map((p) => (
+                        {foodAddOnRates.bilaoPackages.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.label} ({p.pax} pax) — ₱{p.price.toLocaleString()}
                           </option>
@@ -1211,7 +1241,7 @@ export default function AdminQuotation() {
                         onChange={(e) => patchBoodleLine(index, { tierId: e.target.value })}
                       >
                         <option value="">Select…</option>
-                        {BOODLE_FIGHT_PACKAGES.map((p) => (
+                        {foodAddOnRates.boodlePackages.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.label} — ₱{p.price.toLocaleString()}
                           </option>
@@ -1384,7 +1414,12 @@ export default function AdminQuotation() {
 
         <div className="quotation-preview bg-white rounded-xl border border-aegean-100 p-4 sm:p-6 shadow-sm print:border-0 print:shadow-none print:p-0">
           <p className="no-print text-xs text-aegean-500 mb-3 uppercase tracking-wide">Preview</p>
-          <QuotationDocument quote={quote} />
+          <QuotationDocument
+            quote={quote}
+            extraPersonRates={extraPersonRates}
+            islandHoppingRates={islandHoppingRates}
+            foodAddOnRates={foodAddOnRates}
+          />
         </div>
       </div>
 

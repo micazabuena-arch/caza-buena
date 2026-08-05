@@ -1,29 +1,65 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Printer, X } from 'lucide-react';
+import api from '../api/client';
 import QuotationDocument from '../components/admin/QuotationDocument';
 import Loading from '../components/ui/Loading';
+import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import { clearMirroredAdminToken } from '../utils/islandHoppingPrintCache';
+import { islandHoppingRatesFromSettings } from '../utils/islandHoppingRatesConfig';
+import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../utils/foodAddOnRatesConfig';
 import {
   clearQuotationPrintCache,
   readQuotationPrintCache,
 } from '../utils/quotationPrintCache';
 
-/** Standalone print page — no admin sidebar, no login required when quote is cached. */
+function pricingFromSettingsResponse(data) {
+  return {
+    extraPersonRates: data?.extra_person_rates || EXTRA_PERSON_RATES,
+    islandHoppingRates: islandHoppingRatesFromSettings(data || {}),
+    foodAddOnRates: foodAddOnRatesFromSettings(data || {}),
+  };
+}
+
+/** Standalone print page — loads current pricing from settings for accurate totals. */
 export default function QuotationPrint() {
   const [quote, setQuote] = useState(null);
+  const [pricing, setPricing] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setQuote(readQuotationPrintCache());
-    setReady(true);
+    const cached = readQuotationPrintCache();
+    setQuote(cached?.quote ?? null);
+
+    const cachedPricing = cached?.pricingContext;
+    if (cachedPricing?.extraPersonRates) {
+      setPricing({
+        extraPersonRates: cachedPricing.extraPersonRates,
+        islandHoppingRates: cachedPricing.islandHoppingRates,
+        foodAddOnRates: cachedPricing.foodAddOnRates || defaultFoodAddOnRates(),
+      });
+    }
+
+    api
+      .get('/settings/public')
+      .then((res) => setPricing(pricingFromSettingsResponse(res.data)))
+      .catch(() => {
+        if (!cachedPricing?.extraPersonRates) {
+          setPricing({
+            extraPersonRates: EXTRA_PERSON_RATES,
+            islandHoppingRates: islandHoppingRatesFromSettings({}),
+            foodAddOnRates: defaultFoodAddOnRates(),
+          });
+        }
+      })
+      .finally(() => setReady(true));
   }, []);
 
   useEffect(() => {
-    if (!quote) return;
+    if (!quote || !pricing) return;
     const timer = setTimeout(() => window.print(), 700);
     return () => clearTimeout(timer);
-  }, [quote]);
+  }, [quote, pricing]);
 
   useEffect(() => {
     const onPageHide = () => {
@@ -46,6 +82,8 @@ export default function QuotationPrint() {
       </div>
     );
   }
+
+  if (!pricing) return <Loading />;
 
   return (
     <div className="min-h-screen bg-white text-black p-6 md:p-10 print:p-0">
@@ -77,7 +115,12 @@ export default function QuotationPrint() {
         </Link>
       </div>
 
-      <QuotationDocument quote={quote} />
+      <QuotationDocument
+        quote={quote}
+        extraPersonRates={pricing.extraPersonRates}
+        islandHoppingRates={pricing.islandHoppingRates}
+        foodAddOnRates={pricing.foodAddOnRates}
+      />
     </div>
   );
 }

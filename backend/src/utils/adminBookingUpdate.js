@@ -160,18 +160,19 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
   const existingIsland = parseIslandHoppingData(existingBooking.island_hopping_data);
 
   if (islandHopping) {
-    const { parseIslandHoppingData, resolveAdminIslandHoppingPricing } = await import(
-      './islandHopping.js'
-    );
-    const existingIsland = parseIslandHoppingData(existingBooking.island_hopping_data);
+    const { resolveAdminIslandHoppingPricing } = await import('./islandHopping.js');
+    const { getIslandHoppingRates } = await import('./islandHoppingRatesStore.js');
     const ihData = islandHoppingData || {};
-    const resolved = resolveAdminIslandHoppingPricing(ihData, existingIsland);
+    const islandRates = await getIslandHoppingRates(pool);
+    const resolved = resolveAdminIslandHoppingPricing(ihData, existingIsland, islandRates);
     if (resolved.error) return { error: resolved.error };
     islandHoppingAmount = resolved.amount;
     islandHoppingStored = resolved.stored;
   }
 
   const { validateBookingExtras, serializeFoodLines } = await import('./bookingExtras.js');
+  const { getFoodAddOnRates } = await import('./foodAddOnRatesStore.js');
+  const foodRates = await getFoodAddOnRates(pool);
   const extrasValidation = validateBookingExtras(
     {
       bringing_car,
@@ -184,7 +185,8 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       boodle_fight_tier,
       boodle_lines,
     },
-    hasSuite ? 'suite' : room.room_type
+    hasSuite ? 'suite' : room.room_type,
+    foodRates
   );
   if (!extrasValidation.valid) return { error: extrasValidation.message };
 

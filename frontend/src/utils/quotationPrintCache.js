@@ -1,10 +1,10 @@
 const PRINT_CACHE_KEY = 'quotation_print_cache';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-export function storeQuotationPrintCache(quote) {
+export function storeQuotationPrintCache(quote, pricingContext = null) {
   localStorage.setItem(
     PRINT_CACHE_KEY,
-    JSON.stringify({ quote, at: Date.now() })
+    JSON.stringify({ quote, pricingContext, at: Date.now() })
   );
 }
 
@@ -14,7 +14,10 @@ export function readQuotationPrintCache() {
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (Date.now() - data.at > CACHE_TTL_MS) return null;
-    return data.quote ?? null;
+    return {
+      quote: data.quote ?? null,
+      pricingContext: data.pricingContext ?? null,
+    };
   } catch {
     return null;
   }
@@ -25,5 +28,5 @@ export function clearQuotationPrintCache() {
 }
 
 export function hasQuotationPrintCache() {
-  return Boolean(readQuotationPrintCache());
+  return Boolean(readQuotationPrintCache()?.quote);
 }

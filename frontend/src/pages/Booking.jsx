@@ -20,9 +20,12 @@ import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
   emptyPassenger,
+  ISLAND_HOPPING_RATES,
   isSeniorPassenger,
   isPwdPassenger,
 } from '../data/islandHoppingRates';
+import { islandHoppingRatesFromSettings } from '../utils/islandHoppingRatesConfig';
+import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../utils/foodAddOnRatesConfig';
 import {
   emptyBookingExtras,
   validateBookingExtras,
@@ -62,6 +65,8 @@ export default function Booking() {
   const [error, setError] = useState('');
   const [depositPercent, setDepositPercent] = useState(20);
   const [extraPersonRates, setExtraPersonRates] = useState(EXTRA_PERSON_RATES);
+  const [islandHoppingRates, setIslandHoppingRates] = useState(ISLAND_HOPPING_RATES);
+  const [foodAddOnRates, setFoodAddOnRates] = useState(defaultFoodAddOnRates);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [bookingExtras, setBookingExtras] = useState(emptyBookingExtras);
@@ -97,6 +102,12 @@ export default function Booking() {
         }
         if (settingsRes.data?.extra_person_rates) {
           setExtraPersonRates(settingsRes.data.extra_person_rates);
+        }
+        if (settingsRes.data?.island_hopping_rates) {
+          setIslandHoppingRates(islandHoppingRatesFromSettings(settingsRes.data));
+        }
+        if (settingsRes.data?.food_add_on_rates) {
+          setFoodAddOnRates(foodAddOnRatesFromSettings(settingsRes.data));
         }
         if (preselectedRoom) {
           setRoomLines([
@@ -215,14 +226,14 @@ export default function Booking() {
 
   const islandQuote =
     islandHoppingEnabled && islandHopping.passengers?.length
-      ? calculateIslandHopping(islandHopping.passengers)
+      ? calculateIslandHopping(islandHopping.passengers, islandHoppingRates)
       : null;
   const islandHoppingTotal =
     islandHoppingEnabled && islandQuote && !islandQuote.error && islandQuote.complete
       ? islandQuote.total
       : 0;
   const extrasQuote = roomLines.some((line) => line.room_id)
-    ? validateBookingExtras(bookingExtras, extrasRoomType)
+    ? validateBookingExtras(bookingExtras, extrasRoomType, foodAddOnRates)
     : null;
   const bilaoTotal = extrasQuote?.valid ? extrasQuote.bilao_amount : 0;
   const boodleTotal = extrasQuote?.valid ? extrasQuote.boodle_fight_amount : 0;
@@ -753,6 +764,7 @@ export default function Booking() {
                   data={bookingExtras}
                   onChange={setBookingExtras}
                   roomType={extrasRoomType}
+                  foodRates={foodAddOnRates}
                 />
                 <IslandHoppingSection
                   embedded
@@ -769,6 +781,7 @@ export default function Booking() {
                   }}
                   data={islandHopping}
                   onChange={setIslandHopping}
+                  rates={islandHoppingRates}
                 />
               </FormSection>
 

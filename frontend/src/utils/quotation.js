@@ -659,8 +659,9 @@ export function computeAccommodation(quote, options = {}) {
   };
 }
 
-export function computeTour(quote) {
+export function computeTour(quote, options = {}) {
   const q = normalizeQuotation(quote);
+  const rates = options.islandHoppingRates || ISLAND_HOPPING_RATES;
   if (!q.tourEnabled) {
     return {
       regularQty: 0,
@@ -682,7 +683,8 @@ export function computeTour(quote) {
   const regularQty = parseIntSafe(q.tourRegularQty);
   const seniorPwdQty = parseIntSafe(q.tourSeniorPwdQty);
   const infantQty = parseIntSafe(q.tourInfantQty);
-  const { entrance, boat, garbageFee } = ISLAND_HOPPING_RATES;
+  const { entrance, garbageFee } = rates;
+  const boatList = rates.boat;
 
   const regularTotal = regularQty * entrance.regular.rate;
   const seniorPwdTotal = seniorPwdQty * entrance.senior.rate;
@@ -691,7 +693,7 @@ export function computeTour(quote) {
   const boatLines = (q.boats || [])
     .map((entry) => {
       const selectedBoat =
-        boat.find((b) => b.id === entry.boatTierId) || boat.find((b) => b.id === 'small');
+        boatList.find((b) => b.id === entry.boatTierId) || boatList.find((b) => b.id === 'small');
       if (!selectedBoat) return null;
       return {
         boat: selectedBoat,
@@ -703,7 +705,10 @@ export function computeTour(quote) {
 
   const boatTotal = boatLines.reduce((s, line) => s + line.lineTotal, 0);
   const boatTierIds = boatLines.map((line) => line.boat.id);
-  const { amount: facilitation, label: facilitationLabel } = resolveFacilitationFee(boatTierIds);
+  const { amount: facilitation, label: facilitationLabel } = resolveFacilitationFee(
+    boatTierIds,
+    rates
+  );
   const facilitationLines =
     facilitation > 0
       ? [{ label: facilitationLabel, rate: facilitation, qty: 1, total: facilitation }]
@@ -731,8 +736,9 @@ export function computeTour(quote) {
   };
 }
 
-export function computeBilao(quote) {
+export function computeBilao(quote, options = {}) {
   const q = normalizeQuotation(quote);
+  const bilaoPackages = options.foodAddOnRates?.bilaoPackages || BILAO_PACKAGES;
   if (!q.bilaoEnabled) {
     return { lines: [], total: 0 };
   }
@@ -740,7 +746,7 @@ export function computeBilao(quote) {
 
   (q.bilaoLines || []).forEach((line) => {
     if (!line.packageId) return;
-    const pkg = BILAO_PACKAGES.find((p) => p.id === line.packageId);
+    const pkg = bilaoPackages.find((p) => p.id === line.packageId);
     if (!pkg) return;
     const qty = Math.max(1, parseIntSafe(line.qty) || 1);
     if (!aggregated[pkg.id]) {
@@ -761,8 +767,9 @@ export function computeBilao(quote) {
   };
 }
 
-export function computeBoodleFight(quote) {
+export function computeBoodleFight(quote, options = {}) {
   const q = normalizeQuotation(quote);
+  const boodlePackages = options.foodAddOnRates?.boodlePackages || BOODLE_FIGHT_PACKAGES;
   if (!q.boodleEnabled) {
     return { lines: [], total: 0 };
   }
@@ -770,7 +777,7 @@ export function computeBoodleFight(quote) {
 
   (q.boodleLines || []).forEach((line) => {
     if (!line.tierId) return;
-    const pkg = BOODLE_FIGHT_PACKAGES.find((p) => p.id === line.tierId);
+    const pkg = boodlePackages.find((p) => p.id === line.tierId);
     if (!pkg) return;
     const qty = Math.max(1, parseIntSafe(line.qty) || 1);
     if (!aggregated[pkg.id]) {
@@ -824,9 +831,9 @@ export function computeCustomAddons(quote) {
 
 export function computeQuotationTotals(quote, options = {}) {
   const accommodation = computeAccommodation(quote, options);
-  const tour = computeTour(quote);
-  const bilao = computeBilao(quote);
-  const boodleFight = computeBoodleFight(quote);
+  const tour = computeTour(quote, options);
+  const bilao = computeBilao(quote, options);
+  const boodleFight = computeBoodleFight(quote, options);
   const customAddons = computeCustomAddons(quote);
   const addOnsTotal = bilao.total + boodleFight.total + customAddons.total;
   const grandTotal = accommodation.balance + tour.total + addOnsTotal;

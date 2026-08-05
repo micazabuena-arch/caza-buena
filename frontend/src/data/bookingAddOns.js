@@ -16,29 +16,37 @@ export const BOODLE_FIGHT_PACKAGES = [
   { id: '20-25', label: '20–25 pax', price: 13000 },
 ];
 
+function resolveFoodRates(foodRates) {
+  return {
+    bilaoPackages: foodRates?.bilaoPackages || BILAO_PACKAGES,
+    boodlePackages: foodRates?.boodlePackages || BOODLE_FIGHT_PACKAGES,
+    petDepositPerPet: foodRates?.petDepositPerPet ?? PET_DEPOSIT_PER_PET,
+  };
+}
+
 export function maxPetsForRoomType(roomType) {
   return roomType === 'suite' ? 2 : 1;
 }
 
-export function getBilaoPackage(id) {
-  return BILAO_PACKAGES.find((p) => p.id === id) || null;
+export function getBilaoPackage(id, bilaoPackages = BILAO_PACKAGES) {
+  return bilaoPackages.find((p) => p.id === id) || null;
 }
 
-export function getBoodlePackage(id) {
-  return BOODLE_FIGHT_PACKAGES.find((p) => p.id === id) || null;
+export function getBoodlePackage(id, boodlePackages = BOODLE_FIGHT_PACKAGES) {
+  return boodlePackages.find((p) => p.id === id) || null;
 }
 
-export function calculatePetDeposit(petCount) {
+export function calculatePetDeposit(petCount, petDepositPerPet = PET_DEPOSIT_PER_PET) {
   const count = Math.max(0, parseInt(petCount, 10) || 0);
-  return count * PET_DEPOSIT_PER_PET;
+  return count * petDepositPerPet;
 }
 
-export function emptyBilaoQty() {
-  return Object.fromEntries(BILAO_PACKAGES.map((p) => [p.id, 0]));
+export function emptyBilaoQty(bilaoPackages = BILAO_PACKAGES) {
+  return Object.fromEntries(bilaoPackages.map((p) => [p.id, 0]));
 }
 
-export function emptyBoodleQty() {
-  return Object.fromEntries(BOODLE_FIGHT_PACKAGES.map((p) => [p.id, 0]));
+export function emptyBoodleQty(boodlePackages = BOODLE_FIGHT_PACKAGES) {
+  return Object.fromEntries(boodlePackages.map((p) => [p.id, 0]));
 }
 
 function parseQtyMap(qtyMap, packages) {
@@ -50,22 +58,26 @@ function parseQtyMap(qtyMap, packages) {
   return result;
 }
 
-export function bilaoLinesFromQty(qtyMap) {
-  return BILAO_PACKAGES.map((pkg) => ({
-    package_id: pkg.id,
-    qty: Math.max(0, parseInt(qtyMap?.[pkg.id], 10) || 0),
-  })).filter((line) => line.qty > 0);
+export function bilaoLinesFromQty(qtyMap, bilaoPackages = BILAO_PACKAGES) {
+  return bilaoPackages
+    .map((pkg) => ({
+      package_id: pkg.id,
+      qty: Math.max(0, parseInt(qtyMap?.[pkg.id], 10) || 0),
+    }))
+    .filter((line) => line.qty > 0);
 }
 
-export function boodleLinesFromQty(qtyMap) {
-  return BOODLE_FIGHT_PACKAGES.map((pkg) => ({
-    tier_id: pkg.id,
-    qty: Math.max(0, parseInt(qtyMap?.[pkg.id], 10) || 0),
-  })).filter((line) => line.qty > 0);
+export function boodleLinesFromQty(qtyMap, boodlePackages = BOODLE_FIGHT_PACKAGES) {
+  return boodlePackages
+    .map((pkg) => ({
+      tier_id: pkg.id,
+      qty: Math.max(0, parseInt(qtyMap?.[pkg.id], 10) || 0),
+    }))
+    .filter((line) => line.qty > 0);
 }
 
-export function bilaoQtyFromLines(lines) {
-  const qty = emptyBilaoQty();
+export function bilaoQtyFromLines(lines, bilaoPackages = BILAO_PACKAGES) {
+  const qty = emptyBilaoQty(bilaoPackages);
   for (const line of lines || []) {
     const id = line.package_id || line.packageId;
     if (id && qty[id] !== undefined) {
@@ -75,8 +87,8 @@ export function bilaoQtyFromLines(lines) {
   return qty;
 }
 
-export function boodleQtyFromLines(lines) {
-  const qty = emptyBoodleQty();
+export function boodleQtyFromLines(lines, boodlePackages = BOODLE_FIGHT_PACKAGES) {
+  const qty = emptyBoodleQty(boodlePackages);
   for (const line of lines || []) {
     const id = line.tier_id || line.tierId;
     if (id && qty[id] !== undefined) {
@@ -100,11 +112,11 @@ export function parseFoodLines(raw) {
   return [];
 }
 
-export function summarizeBilaoLines(lines) {
+export function summarizeBilaoLines(lines, bilaoPackages = BILAO_PACKAGES) {
   const items = [];
   let total = 0;
   for (const line of lines || []) {
-    const pkg = getBilaoPackage(line.package_id || line.packageId);
+    const pkg = getBilaoPackage(line.package_id || line.packageId, bilaoPackages);
     const qty = Math.max(0, parseInt(line.qty, 10) || 0);
     if (!pkg || qty < 1) continue;
     const subtotal = pkg.price * qty;
@@ -118,11 +130,11 @@ export function summarizeBilaoLines(lines) {
   };
 }
 
-export function summarizeBoodleLines(lines) {
+export function summarizeBoodleLines(lines, boodlePackages = BOODLE_FIGHT_PACKAGES) {
   const items = [];
   let total = 0;
   for (const line of lines || []) {
-    const pkg = getBoodlePackage(line.tier_id || line.tierId);
+    const pkg = getBoodlePackage(line.tier_id || line.tierId, boodlePackages);
     const qty = Math.max(0, parseInt(line.qty, 10) || 0);
     if (!pkg || qty < 1) continue;
     const subtotal = pkg.price * qty;
@@ -150,7 +162,8 @@ export function formatBoodleOrderLabel(items) {
     .join(', ');
 }
 
-export function foodLinesFromBooking(booking) {
+export function foodLinesFromBooking(booking, foodRates) {
+  const { bilaoPackages, boodlePackages } = resolveFoodRates(foodRates);
   const bilaoStored = parseFoodLines(booking?.bilao_lines);
   const boodleStored = parseFoodLines(booking?.boodle_lines);
 
@@ -160,8 +173,8 @@ export function foodLinesFromBooking(booking) {
           package_id: line.package_id || line.packageId,
           qty: Math.max(0, parseInt(line.qty, 10) || 0),
         }))
-        .filter((line) => line.package_id && getBilaoPackage(line.package_id) && line.qty > 0)
-    : booking?.bilao_package && getBilaoPackage(booking.bilao_package)
+        .filter((line) => line.package_id && getBilaoPackage(line.package_id, bilaoPackages) && line.qty > 0)
+    : booking?.bilao_package && getBilaoPackage(booking.bilao_package, bilaoPackages)
       ? [{ package_id: booking.bilao_package, qty: 1 }]
       : [];
 
@@ -171,16 +184,17 @@ export function foodLinesFromBooking(booking) {
           tier_id: line.tier_id || line.tierId,
           qty: Math.max(0, parseInt(line.qty, 10) || 0),
         }))
-        .filter((line) => line.tier_id && getBoodlePackage(line.tier_id) && line.qty > 0)
-    : booking?.boodle_fight_tier && getBoodlePackage(booking.boodle_fight_tier)
+        .filter((line) => line.tier_id && getBoodlePackage(line.tier_id, boodlePackages) && line.qty > 0)
+    : booking?.boodle_fight_tier && getBoodlePackage(booking.boodle_fight_tier, boodlePackages)
       ? [{ tier_id: booking.boodle_fight_tier, qty: 1 }]
       : [];
 
   return { bilaoLines, boodleLines };
 }
 
-export function buildBilaoSoaLineItems(booking) {
-  const { bilaoLines } = foodLinesFromBooking(booking);
+export function buildBilaoSoaLineItems(booking, foodRates) {
+  const { bilaoPackages } = resolveFoodRates(foodRates);
+  const { bilaoLines } = foodLinesFromBooking(booking, foodRates);
   if (bilaoLines.length === 0) {
     if (Number(booking?.bilao_amount) > 0) {
       return [{ label: 'Seafood Bilao', amount: Number(booking.bilao_amount) }];
@@ -188,14 +202,15 @@ export function buildBilaoSoaLineItems(booking) {
     return [];
   }
 
-  return summarizeBilaoLines(bilaoLines).items.map(({ package: pkg, qty, subtotal }) => ({
+  return summarizeBilaoLines(bilaoLines, bilaoPackages).items.map(({ package: pkg, qty, subtotal }) => ({
     label: qty > 1 ? `Bilao — ${pkg.label} × ${qty}` : `Bilao — ${pkg.label}`,
     amount: subtotal,
   }));
 }
 
-export function buildBoodleSoaLineItems(booking) {
-  const { boodleLines } = foodLinesFromBooking(booking);
+export function buildBoodleSoaLineItems(booking, foodRates) {
+  const { boodlePackages } = resolveFoodRates(foodRates);
+  const { boodleLines } = foodLinesFromBooking(booking, foodRates);
   if (boodleLines.length === 0) {
     if (Number(booking?.boodle_fight_amount) > 0) {
       return [{ label: 'Boodle fight', amount: Number(booking.boodle_fight_amount) }];
@@ -203,47 +218,50 @@ export function buildBoodleSoaLineItems(booking) {
     return [];
   }
 
-  return summarizeBoodleLines(boodleLines).items.map(({ package: pkg, qty, subtotal }) => ({
+  return summarizeBoodleLines(boodleLines, boodlePackages).items.map(({ package: pkg, qty, subtotal }) => ({
     label: qty > 1 ? `Boodle fight — ${pkg.label} × ${qty}` : `Boodle fight — ${pkg.label}`,
     amount: subtotal,
   }));
 }
 
-export function describeBilaoBooking(booking) {
-  const { bilaoLines } = foodLinesFromBooking(booking);
+export function describeBilaoBooking(booking, foodRates) {
+  const { bilaoLines } = foodLinesFromBooking(booking, foodRates);
   if (!bilaoLines.length) return null;
-  const summary = summarizeBilaoLines(bilaoLines);
+  const { bilaoPackages } = resolveFoodRates(foodRates);
+  const summary = summarizeBilaoLines(bilaoLines, bilaoPackages);
   return {
     label: formatBilaoOrderLabel(summary.items),
     amount: summary.total,
   };
 }
 
-export function describeBoodleBooking(booking) {
-  const { boodleLines } = foodLinesFromBooking(booking);
+export function describeBoodleBooking(booking, foodRates) {
+  const { boodleLines } = foodLinesFromBooking(booking, foodRates);
   if (!boodleLines.length) return null;
-  const summary = summarizeBoodleLines(boodleLines);
+  const { boodlePackages } = resolveFoodRates(foodRates);
+  const summary = summarizeBoodleLines(boodleLines, boodlePackages);
   return {
     label: formatBoodleOrderLabel(summary.items),
     amount: summary.total,
   };
 }
 
-export function bookingExtrasFromRecord(booking) {
+export function bookingExtrasFromRecord(booking, foodRates) {
+  const { bilaoPackages, boodlePackages } = resolveFoodRates(foodRates);
   const bilaoLines = parseFoodLines(booking?.bilao_lines);
   const boodleLines = parseFoodLines(booking?.boodle_lines);
   const bilaoQty =
     bilaoLines.length > 0
-      ? bilaoQtyFromLines(bilaoLines)
+      ? bilaoQtyFromLines(bilaoLines, bilaoPackages)
       : booking?.bilao_package
-        ? { ...emptyBilaoQty(), [booking.bilao_package]: 1 }
-        : emptyBilaoQty();
+        ? { ...emptyBilaoQty(bilaoPackages), [booking.bilao_package]: 1 }
+        : emptyBilaoQty(bilaoPackages);
   const boodleQty =
     boodleLines.length > 0
-      ? boodleQtyFromLines(boodleLines)
+      ? boodleQtyFromLines(boodleLines, boodlePackages)
       : booking?.boodle_fight_tier
-        ? { ...emptyBoodleQty(), [booking.boodle_fight_tier]: 1 }
-        : emptyBoodleQty();
+        ? { ...emptyBoodleQty(boodlePackages), [booking.boodle_fight_tier]: 1 }
+        : emptyBoodleQty(boodlePackages);
 
   const bilaoHasQty = Object.values(bilaoQty).some((n) => n > 0);
   const boodleHasQty = Object.values(boodleQty).some((n) => n > 0);
@@ -261,21 +279,24 @@ export function bookingExtrasFromRecord(booking) {
   };
 }
 
-export function emptyBookingExtras() {
+export function emptyBookingExtras(foodRates) {
+  const { bilaoPackages, boodlePackages } = resolveFoodRates(foodRates);
   return {
     bringing_car: false,
     car_count: 1,
     pet_count: 0,
     bilao_enabled: false,
     bilao_package: '',
-    bilao_qty: emptyBilaoQty(),
+    bilao_qty: emptyBilaoQty(bilaoPackages),
     boodle_fight_enabled: false,
     boodle_fight_tier: '',
-    boodle_qty: emptyBoodleQty(),
+    boodle_qty: emptyBoodleQty(boodlePackages),
   };
 }
 
-export function validateBookingExtras(extras, roomType) {
+export function validateBookingExtras(extras, roomType, foodRates) {
+  const { bilaoPackages, boodlePackages, petDepositPerPet } = resolveFoodRates(foodRates);
+
   const bringingCar = Boolean(extras.bringing_car);
   const carCount = bringingCar ? parseInt(extras.car_count, 10) || 0 : 0;
   if (bringingCar && carCount < 1) {
@@ -297,9 +318,11 @@ export function validateBookingExtras(extras, roomType) {
     };
   }
 
-  const bilaoLines = extras.bilao_enabled ? bilaoLinesFromQty(parseQtyMap(extras.bilao_qty, BILAO_PACKAGES)) : [];
+  const bilaoLines = extras.bilao_enabled
+    ? bilaoLinesFromQty(parseQtyMap(extras.bilao_qty, bilaoPackages), bilaoPackages)
+    : [];
   const boodleLines = extras.boodle_fight_enabled
-    ? boodleLinesFromQty(parseQtyMap(extras.boodle_qty, BOODLE_FIGHT_PACKAGES))
+    ? boodleLinesFromQty(parseQtyMap(extras.boodle_qty, boodlePackages), boodlePackages)
     : [];
 
   if (extras.bilao_enabled && bilaoLines.length === 0) {
@@ -309,15 +332,15 @@ export function validateBookingExtras(extras, roomType) {
     return { valid: false, message: 'Enter at least one Boodle Fight order quantity.' };
   }
 
-  const bilaoSummary = summarizeBilaoLines(bilaoLines);
-  const boodleSummary = summarizeBoodleLines(boodleLines);
+  const bilaoSummary = summarizeBilaoLines(bilaoLines, bilaoPackages);
+  const boodleSummary = summarizeBoodleLines(boodleLines, boodlePackages);
 
   return {
     valid: true,
     bringing_car: bringingCar,
     car_count: carCount,
     pet_count: petCount,
-    pet_deposit_amount: calculatePetDeposit(petCount),
+    pet_deposit_amount: calculatePetDeposit(petCount, petDepositPerPet),
     bilao_lines: bilaoLines,
     bilao_package: bilaoSummary.primaryPackageId,
     bilao_amount: bilaoSummary.total,

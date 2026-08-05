@@ -50,12 +50,24 @@ function MetaRow({ label, value, valueClass = '' }) {
   );
 }
 
-export default function QuotationDocument({ quote }) {
+export default function QuotationDocument({
+  quote,
+  extraPersonRates,
+  islandHoppingRates,
+  foodAddOnRates,
+}) {
   if (!quote) return null;
 
+  const rates = islandHoppingRates || ISLAND_HOPPING_RATES;
+  const bilaoPackages = foodAddOnRates?.bilaoPackages || BILAO_PACKAGES;
+  const boodlePackages = foodAddOnRates?.boodlePackages || BOODLE_FIGHT_PACKAGES;
   const { accommodation, tour, bilao, boodleFight, customAddons, grandTotal } =
-    computeQuotationTotals(quote);
-  const { entrance, garbageFee } = ISLAND_HOPPING_RATES;
+    computeQuotationTotals(quote, {
+      extraPersonRates,
+      islandHoppingRates: rates,
+      foodAddOnRates,
+    });
+  const { entrance, garbageFee } = rates;
   const pax = quote.pax || accommodation.roomLines.reduce((s, r) => s + r.occupants, 0) || '—';
 
   const bilaoById = Object.fromEntries(bilao.lines.map((l) => [l.package.id, l]));
@@ -275,7 +287,7 @@ export default function QuotationDocument({ quote }) {
             </tr>
           </thead>
           <tbody>
-            {BILAO_PACKAGES.map((pkg) => {
+            {bilaoPackages.map((pkg) => {
               const selected = bilaoById[pkg.id];
               return (
                 <tr key={pkg.id}>
@@ -316,7 +328,7 @@ export default function QuotationDocument({ quote }) {
             </tr>
           </thead>
           <tbody>
-            {BOODLE_FIGHT_PACKAGES.map((pkg) => {
+            {boodlePackages.map((pkg) => {
               const selected = boodleById[pkg.id];
               return (
                 <tr key={pkg.id}>
