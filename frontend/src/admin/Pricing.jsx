@@ -91,8 +91,7 @@ export default function AdminPricing() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!isFullAdmin) return;
+  const loadPricingSettings = () =>
     api
       .get('/admin/settings')
       .then((r) => {
@@ -102,6 +101,10 @@ export default function AdminPricing() {
       })
       .catch((e) => setError(getApiError(e)))
       .finally(() => setLoading(false));
+
+  useEffect(() => {
+    if (!isFullAdmin) return;
+    loadPricingSettings();
   }, [isFullAdmin]);
 
   if (!isFullAdmin) {
@@ -179,7 +182,7 @@ export default function AdminPricing() {
       await api.put('/admin/settings', {
         [FOOD_ADD_ON_RATES_SETTING_KEY]: payload,
       });
-      setFoodRatesForm(foodAddOnRatesFormState(foodAddOnRatesFromSettings({ food_add_on_rates: payload })));
+      await loadPricingSettings();
       toast.success('Food add-on rates saved.');
     } catch (err) {
       const msg = getApiError(err);
@@ -200,7 +203,7 @@ export default function AdminPricing() {
       await api.put('/admin/settings', {
         [FOOD_ADD_ON_RATES_SETTING_KEY]: payload,
       });
-      setFoodRatesForm(foodAddOnRatesFormState(foodAddOnRatesFromSettings({ food_add_on_rates: payload })));
+      await loadPricingSettings();
       toast.success('Pet deposit saved.');
     } catch (err) {
       const msg = getApiError(err);
@@ -221,7 +224,7 @@ export default function AdminPricing() {
       await api.put('/admin/settings', {
         [ISLAND_HOPPING_RATES_SETTING_KEY]: normalized,
       });
-      setIslandRatesForm(normalized);
+      await loadPricingSettings();
       toast.success('Island hopping rates saved.');
     } catch (err) {
       const msg = getApiError(err);

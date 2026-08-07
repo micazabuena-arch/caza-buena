@@ -3,6 +3,14 @@
  * Run from backend folder: npm run migrate
  */
 import pool from '../src/config/database.js';
+import {
+  DEFAULT_ISLAND_HOPPING_RATES,
+  ISLAND_HOPPING_RATES_SETTING_KEY,
+} from '../src/utils/islandHoppingRatesStore.js';
+import {
+  DEFAULT_FOOD_ADD_ON_RATES,
+  FOOD_ADD_ON_RATES_SETTING_KEY,
+} from '../src/utils/foodAddOnRatesStore.js';
 
 async function columnExists(table, column) {
   const [rows] = await pool.query(
@@ -349,6 +357,18 @@ async function run() {
     "INSERT INTO site_settings (setting_key, setting_value) VALUES ('extra_pax_child_7_12', '400') ON DUPLICATE KEY UPDATE setting_value = setting_value"
   );
   console.log('  ✓ extra_pax_* settings (defaults if new)');
+
+  console.log('\nisland hopping & food add-on rates:');
+  await pool.query(
+    'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = setting_value',
+    [ISLAND_HOPPING_RATES_SETTING_KEY, JSON.stringify(DEFAULT_ISLAND_HOPPING_RATES)]
+  );
+  console.log(`  ✓ ${ISLAND_HOPPING_RATES_SETTING_KEY} (default if new)`);
+  await pool.query(
+    'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = setting_value',
+    [FOOD_ADD_ON_RATES_SETTING_KEY, JSON.stringify(DEFAULT_FOOD_ADD_ON_RATES)]
+  );
+  console.log(`  ✓ ${FOOD_ADD_ON_RATES_SETTING_KEY} (default if new)`);
 
   const [payUpdate] = await pool.query(
     "UPDATE payment_methods SET account_number = '09471918080' WHERE account_number IN ('09157118212', '09178290292', '+639178290292', '+63 917 829 0292')"

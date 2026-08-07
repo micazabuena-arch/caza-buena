@@ -358,12 +358,18 @@ router.put('/settings', authenticateAdmin, requireAdminRole, async (req, res) =>
   const entries = {
     ...req.body,
     ...extraRates.parsed,
-    ...(islandRates.parsed ? islandHoppingRatesToSettings(islandRates.parsed) : {}),
-    ...(foodRates.parsed ? foodAddOnRatesToSettings(foodRates.parsed) : {}),
   };
 
+  // Remove raw JSON objects from the body; re-add as stringified values below.
   delete entries.island_hopping_rates;
   delete entries.food_add_on_rates;
+
+  if (islandRates.parsed) {
+    Object.assign(entries, islandHoppingRatesToSettings(islandRates.parsed));
+  }
+  if (foodRates.parsed) {
+    Object.assign(entries, foodAddOnRatesToSettings(foodRates.parsed));
+  }
 
   for (const [key, value] of Object.entries(entries)) {
     await pool.query(

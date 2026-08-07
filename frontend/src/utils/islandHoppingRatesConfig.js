@@ -45,19 +45,13 @@ export function resolveIslandHoppingRates(fromApi) {
 }
 
 export function islandHoppingRatesFromSettings(settings = {}) {
-  if (settings.island_hopping_rates) {
-    return resolveIslandHoppingRates(settings.island_hopping_rates);
+  const raw = settings.island_hopping_rates ?? settings[ISLAND_HOPPING_RATES_SETTING_KEY];
+  if (!raw) return structuredClone(ISLAND_HOPPING_RATES);
+
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return resolveIslandHoppingRates(parsed);
+  } catch {
+    return structuredClone(ISLAND_HOPPING_RATES);
   }
-  if (settings[ISLAND_HOPPING_RATES_SETTING_KEY]) {
-    try {
-      const parsed =
-        typeof settings[ISLAND_HOPPING_RATES_SETTING_KEY] === 'string'
-          ? JSON.parse(settings[ISLAND_HOPPING_RATES_SETTING_KEY])
-          : settings[ISLAND_HOPPING_RATES_SETTING_KEY];
-      return resolveIslandHoppingRates(parsed);
-    } catch {
-      return structuredClone(ISLAND_HOPPING_RATES);
-    }
-  }
-  return structuredClone(ISLAND_HOPPING_RATES);
 }

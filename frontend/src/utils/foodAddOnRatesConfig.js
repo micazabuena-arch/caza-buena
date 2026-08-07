@@ -68,21 +68,15 @@ export function foodAddOnRatesFormState(rates = defaultFoodAddOnRates()) {
 }
 
 export function foodAddOnRatesFromSettings(settings = {}) {
-  if (settings.food_add_on_rates) {
-    return resolveFoodAddOnRates(settings.food_add_on_rates);
+  const raw = settings.food_add_on_rates ?? settings[FOOD_ADD_ON_RATES_SETTING_KEY];
+  if (!raw) return defaultFoodAddOnRates();
+
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return resolveFoodAddOnRates(parsed);
+  } catch {
+    return defaultFoodAddOnRates();
   }
-  if (settings[FOOD_ADD_ON_RATES_SETTING_KEY]) {
-    try {
-      const parsed =
-        typeof settings[FOOD_ADD_ON_RATES_SETTING_KEY] === 'string'
-          ? JSON.parse(settings[FOOD_ADD_ON_RATES_SETTING_KEY])
-          : settings[FOOD_ADD_ON_RATES_SETTING_KEY];
-      return resolveFoodAddOnRates(parsed);
-    } catch {
-      return defaultFoodAddOnRates();
-    }
-  }
-  return defaultFoodAddOnRates();
 }
 
 /** Serialize form arrays back to API payload shape. */
