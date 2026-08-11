@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/ui/Loading';
+import api from '../api/client';
 
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -43,9 +44,11 @@ const nav = [
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
-function SidebarContent({ onNavigate }) {
+function SidebarContent({ onNavigate, guestDayCounts }) {
   const { logout, isFullAdmin } = useAuth();
   const links = nav.filter((item) => !item.adminOnly || isFullAdmin);
+  const guestBadgeTotal =
+    (guestDayCounts?.check_ins_today || 0) + (guestDayCounts?.check_outs_today || 0);
 
   return (
     <>
@@ -83,7 +86,19 @@ function SidebarContent({ onNavigate }) {
             }
           >
             <Icon size={18} className="shrink-0" />
-            <span>{label}</span>
+            <span className="flex-1">{label}</span>
+            {to === '/admin/guests' && (
+              <span
+                className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold flex items-center justify-center ${
+                  guestBadgeTotal > 0
+                    ? 'bg-amber-400 text-aegean-900'
+                    : 'bg-aegean-600/80 text-aegean-200'
+                }`}
+                title={`${guestDayCounts.check_ins_today} check-in · ${guestDayCounts.check_outs_today} check-out today`}
+              >
+                {guestBadgeTotal}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -105,6 +120,23 @@ export default function AdminLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [guestDayCounts, setGuestDayCounts] = useState({
+    check_ins_today: 0,
+    check_outs_today: 0,
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    const loadCounts = () => {
+      api
+        .get('/admin/guests/daily-counts')
+        .then((r) => setGuestDayCounts(r.data))
+        .catch(() => {});
+    };
+    loadCounts();
+    const timer = setInterval(loadCounts, 5 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   useEffect(() => {
     setNavOpen(false);
@@ -145,7 +177,7 @@ export default function AdminLayout() {
           navOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent onNavigate={closeNav} />
+        <SidebarContent onNavigate={closeNav} guestDayCounts={guestDayCounts} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 lg:min-h-screen">

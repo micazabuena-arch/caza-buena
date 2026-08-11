@@ -242,6 +242,20 @@ async function run() {
   } else {
     console.log('  ✓ booking_rooms (already exists)');
   }
+  await addColumn(
+    'booking_rooms',
+    'assigned_room_number',
+    'VARCHAR(100) NULL COMMENT "Admin-typed physical unit (hidden from guests)" AFTER `room_id`'
+  );
+  if (await columnExists('booking_rooms', 'assigned_room_id')) {
+    await pool.query(`
+      UPDATE booking_rooms br
+      JOIN rooms r ON br.assigned_room_id = r.id
+      SET br.assigned_room_number = r.name
+      WHERE br.assigned_room_number IS NULL OR br.assigned_room_number = ''
+    `);
+    console.log('  ✓ backfilled assigned_room_number from assigned_room_id');
+  }
 
   const [holidayTable] = await pool.query(
     `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES

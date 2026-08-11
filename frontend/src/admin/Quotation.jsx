@@ -5,9 +5,11 @@ import api, { getApiError } from '../api/client';
 import AdminModal from '../components/admin/AdminModal';
 import QuotationDocument from '../components/admin/QuotationDocument';
 import Loading from '../components/ui/Loading';
+import Pagination from '../components/ui/Pagination';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
+import { usePagination } from '../hooks/usePagination';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import { islandHoppingRatesFromSettings } from '../utils/islandHoppingRatesConfig';
 import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../utils/foodAddOnRatesConfig';
@@ -75,6 +77,9 @@ export default function AdminQuotation() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
+
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } =
+    usePagination(savedQuotes);
 
   const loadSavedList = useCallback(() => {
     setListLoading(true);
@@ -567,7 +572,7 @@ export default function AdminQuotation() {
               </tr>
             </thead>
             <tbody>
-              {savedQuotes.map((item) => (
+              {pageItems.map((item) => (
                 <tr key={item.id} className="border-b border-aegean-50">
                   <td className="py-2.5 pr-3 font-mono text-xs">{item.reference_code}</td>
                   <td className="py-2.5 pr-3">{item.guest_name || '—'}</td>
@@ -599,6 +604,16 @@ export default function AdminQuotation() {
               ))}
             </tbody>
           </table>
+          {savedQuotes.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              from={from}
+              to={to}
+              onPageChange={setPage}
+            />
+          )}
         </div>
       )}
     </section>

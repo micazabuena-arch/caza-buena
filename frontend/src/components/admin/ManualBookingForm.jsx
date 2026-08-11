@@ -657,6 +657,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               onRemoveLine={handleRemoveLine}
               usedRoomIds={usedRoomIds(roomLines)}
               allowUnavailable={anteDate}
+              showAssignedRoomNumber
             />
             {fieldErrors.room_id && (
               <p className="text-xs text-red-600" role="alert">

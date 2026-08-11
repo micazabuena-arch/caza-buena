@@ -9,6 +9,7 @@ export function createRoomLine(overrides = {}) {
     adults: 2,
     children_under6: 0,
     children_7_12: 0,
+    assigned_room_number: '',
     ...overrides,
   };
 }
@@ -33,6 +34,7 @@ export function roomLinesToPayload(lines) {
       adults: parseInt(line.adults, 10) || 1,
       children_under6: parseInt(line.children_under6, 10) || 0,
       children_7_12: parseInt(line.children_7_12, 10) || 0,
+      assigned_room_number: String(line.assigned_room_number || '').trim() || undefined,
     }));
 }
 
@@ -53,6 +55,7 @@ export function bookingToRoomLines(booking) {
         adults: line.adults ?? 1,
         children_under6: line.children_under6 ?? 0,
         children_7_12: line.children_7_12 ?? 0,
+        assigned_room_number: line.assigned_room_number || '',
       })
     );
   }

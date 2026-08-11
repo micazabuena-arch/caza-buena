@@ -381,6 +381,27 @@ router.put('/settings', authenticateAdmin, requireAdminRole, async (req, res) =>
 });
 
 // Guest list — one row per email (any booking history)
+router.get('/guests/daily-counts', authenticateAdmin, async (_req, res) => {
+  const activeStatuses = ['confirmed', 'payment_submitted', 'awaiting_payment'];
+  const placeholders = activeStatuses.map(() => '?').join(', ');
+
+  const [checkIns] = await pool.query(
+    `SELECT COUNT(*) AS c FROM bookings
+     WHERE status IN (${placeholders}) AND DATE(check_in) = CURDATE()`,
+    activeStatuses
+  );
+  const [checkOuts] = await pool.query(
+    `SELECT COUNT(*) AS c FROM bookings
+     WHERE status IN (${placeholders}) AND DATE(check_out) = CURDATE()`,
+    activeStatuses
+  );
+
+  res.json({
+    check_ins_today: Number(checkIns[0].c) || 0,
+    check_outs_today: Number(checkOuts[0].c) || 0,
+  });
+});
+
 router.get('/guests', authenticateAdmin, async (_req, res) => {
   const [rows] = await pool.query(
     `SELECT b.guest_email,

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Eye, Pencil, Download, Trash2 } from 'lucide-react';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import api, { getApiError } from '../api/client';
@@ -47,17 +48,46 @@ function formatReference(code) {
   return code;
 }
 
+const TODAY_FILTERS = {
+  all: 'All stays',
+  arriving: 'Arriving today',
+  departing: 'Departing today',
+};
+
+function isToday(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  return String(dateStr).slice(0, 10) === `${y}-${m}-${d}`;
+}
+
 export default function AdminGuests() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dayFilter = searchParams.get('filter') || 'all';
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [panelMode, setPanelMode] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [paymentProofUrl, setPaymentProofUrl] = useState(null);
+  const [dayCounts, setDayCounts] = useState({ check_ins_today: 0, check_outs_today: 0 });
   const toast = useToast();
   const confirm = useConfirm();
 
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(bookings);
+  const filteredBookings = useMemo(() => {
+    if (dayFilter === 'arriving') {
+      return bookings.filter((b) => isToday(b.check_in));
+    }
+    if (dayFilter === 'departing') {
+      return bookings.filter((b) => isToday(b.check_out));
+    }
+    return bookings;
+  }, [bookings, dayFilter]);
+
+  const { page, setPage, pageItems, totalPages, totalItems, from, to } =
+    usePagination(filteredBookings);
 
   const loadBookings = async () => {
     setLoading(true);
@@ -75,6 +105,10 @@ export default function AdminGuests() {
 
   useEffect(() => {
     loadBookings();
+    api
+      .get('/admin/guests/daily-counts')
+      .then((r) => setDayCounts(r.data))
+      .catch(() => {});
   }, []);
 
   const fetchBookingDetail = async (id) => {
@@ -156,16 +190,52 @@ export default function AdminGuests() {
           Export Excel
         </button>
       </div>
-      <p className="text-sm text-aegean-600 mb-8">
+      <p className="text-sm text-aegean-600 mb-4">
         Each row is one stay. Export Excel includes all guests — current and past stays.
       </p>
+
+      <div className="mb-6 rounded-xl border border-aegean-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <p className="text-sm font-medium text-aegean-800">Today</p>
+        <p className="text-sm text-aegean-700">
+          <span className="font-semibold text-aegean-900">{dayCounts.check_ins_today}</span> checking in
+        </p>
+        <p className="text-sm text-aegean-700">
+          <span className="font-semibold text-aegean-900">{dayCounts.check_outs_today}</span> checking out
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        {Object.entries(TODAY_FILTERS).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              if (key === 'all') {
+                setSearchParams({});
+              } else {
+                setSearchParams({ filter: key });
+              }
+              setPage(1);
+            }}
+            className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+              dayFilter === key
+                ? 'bg-aegean-600 text-white border-aegean-600'
+                : 'bg-white text-aegean-700 border-aegean-200 hover:border-aegean-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {loading ? (
         <Loading />
       ) : (
         <div className="bg-white rounded-xl shadow-sm">
-          {bookings.length === 0 ? (
-            <p className="p-8 text-center text-aegean-500">No guest bookings yet.</p>
+          {filteredBookings.length === 0 ? (
+            <p className="p-8 text-center text-aegean-500">
+              {dayFilter === 'all' ? 'No guest bookings yet.' : 'No stays for this filter today.'}
+            </p>
           ) : (
             <div className="lg:hidden p-4 space-y-3">
               {pageItems.map((b) => (
@@ -209,7 +279,7 @@ export default function AdminGuests() {
               </tr>
             </thead>
             <tbody>
-              {bookings.length > 0 &&
+              {filteredBookings.length > 0 &&
                 pageItems.map((b) => (
                   <tr
                     key={b.id}
@@ -221,7 +291,7 @@ export default function AdminGuests() {
                       <p className="text-xs text-aegean-500">{b.guest_email}</p>
                     </td>
                     <td className="p-4 text-aegean-700 whitespace-nowrap">{formatGuestCount(b)}</td>
-                    <td className="p-4">{b.room_name}</td>
+                    <td className="p-4">{b.room_names || b.room_name}</td>
                     <td className="p-4 whitespace-nowrap">
                       {b.check_in} → {b.check_out}
                     </td>

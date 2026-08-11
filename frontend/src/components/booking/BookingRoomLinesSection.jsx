@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
-import { roomGuestCapacityLabel } from '../../data/resortRules';
+import { roomGuestCapacityLabel, getGuestRoomLabel } from '../../data/resortRules';
 import { roomLineGuestCount } from '../../utils/bookingRoomLines';
 
 const inputClass =
@@ -19,8 +19,11 @@ function RoomLineCard({
   roomsSearchUrl,
   usedRoomIds,
   allowUnavailable,
+  guestFacing,
+  showAssignedRoomNumber,
 }) {
   const selectedRoom = rooms.find((r) => String(r.id) === String(line.room_id));
+  const displayName = guestFacing && selectedRoom ? getGuestRoomLabel(selectedRoom) : selectedRoom?.name;
   const guestCount = roomLineGuestCount(line);
   const maxG =
     lineQuote?.room_limits?.max_guests ??
@@ -41,6 +44,16 @@ function RoomLineCard({
     return true;
   });
 
+  const roomOptions = guestFacing
+    ? Array.from(
+        availableRooms.reduce((map, room) => {
+          const type = room.room_type || 'queen';
+          if (!map.has(type)) map.set(type, room);
+          return map;
+        }, new Map()).values()
+      )
+    : availableRooms;
+
   const update = (patch) => onChange(line.id, patch);
   const calendarConflict =
     line.room_id && lineQuote && !lineQuote.available && !lineQuote.occupancy_error;
@@ -50,7 +63,7 @@ function RoomLineCard({
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-aegean-50/80 border-b border-aegean-100">
         <p className="text-sm font-medium text-aegean-800">
           Room {index + 1}
-          {selectedRoom ? ` · ${selectedRoom.name}` : ''}
+          {displayName ? ` · ${displayName}` : ''}
         </p>
         {canRemove && (
           <button
@@ -65,10 +78,24 @@ function RoomLineCard({
       </div>
 
       <div className="p-4 space-y-4">
+        {showAssignedRoomNumber && (
+          <div>
+            <label className="block text-sm font-medium text-aegean-700 mb-1.5">Room number</label>
+            <input
+              type="text"
+              value={line.assigned_room_number || ''}
+              onChange={(e) => update({ assigned_room_number: e.target.value })}
+              placeholder="e.g. ROOM 101"
+              maxLength={100}
+              className={inputClass}
+            />
+          </div>
+        )}
+
         {lockThisRoom && selectedRoom ? (
           <div className="rounded-lg border border-aegean-100 bg-aegean-50/60 p-4">
             <p className="text-xs uppercase tracking-wider text-aegean-500 mb-1">Selected room</p>
-            <p className="font-serif text-lg text-aegean-800">{selectedRoom.name}</p>
+            <p className="font-serif text-lg text-aegean-800">{displayName}</p>
             {capacityLabel && (
               <p className="text-sm text-aegean-600 mt-1">{capacityLabel}</p>
             )}
@@ -88,9 +115,10 @@ function RoomLineCard({
               className={inputClass}
             >
               <option value="">Select a room</option>
-              {availableRooms.map((r) => (
+              {roomOptions.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} ({r.min_guests ?? 1}–{r.max_guests ?? r.capacity} guests)
+                  {guestFacing ? getGuestRoomLabel(r) : r.name} ({r.min_guests ?? 1}–
+                  {r.max_guests ?? r.capacity} guests)
                 </option>
               ))}
             </select>
@@ -203,6 +231,8 @@ export default function BookingRoomLinesSection({
   roomsSearchUrl,
   usedRoomIds,
   allowUnavailable = false,
+  guestFacing = false,
+  showAssignedRoomNumber = false,
 }) {
   const totalGuests = lines.reduce((s, l) => s + roomLineGuestCount(l), 0);
 
@@ -223,6 +253,8 @@ export default function BookingRoomLinesSection({
           roomsSearchUrl={roomsSearchUrl}
           usedRoomIds={usedRoomIds}
           allowUnavailable={allowUnavailable}
+          guestFacing={guestFacing}
+          showAssignedRoomNumber={showAssignedRoomNumber}
         />
       ))}
 

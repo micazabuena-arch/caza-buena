@@ -15,7 +15,7 @@ import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { pages, images } from '../data/placeholders';
-import { EXTRA_PERSON_RATES } from '../data/resortRules';
+import { EXTRA_PERSON_RATES, getGuestRoomLabel } from '../data/resortRules';
 import {
   calculateIslandHopping,
   emptyIslandHoppingForm,
@@ -672,6 +672,7 @@ export default function Booking() {
                   onRemoveLine={removeRoomLine}
                   roomsSearchUrl={roomsSearchUrl}
                   usedRoomIds={usedRoomIds(roomLines)}
+                  guestFacing
                 />
                 <p className="text-xs text-aegean-500 mt-3">
                   Extra adult ₱{extraPersonRates.adult_weekday}/night (Mon–Thu) or ₱
@@ -803,7 +804,7 @@ export default function Booking() {
                         return (
                           <div key={line.id} className="flex justify-between gap-4">
                             <span>
-                              {room?.name || 'Room'} ({quote?.nights || nights} night
+                              {room ? getGuestRoomLabel(room) : 'Room'} ({quote?.nights || nights} night
                               {(quote?.nights || nights) !== 1 ? 's' : ''})
                             </span>
                             <span className="shrink-0">

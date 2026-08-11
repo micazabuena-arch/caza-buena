@@ -31,6 +31,25 @@ export function bedroomCountLabel(roomType) {
   return roomType === 'suite' ? '2 bedrooms' : '1 bedroom';
 }
 
+/** Generic label shown to guests online (hides ROOM 101, etc.). */
+export function getGuestRoomLabel(room) {
+  if (!room) return 'Room';
+  const type = room.room_type || room;
+  if (type === 'suite') return ROOM_INVENTORY.suite.label;
+  if (type === 'queen') return ROOM_INVENTORY.queen.label;
+  return room.name || 'Room';
+}
+
+/** Admin list label: physical unit + type hint */
+export function getAdminRoomLabel(room) {
+  if (!room) return '';
+  const generic = getGuestRoomLabel(room);
+  if (room.name && room.name !== generic) {
+    return `${room.name} (${generic})`;
+  }
+  return room.name || generic;
+}
+
 function roomTypeSubtitle(roomType) {
   return roomType === 'suite' ? 'Two-bedroom suite' : 'One-bedroom queen';
 }

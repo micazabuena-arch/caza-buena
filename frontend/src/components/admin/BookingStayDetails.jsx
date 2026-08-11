@@ -22,6 +22,7 @@ import { bookingRoomStayTotal } from '../../utils/bookingSoaLines';
 import { parseStayAddons } from '../../utils/stayAddons';
 import { SOA_DOCUMENT_TYPES } from '../../utils/soaDocumentTitle';
 import { useToast } from '../../context/ToastContext';
+import { getGuestRoomLabel } from '../../data/resortRules';
 
 const TABS = [
   { id: 'stay', label: 'Stay' },
@@ -100,7 +101,17 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
                         (line.adults || 0) +
                         (line.children_under6 || 0) +
                         (line.children_7_12 || 0);
-                      return `${line.room_name} (${guests} guest${guests !== 1 ? 's' : ''})`;
+                      const label =
+                        line.assigned_room_number ||
+                        line.admin_room_display ||
+                        line.guest_room_label ||
+                        getGuestRoomLabel(line);
+                      const bookedAs = line.guest_room_label || getGuestRoomLabel(line);
+                      const display =
+                        line.assigned_room_number && bookedAs !== label
+                          ? `${bookedAs} · ${line.assigned_room_number}`
+                          : label;
+                      return `${display} (${guests} guest${guests !== 1 ? 's' : ''})`;
                     }).join(' · ')
                   : booking.room_name
               }

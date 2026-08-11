@@ -467,6 +467,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               onRemoveLine={handleRemoveLine}
               usedRoomIds={usedRoomIds(roomLines)}
               allowUnavailable={anteDate}
+              showAssignedRoomNumber
             />
             {stayConfigChanged && roomLines.length === 1 && (
               <RebookPricePreview quote={rebookQuote} loading={rebookQuoteLoading} />

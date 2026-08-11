@@ -182,7 +182,7 @@ router.get('/available-rooms', async (req, res) => {
     check_out: checkOut,
     guests: guestCount,
     nights,
-    rooms: available,
+    rooms: (await import('../utils/roomLabels.js')).dedupeRoomsByTypeForGuest(available),
   });
 });
 
@@ -203,8 +203,9 @@ router.get('/reference/:code', async (req, res) => {
   );
   if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
   const { attachBookingRooms } = await import('../utils/bookingRooms.js');
+  const { sanitizeBookingForGuest } = await import('../utils/roomLabels.js');
   const booking = await attachBookingRooms(pool, rows[0]);
-  res.json(booking);
+  res.json(sanitizeBookingForGuest(booking));
 });
 
 // Public: create booking request

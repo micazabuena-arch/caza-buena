@@ -1,5 +1,6 @@
 import { calculateNights, isRoomAvailable } from './booking.js';
 import { calculateStayTotal } from './pricing.js';
+import { enrichBookingRoomLine } from './roomLabels.js';
 
 /** Normalize API body to room line objects. */
 export function normalizeRoomLines(body) {
@@ -9,6 +10,7 @@ export function normalizeRoomLines(body) {
       adults: parseInt(line.adults, 10) || 1,
       children_under6: parseInt(line.children_under6, 10) || 0,
       children_7_12: parseInt(line.children_7_12, 10) || 0,
+      assigned_room_number: String(line.assigned_room_number || '').trim() || null,
       sort_order: index,
     }));
   }
@@ -108,6 +110,7 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
       adults: line.adults,
       children_under6: line.children_under6,
       children_7_12: line.children_7_12,
+      assigned_room_number: line.assigned_room_number || null,
       guest_count: guestCount,
       nights,
       room_rate: avgNightlyRate,
@@ -222,14 +225,18 @@ export function applyQuotedStayPricing(priced, { quotedStaySubtotal, quotedLineS
 
 export async function insertBookingRooms(pool, bookingId, pricedLines) {
   for (const line of pricedLines) {
+    const assignedNumber = line.assigned_room_number
+      ? String(line.assigned_room_number).trim().slice(0, 100)
+      : null;
     await pool.query(
       `INSERT INTO booking_rooms (
-        booking_id, room_id, adults, children_under6, children_7_12, guest_count,
+        booking_id, room_id, assigned_room_number, adults, children_under6, children_7_12, guest_count,
         nights, room_rate, room_subtotal, extra_person_charges, subtotal, sort_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         bookingId,
         line.room_id,
+        assignedNumber,
         line.adults,
         line.children_under6,
         line.children_7_12,
@@ -254,7 +261,7 @@ export async function fetchBookingRooms(pool, bookingId) {
      ORDER BY br.sort_order, br.id`,
     [bookingId]
   );
-  return rows;
+  return rows.map(enrichBookingRoomLine);
 }
 
 export async function attachBookingRooms(pool, booking) {
@@ -262,7 +269,7 @@ export async function attachBookingRooms(pool, booking) {
   const room_lines = await fetchBookingRooms(pool, booking.id);
   const room_names =
     room_lines.length > 0
-      ? room_lines.map((l) => l.room_name).join(', ')
+      ? room_lines.map((l) => l.admin_room_display || l.room_name).join(', ')
       : booking.room_name || null;
   return {
     ...booking,
@@ -308,8 +315,9 @@ export async function attachBookingRoomsToList(pool, bookings) {
   );
   const byBooking = new Map();
   for (const row of rows) {
+    const enriched = enrichBookingRoomLine(row);
     if (!byBooking.has(row.booking_id)) byBooking.set(row.booking_id, []);
-    byBooking.get(row.booking_id).push(row);
+    byBooking.get(row.booking_id).push(enriched);
   }
   return bookings.map((b) => {
     const room_lines = byBooking.get(b.id) || [];
@@ -318,7 +326,7 @@ export async function attachBookingRoomsToList(pool, bookings) {
       room_lines,
       room_names:
         room_lines.length > 0
-          ? room_lines.map((l) => l.room_name).join(', ')
+          ? room_lines.map((l) => l.admin_room_display || l.room_name).join(', ')
           : b.room_name || null,
       room_count: room_lines.length || 1,
     };
