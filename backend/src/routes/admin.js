@@ -384,21 +384,25 @@ router.put('/settings', authenticateAdmin, requireAdminRole, async (req, res) =>
 router.get('/guests/daily-counts', authenticateAdmin, async (_req, res) => {
   const activeStatuses = ['confirmed', 'payment_submitted', 'awaiting_payment'];
   const placeholders = activeStatuses.map(() => '?').join(', ');
+  // Use PHT calendar day so the Guests badge updates from 12:00 AM Manila time.
+  const { todayYmd } = await import('../utils/booking.js');
+  const today = todayYmd();
 
   const [checkIns] = await pool.query(
     `SELECT COUNT(*) AS c FROM bookings
-     WHERE status IN (${placeholders}) AND DATE(check_in) = CURDATE()`,
-    activeStatuses
+     WHERE status IN (${placeholders}) AND DATE(check_in) = ?`,
+    [...activeStatuses, today]
   );
   const [checkOuts] = await pool.query(
     `SELECT COUNT(*) AS c FROM bookings
-     WHERE status IN (${placeholders}) AND DATE(check_out) = CURDATE()`,
-    activeStatuses
+     WHERE status IN (${placeholders}) AND DATE(check_out) = ?`,
+    [...activeStatuses, today]
   );
 
   res.json({
     check_ins_today: Number(checkIns[0].c) || 0,
     check_outs_today: Number(checkOuts[0].c) || 0,
+    today,
   });
 });
 

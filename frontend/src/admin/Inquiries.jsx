@@ -6,9 +6,21 @@ import IconActionButton, { IconActionGroup } from '../components/ui/IconActionBu
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
 import AdminTableShell from '../components/ui/AdminTableShell';
-import { usePagination } from '../hooks/usePagination';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { formatDateTimePHT } from '../utils/datetime';
+import {
+  INQUIRY_STATUS_FILTER_OPTIONS,
+  matchInquiryReadStatus,
+  toDateKey,
+} from '../utils/adminListFilter';
+
+const INQUIRY_SEARCH_FIELDS = ['name', 'email', 'phone', 'subject', 'message'];
+
+function inquiryDate(item) {
+  return toDateKey(item.created_at);
+}
 
 function formatInquiryDate(value) {
   return formatDateTimePHT(value);
@@ -19,7 +31,28 @@ export default function AdminInquiries() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(inquiries);
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    status,
+    setStatus,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(inquiries, {
+    searchFields: INQUIRY_SEARCH_FIELDS,
+    getDate: inquiryDate,
+    matchStatus: matchInquiryReadStatus,
+  });
 
   useEffect(() => {
     api.get('/contact/admin').then((r) => setInquiries(r.data)).finally(() => setLoading(false));
@@ -59,8 +92,28 @@ export default function AdminInquiries() {
     <div>
       <h1 className="text-2xl sm:text-3xl font-serif text-aegean-800 mb-8">Contact Inquiries</h1>
 
+      {inquiries.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search name, email, subject, message…"
+          showDates
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          dateFromLabel="Received from"
+          dateToLabel="Received to"
+          status={status}
+          onStatusChange={setStatus}
+          statusOptions={INQUIRY_STATUS_FILTER_OPTIONS}
+        />
+      )}
+
       {inquiries.length === 0 ? (
         <p className="text-aegean-600">No inquiries yet.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-aegean-600">No inquiries match this filter.</p>
       ) : (
         <div className="bg-white rounded-2xl border border-aegean-100 overflow-hidden">
           {inquiries.length === 0 ? null : (
@@ -126,7 +179,7 @@ export default function AdminInquiries() {
               </tr>
             </thead>
             <tbody>
-              {inquiries.length > 0 &&
+              {filtered.length > 0 &&
                 pageItems.map((inq) => (
                   <tr
                     key={inq.id}
@@ -178,7 +231,7 @@ export default function AdminInquiries() {
                 ))}
             </tbody>
           </AdminTableShell>
-          {inquiries.length > 0 && (
+          {filtered.length > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}

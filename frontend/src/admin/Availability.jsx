@@ -5,8 +5,16 @@ import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+import { toDateKey } from '../utils/adminListFilter';
 import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
+
+function blockStartDate(item) {
+  return toDateKey(item.start_date);
+}
+
+const BLOCK_SEARCH_FIELDS = ['reason', 'start_date', 'end_date'];
 
 export default function AdminAvailability() {
   const [rooms, setRooms] = useState([]);
@@ -18,7 +26,25 @@ export default function AdminAvailability() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(blocks);
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(blocks, {
+    searchFields: BLOCK_SEARCH_FIELDS,
+    getDate: blockStartDate,
+  }, roomId);
   const [availabilityBaselineKey, setAvailabilityBaselineKey] = useState(0);
   const availabilityDirty = useDirtySnapshot(form, true, availabilityBaselineKey);
   useUnsavedNavigation(availabilityDirty);
@@ -106,9 +132,26 @@ export default function AdminAvailability() {
         </SubmitButton>
       </form>
 
+      {blocks.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search reason or dates…"
+          showDates
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          dateFromLabel="Starts from"
+          dateToLabel="Starts to"
+        />
+      )}
+
       <div className="space-y-3">
         {blocks.length === 0 ? (
           <p className="text-aegean-600">No blocked dates for this room.</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-aegean-600">No blocked dates match this filter.</p>
         ) : (
           pageItems.map((b) => (
             <div key={b.id} className="bg-white p-4 rounded-xl flex justify-between items-center">
@@ -117,7 +160,7 @@ export default function AdminAvailability() {
             </div>
           ))
         )}
-        {blocks.length > 0 && (
+        {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}

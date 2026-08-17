@@ -4,6 +4,7 @@ import {
   calculateIslandHopping,
   emptyPassenger,
   formatBoatPlanLabel,
+  formatQuotedBoatPlanLabel,
   ISLAND_HOPPING_RATES,
   planBoatsForPax,
 } from '../../data/islandHoppingRates';
@@ -81,10 +82,12 @@ export default function IslandHoppingSection({
   };
 
   const quote = enabled && !data.soa_summary ? calculateIslandHopping(data.passengers, rates) : null;
+  const quotedBoatLabel = formatQuotedBoatPlanLabel(data.summary_boats);
   const summaryBoatPlan =
-    data.soa_summary && data.summary_pax
+    data.soa_summary && data.summary_pax && !quotedBoatLabel
       ? planBoatsForPax(parseInt(data.summary_pax, 10), rates)
       : null;
+  const boatPlanLabel = quotedBoatLabel || formatBoatPlanLabel(summaryBoatPlan);
   const formComplete =
     enabled &&
     data.passenger_address?.trim() &&
@@ -135,6 +138,7 @@ export default function IslandHoppingSection({
                       soa_summary: e.target.checked,
                       summary_pax: e.target.checked ? data.summary_pax || '' : '',
                       summary_amount: e.target.checked ? data.summary_amount || '' : '',
+                      summary_boats: e.target.checked ? data.summary_boats || [] : data.summary_boats,
                     })
                   }
                   className="mt-1 rounded border-aegean-300 text-aegean-600 focus:ring-aegean-400"
@@ -448,9 +452,9 @@ export default function IslandHoppingSection({
               <p className="text-xs text-aegean-500 mt-2">
                 This will appear on the SOA as one line with pax count and amount.
               </p>
-              {summaryBoatPlan?.length > 0 && (
+              {boatPlanLabel && (
                 <p className="text-xs text-aegean-600 mt-2">
-                  Boats: {formatBoatPlanLabel(summaryBoatPlan)}
+                  Boats: {boatPlanLabel}
                 </p>
               )}
             </div>

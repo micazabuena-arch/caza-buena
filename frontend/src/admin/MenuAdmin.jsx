@@ -9,7 +9,10 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { groupMenuByCategory } from '../utils/menuGrouping';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useAdminListFilter } from '../hooks/useAdminListFilter';
 
+const MENU_SEARCH_FIELDS = ['name', 'category'];
 const DEFAULT_CATEGORIES = ['All Day Breakfast', 'Rice Meals', 'Snacks & Extras', 'Drinks'];
 
 const emptyForm = () => ({
@@ -154,7 +157,10 @@ export default function AdminMenu() {
     );
   }, [items]);
 
-  const grouped = useMemo(() => groupMenuByCategory(items), [items]);
+  const { search, setSearch, filtered } = useAdminListFilter(items, {
+    searchFields: MENU_SEARCH_FIELDS,
+  });
+  const grouped = useMemo(() => groupMenuByCategory(filtered), [filtered]);
 
   const load = () => {
     setLoading(true);
@@ -285,9 +291,21 @@ export default function AdminMenu() {
 
       {error && !modalOpen && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
+      {items.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search menu item or category…"
+        />
+      )}
+
       {items.length === 0 ? (
         <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
           No menu items yet. Click Add menu item to create one.
+        </p>
+      ) : grouped.length === 0 ? (
+        <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
+          No menu items match this search.
         </p>
       ) : (
         <div className="space-y-8">

@@ -8,8 +8,11 @@ import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
+
+const POLICY_SEARCH_FIELDS = ['title', 'content'];
 
 const emptyForm = () => ({
   title: '',
@@ -29,7 +32,18 @@ export default function AdminPolicies() {
   const [error, setError] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(policies);
+  const {
+    search,
+    setSearch,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(policies, { searchFields: POLICY_SEARCH_FIELDS });
   const isDirty = useDirtySnapshot(form, modalOpen);
 
   const load = () =>
@@ -139,10 +153,22 @@ export default function AdminPolicies() {
         </button>
       </div>
 
+      {policies.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search policy title or content…"
+        />
+      )}
+
       <div className="space-y-3">
         {policies.length === 0 ? (
           <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
             No policies yet. Click Add policy to create one.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
+            No policies match this search.
           </p>
         ) : (
           pageItems.map((policy) => (
@@ -168,7 +194,7 @@ export default function AdminPolicies() {
             </div>
           ))
         )}
-        {policies.length > 0 && (
+        {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}

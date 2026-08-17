@@ -28,6 +28,7 @@ import {
   usedRoomIds,
 } from '../../utils/bookingRoomLines';
 import BookingCustomAddons from './BookingCustomAddons';
+import BookingPaymentsPanel from './BookingPaymentsPanel';
 import { useAdminModalClose, useRegisterModalDirty } from './AdminModal';
 
 const inputClass =
@@ -86,11 +87,16 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const confirm = useConfirm();
   const requestClose = useAdminModalClose();
   const [dirty, setDirty] = useState(false);
+  // Payment series lives outside the stay-save payload; track locally for UI.
+  const [recordedPayments, setRecordedPayments] = useState(() =>
+    Array.isArray(booking?.payments) ? booking.payments : []
+  );
   useRegisterModalDirty(dirty);
 
   useEffect(() => {
     setForm(bookingToEditState(booking));
     setRoomLines(bookingToRoomLines(booking));
+    setRecordedPayments(Array.isArray(booking?.payments) ? booking.payments : []);
     setError('');
     setActiveTab('stay');
     setDirty(false);
@@ -324,9 +330,9 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         return islandQuote.error;
       }
     }
-    if (form.payment_option === 'custom') {
+    if (form.payment_option === 'custom' && recordedPayments.length === 0) {
       const custom = parseFloat(form.custom_payment_amount);
-      if (!Number.isFinite(custom) || custom <= 0) return 'Enter a valid custom amount (tab 4).';
+      if (!Number.isFinite(custom) || custom <= 0) return 'Enter a valid custom amount (tab 5).';
     }
     if (!booking.discount_code && form.admin_discount_amount !== '' && form.admin_discount_amount != null) {
       const discount = parseFloat(form.admin_discount_amount);
@@ -627,16 +633,35 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
                 />
               </div>
             )}
-            <PaymentAmountSelect
-              totalAmount={
+            <BookingPaymentsPanel
+              bookingId={booking.id}
+              payments={recordedPayments}
+              bookingTotal={
                 paymentPreviewTotal > 0 ? paymentPreviewTotal : Number(booking.total_amount)
               }
-              depositPercent={depositPercent}
-              paymentOption={form.payment_option}
-              customAmount={form.custom_payment_amount}
-              onOptionChange={(id) => update({ payment_option: id })}
-              onCustomAmountChange={(val) => update({ custom_payment_amount: val })}
+              onChange={setRecordedPayments}
+              onBookingUpdated={(updated) => {
+                if (updated) {
+                  setRecordedPayments(
+                    Array.isArray(updated.payments) ? updated.payments : recordedPayments
+                  );
+                  onSaved?.(updated);
+                }
+              }}
             />
+            {/* Planned pay-now only when no ledger rows yet — once payments exist, series is source of truth. */}
+            {recordedPayments.length === 0 && (
+              <PaymentAmountSelect
+                totalAmount={
+                  paymentPreviewTotal > 0 ? paymentPreviewTotal : Number(booking.total_amount)
+                }
+                depositPercent={depositPercent}
+                paymentOption={form.payment_option}
+                customAmount={form.custom_payment_amount}
+                onOptionChange={(id) => update({ payment_option: id })}
+                onCustomAmountChange={(val) => update({ custom_payment_amount: val })}
+              />
+            )}
             <p className="text-xs text-aegean-500 -mt-2">
               Estimated total: ₱{formatMoney(paymentPreviewTotal)}
               {stayConfigChanged && rebookQuote && !rebookQuote.error && roomLines.length === 1 ? (

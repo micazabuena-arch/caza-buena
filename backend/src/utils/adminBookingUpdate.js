@@ -210,18 +210,36 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     duringStayTotal +
     customAddonsTotal;
 
-  const payOption = payment_option ?? existingBooking.payment_option ?? 'deposit';
-  const [settingRows] = await pool.query(
-    "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
-  );
-  const { resolveAmountToPay, getDepositPercent } = await import('./paymentAmount.js');
-  const depositPercent = getDepositPercent(settingRows[0]?.setting_value);
-  const customAmount =
-    payOption === 'custom'
-      ? custom_payment_amount ?? existingBooking.amount_to_pay
-      : undefined;
-  const payResolved = resolveAmountToPay(total, payOption, customAmount, depositPercent);
-  if (payResolved.error) return { error: payResolved.error };
+  // Once a payment series exists, keep amount_to_pay = sum of ledger rows
+  // so editing stay details cannot wipe earlier DP / partial entries.
+  const { listBookingPayments, sumPaymentAmounts } = await import('./bookingPayments.js');
+  let payments = [];
+  try {
+    payments = await listBookingPayments(pool, existingBooking.id);
+  } catch {
+    payments = [];
+  }
+
+  let payOption = payment_option ?? existingBooking.payment_option ?? 'deposit';
+  let amountToPay;
+
+  if (payments.length > 0) {
+    amountToPay = sumPaymentAmounts(payments);
+    payOption = existingBooking.payment_option ?? payOption;
+  } else {
+    const [settingRows] = await pool.query(
+      "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
+    );
+    const { resolveAmountToPay, getDepositPercent } = await import('./paymentAmount.js');
+    const depositPercent = getDepositPercent(settingRows[0]?.setting_value);
+    const customAmount =
+      payOption === 'custom'
+        ? custom_payment_amount ?? existingBooking.amount_to_pay
+        : undefined;
+    const payResolved = resolveAmountToPay(total, payOption, customAmount, depositPercent);
+    if (payResolved.error) return { error: payResolved.error };
+    amountToPay = payResolved.amount;
+  }
 
   const storedPayment = resolveStoredManualPayment({
     manual_payment_method,
@@ -275,13 +293,13 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
       bilao_package: extrasValidation.bilao_package,
       bilao_amount: extrasValidation.bilao_amount,
       bilao_lines: serializeFoodLines(extrasValidation.bilao_lines),
-      boodle_fight: extrasValidation.boodle_fight ? 1 : 0,
+      boodle_fight: extrasValidation.boodle_fight ? 1 : 0, 
       boodle_fight_tier: extrasValidation.boodle_fight_tier,
       boodle_fight_amount: extrasValidation.boodle_fight_amount,
       boodle_lines: serializeFoodLines(extrasValidation.boodle_lines),
       payment_method_id: storedPayment.payment_method_id,
       payment_option: payOption,
-      amount_to_pay: payResolved.amount,
+      amount_to_pay: amountToPay,
     },
     pricedLines,
   };

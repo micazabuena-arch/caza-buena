@@ -1,14 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Eye, Pencil, Download, Trash2 } from 'lucide-react';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import Pagination from '../components/ui/Pagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { usePagination } from '../hooks/usePagination';
+import { isTodayPHT } from '../utils/datetime';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { formatGuestCount } from '../utils/guestCount';
+import {
+  BOOKING_STATUS_FILTER_OPTIONS,
+  STAY_SEARCH_FIELDS,
+  getStayCheckIn,
+} from '../utils/adminListFilter';
 import BookingStayDetails from '../components/admin/BookingStayDetails';
 import BookingStayEditForm from '../components/admin/BookingStayEditForm';
 import AdminModal from '../components/admin/AdminModal';
@@ -54,13 +61,13 @@ const TODAY_FILTERS = {
   departing: 'Departing today',
 };
 
-function isToday(dateStr) {
-  if (!dateStr) return false;
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, '0');
-  const d = String(today.getDate()).padStart(2, '0');
-  return String(dateStr).slice(0, 10) === `${y}-${m}-${d}`;
+function sortByEarliestCheckIn(list) {
+  return [...(list || [])].sort((a, b) => {
+    const aIn = String(a.check_in || '').slice(0, 10);
+    const bIn = String(b.check_in || '').slice(0, 10);
+    if (aIn !== bIn) return aIn.localeCompare(bIn);
+    return String(a.check_out || '').slice(0, 10).localeCompare(String(b.check_out || '').slice(0, 10));
+  });
 }
 
 export default function AdminGuests() {
@@ -76,24 +83,48 @@ export default function AdminGuests() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const filteredBookings = useMemo(() => {
-    if (dayFilter === 'arriving') {
-      return bookings.filter((b) => isToday(b.check_in));
-    }
-    if (dayFilter === 'departing') {
-      return bookings.filter((b) => isToday(b.check_out));
-    }
-    return bookings;
-  }, [bookings, dayFilter]);
+  // Today chips (arriving/departing) stack on top of search / date / status filters.
+  const extraFilter = useCallback(
+    (b) => {
+      if (dayFilter === 'arriving') return isTodayPHT(b.check_in);
+      if (dayFilter === 'departing') return isTodayPHT(b.check_out);
+      return true;
+    },
+    [dayFilter]
+  );
 
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } =
-    usePagination(filteredBookings);
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    status,
+    setStatus,
+    filtered: filteredBookings,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(
+    bookings,
+    {
+      searchFields: STAY_SEARCH_FIELDS,
+      getDate: getStayCheckIn,
+      extraFilter,
+    },
+    dayFilter
+  );
 
   const loadBookings = async () => {
     setLoading(true);
     try {
       const { data } = await api.get('/bookings/admin/all');
-      setBookings(data);
+      setBookings(sortByEarliestCheckIn(data));
       return data;
     } catch (err) {
       toast.error(getApiError(err));
@@ -149,7 +180,7 @@ export default function AdminGuests() {
   };
 
   const handleExport = () => {
-    const result = exportGuestBookingsExcel(bookings);
+    const result = exportGuestBookingsExcel(filteredBookings);
     if (result.ok) {
       toast.success(`Exported ${result.count} guest stay(s) to Excel.`);
     } else {
@@ -183,7 +214,7 @@ export default function AdminGuests() {
         <button
           type="button"
           onClick={() => handleExport()}
-          disabled={loading || bookings.length === 0}
+          disabled={loading || filteredBookings.length === 0}
           className="btn-outline text-sm flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto"
         >
           <Download size={16} />
@@ -191,7 +222,7 @@ export default function AdminGuests() {
         </button>
       </div>
       <p className="text-sm text-aegean-600 mb-4">
-        Each row is one stay. Export Excel includes all guests — current and past stays.
+        Each row is one stay. Export Excel uses the current search and filters.
       </p>
 
       <div className="mb-6 rounded-xl border border-aegean-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -204,29 +235,42 @@ export default function AdminGuests() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {Object.entries(TODAY_FILTERS).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => {
-              if (key === 'all') {
-                setSearchParams({});
-              } else {
-                setSearchParams({ filter: key });
-              }
-              setPage(1);
-            }}
-            className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
-              dayFilter === key
-                ? 'bg-aegean-600 text-white border-aegean-600'
-                : 'bg-white text-aegean-700 border-aegean-200 hover:border-aegean-400'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <AdminListFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, reference, room, email, phone…"
+        showDates
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        status={status}
+        onStatusChange={setStatus}
+        statusOptions={BOOKING_STATUS_FILTER_OPTIONS}
+      >
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(TODAY_FILTERS).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                if (key === 'all') {
+                  setSearchParams({});
+                } else {
+                  setSearchParams({ filter: key });
+                }
+              }}
+              className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+                dayFilter === key
+                  ? 'bg-aegean-600 text-white border-aegean-600'
+                  : 'bg-white text-aegean-700 border-aegean-200 hover:border-aegean-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </AdminListFilters>
 
       {loading ? (
         <Loading />
@@ -234,7 +278,7 @@ export default function AdminGuests() {
         <div className="bg-white rounded-xl shadow-sm">
           {filteredBookings.length === 0 ? (
             <p className="p-8 text-center text-aegean-500">
-              {dayFilter === 'all' ? 'No guest bookings yet.' : 'No stays for this filter today.'}
+              {bookings.length === 0 ? 'No guest bookings yet.' : 'No stays match this filter.'}
             </p>
           ) : (
             <div className="lg:hidden p-4 space-y-3">
@@ -323,7 +367,7 @@ export default function AdminGuests() {
                 ))}
             </tbody>
           </AdminTableShell>
-          {bookings.length > 0 && (
+          {filteredBookings.length > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}

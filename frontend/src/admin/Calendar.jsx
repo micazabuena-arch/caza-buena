@@ -4,10 +4,16 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import ButtonSpinner from '../components/ui/ButtonSpinner';
 import Pagination from '../components/ui/Pagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
 import AdminModal from '../components/admin/AdminModal';
 import BookingStayDetails from '../components/admin/BookingStayDetails';
 import { useToast } from '../context/ToastContext';
-import { usePagination } from '../hooks/usePagination';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+import {
+  BOOKING_STATUS_FILTER_OPTIONS,
+  STAY_SEARCH_FIELDS,
+  getStayCheckIn,
+} from '../utils/adminListFilter';
 import { getAssetUrl } from '../utils/assetUrl';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -39,7 +45,27 @@ export default function AdminCalendar() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(bookings);
+  const {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(
+    bookings,
+    {
+      searchFields: STAY_SEARCH_FIELDS,
+      getDate: getStayCheckIn,
+    },
+    `${year}-${month}`
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -48,10 +74,6 @@ export default function AdminCalendar() {
       .then((r) => setBookings(r.data))
       .finally(() => setLoading(false));
   }, [month, year]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [month, year, setPage]);
 
   const openBookingDetail = async (id) => {
     setDetailOpen(true);
@@ -83,18 +105,18 @@ export default function AdminCalendar() {
     for (let i = 0; i < firstDow; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayBookings = bookings.filter((b) =>
+      const dayBookings = filtered.filter((b) =>
         dateInRange(dateStr, b.check_in, b.check_out)
       );
       cells.push({ day: d, dateStr, bookings: dayBookings });
     }
     return cells;
-  }, [bookings, month, year]);
+  }, [filtered, month, year]);
 
   const selectedDayBookings = useMemo(() => {
     if (!selectedDay) return [];
-    return bookings.filter((b) => dateInRange(selectedDay, b.check_in, b.check_out));
-  }, [bookings, selectedDay]);
+    return filtered.filter((b) => dateInRange(selectedDay, b.check_in, b.check_out));
+  }, [filtered, selectedDay]);
 
   return (
     <div>
@@ -119,6 +141,15 @@ export default function AdminCalendar() {
           Manage all bookings →
         </Link>
       </div>
+
+      <AdminListFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, reference, room…"
+        status={status}
+        onStatusChange={setStatus}
+        statusOptions={BOOKING_STATUS_FILTER_OPTIONS}
+      />
 
       {loading ? (
         <Loading />
@@ -215,8 +246,10 @@ export default function AdminCalendar() {
 
           <h2 className="text-lg font-serif text-aegean-800 mb-4">Upcoming stays</h2>
           <div className="space-y-2">
-            {bookings.length === 0 ? (
-              <p className="text-aegean-600">No upcoming stays this month.</p>
+            {filtered.length === 0 ? (
+              <p className="text-aegean-600">
+                {bookings.length === 0 ? 'No upcoming stays this month.' : 'No stays match this filter.'}
+              </p>
             ) : (
               pageItems.map((b) => (
                 <button
@@ -235,7 +268,7 @@ export default function AdminCalendar() {
                 </button>
               ))
             )}
-            {bookings.length > 0 && (
+            {filtered.length > 0 && (
               <Pagination
                 page={page}
                 totalPages={totalPages}

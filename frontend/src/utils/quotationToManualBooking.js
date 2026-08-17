@@ -8,6 +8,7 @@ import { emptyIslandHoppingForm } from '../data/islandHoppingRates';
 import { createRoomLine } from './bookingRoomLines';
 import {
   computeAccommodation,
+  computeCustomAddons,
   computeQuotationTotals,
   computeTour,
   normalizeQuotation,
@@ -117,6 +118,16 @@ function quoteRoomsToLines(quoteRooms, rooms, additionalPaxLines = []) {
   return applyAdditionalPaxToRoomLines(baseLines, additionalPaxLines);
 }
 
+function quoteCustomAddonsToRows(quote) {
+  return computeCustomAddons(quote)
+    .lines.filter((line) => line.total > 0)
+    .map((line) => ({
+      label: line.label,
+      description: line.detail || (line.qty > 1 ? `${line.qty} × ₱${line.rate}` : ''),
+      amount: line.total,
+    }));
+}
+
 function quoteExtrasToBookingExtras(quote) {
   const extras = emptyBookingExtras();
   const bilaoQty = bilaoQtyFromLines(quote.bilaoLines || []);
@@ -139,8 +150,8 @@ function quoteExtrasToBookingExtras(quote) {
   return extras;
 }
 
-function quoteIslandHoppingToForm(quote) {
-  const tour = computeTour(quote);
+function quoteIslandHoppingToForm(quote, islandHoppingRates) {
+  const tour = computeTour(quote, { islandHoppingRates });
   const hasTour = tour.total > 0;
 
   if (!hasTour) {
@@ -156,6 +167,11 @@ function quoteIslandHoppingToForm(quote) {
       soa_summary: true,
       summary_pax: String(totalPax > 0 ? totalPax : quote.pax || 1),
       summary_amount: String(tour.total),
+      summary_boats: (tour.boatLines || []).map((line) => ({
+        id: line.boat?.id || '',
+        label: line.boat?.label || '',
+        rate: line.rate,
+      })),
     },
   };
 }
@@ -224,8 +240,9 @@ function buildQuotedAccommodationPricing(quote, bookingRoomLines) {
  * - rooms + additionalPaxLines → roomLines (guest counts)
  * - discountAmount/Label → admin_discount_amount/note (room stay only)
  * - downPaymentAmount → payment_option / custom_payment_amount
- * - tour* → island hopping SOA summary
+ * - tour* → island hopping SOA summary (quoted boat rates)
  * - bilao/boodle → bookingExtras
+ * - customAddonLines → quoted_addons
  */
 export function mapQuotationToManualBooking(
   savedQuote,
@@ -234,7 +251,7 @@ export function mapQuotationToManualBooking(
   const quote = normalizeQuotation(savedQuote?.quote_data || savedQuote || {});
   const totals = computeQuotationTotals(quote, { islandHoppingRates, foodAddOnRates });
   const dates = resolveStayDates(quote);
-  const island = quoteIslandHoppingToForm(quote);
+  const island = quoteIslandHoppingToForm(quote, islandHoppingRates);
   const payment = resolvePaymentFields(quote, totals, depositPercent);
   const quotationReference = savedQuote?.reference_code || null;
   const discountAmount = formatDiscountAmount(quote.discountAmount);
@@ -257,7 +274,7 @@ export function mapQuotationToManualBooking(
       check_out: dates.check_out,
       status: 'confirmed',
       special_requests: '',
-      send_confirmation_email: false,
+      send_confirmation_email: true,
       payment_method_id: '',
       payment_option: payment.payment_option,
       custom_payment_amount: payment.custom_payment_amount,
@@ -268,5 +285,6 @@ export function mapQuotationToManualBooking(
     bookingExtras: quoteExtrasToBookingExtras(quote),
     islandHoppingEnabled: island.enabled,
     islandHopping: island.data,
+    quotedAddons: quoteCustomAddonsToRows(quote),
   };
 }

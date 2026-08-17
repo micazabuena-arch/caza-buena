@@ -323,17 +323,33 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
               />
             )}
             <Row label="Booking total" value={`₱${payment.total.toLocaleString()}`} />
-            <Row
-              label={payment.upfrontLabel}
-              value={
-                <>
-                  ₱{payment.payNow.toLocaleString()}
-                  {payment.paymentOptionLabel && (
-                    <span className="text-aegean-500"> ({payment.paymentOptionLabel})</span>
-                  )}
-                </>
-              }
-            />
+            {payment.paymentLines?.length > 0 ? (
+              <>
+                {payment.paymentLines.map((line) => (
+                  <Row
+                    key={line.id || `${line.label}-${line.amount}`}
+                    label={line.label}
+                    value={`₱${line.amount.toLocaleString()}`}
+                  />
+                ))}
+                <Row
+                  label="Total amount paid"
+                  value={`₱${payment.payNow.toLocaleString()}`}
+                />
+              </>
+            ) : (
+              <Row
+                label={payment.upfrontLabel}
+                value={
+                  <>
+                    ₱{payment.payNow.toLocaleString()}
+                    {payment.paymentOptionLabel && (
+                      <span className="text-aegean-500"> ({payment.paymentOptionLabel})</span>
+                    )}
+                  </>
+                }
+              />
+            )}
             {payment.isPartial && (
               <Row label="Balance due" value={`₱${payment.balance.toLocaleString()}`} />
             )}

@@ -10,8 +10,11 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
+
+const PAYMENT_SEARCH_FIELDS = ['name', 'type', 'account_name', 'account_number', 'instructions'];
 
 const PAYMENT_TYPES = [
   { value: 'gcash', label: 'GCash' },
@@ -59,7 +62,18 @@ export default function AdminPaymentMethods() {
   const confirm = useConfirm();
   // Payment methods hold bank / e-wallet account details — only full admins may manage them.
   const { isFullAdmin } = useAuth();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(methods);
+  const {
+    search,
+    setSearch,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(methods, { searchFields: PAYMENT_SEARCH_FIELDS });
   const isDirty = useDirtySnapshot(form, modalOpen);
 
   const editingMethod = editingId ? methods.find((m) => m.id === editingId) : null;
@@ -223,10 +237,22 @@ export default function AdminPaymentMethods() {
       </p>
       {error && !modalOpen && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
+      {methods.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search name, account, type…"
+        />
+      )}
+
       <div className="space-y-3">
         {methods.length === 0 ? (
           <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
             No payment methods yet. Click Add payment method to create one.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
+            No payment methods match this search.
           </p>
         ) : (
           pageItems.map((m) => (
@@ -271,7 +297,7 @@ export default function AdminPaymentMethods() {
             </div>
           ))
         )}
-        {methods.length > 0 && (
+        {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}

@@ -147,10 +147,21 @@ function generateBookingSoaPdfWithDoc(booking, PDFDocument, options = {}) {
         bold: true,
         width: pageWidth,
       });
-      y = drawTableRow(doc, y, payment.upfrontLabel, formatSoaAmount(payment.payNow), {
-        bold: true,
-        width: pageWidth,
+      (payment.paymentLines || []).forEach((line) => {
+        y = drawTableRow(doc, y, line.label, formatSoaAmount(line.amount), {
+          width: pageWidth,
+        });
       });
+      y = drawTableRow(
+        doc,
+        y,
+        payment.paymentLines?.length > 0 ? 'Total Amount Paid' : payment.upfrontLabel,
+        formatSoaAmount(payment.payNow),
+        {
+          bold: true,
+          width: pageWidth,
+        }
+      );
       y = drawTableRow(doc, y, 'Balance Due', formatSoaAmount(payment.balance), {
         bold: true,
         width: pageWidth,

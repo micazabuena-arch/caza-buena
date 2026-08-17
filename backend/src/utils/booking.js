@@ -15,12 +15,20 @@ export function calculateNights(checkIn, checkOut) {
   return diff > 0 ? diff : 0;
 }
 
-/** Local YYYY-MM-DD for the server clock (used for ante-date / recording stays). */
+/** Philippine Time — resort local day for ante-date checks and daily counts. */
+export const PHT_TIMEZONE = 'Asia/Manila';
+
+/**
+ * YYYY-MM-DD for "today" in Philippine Time.
+ * Ensures check-in / check-out notifications flip at 12:00 AM PHT, not UTC midnight.
+ */
 export function todayYmd(referenceDate = new Date()) {
-  const y = referenceDate.getFullYear();
-  const m = String(referenceDate.getMonth() + 1).padStart(2, '0');
-  const d = String(referenceDate.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: PHT_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(referenceDate);
 }
 
 /**

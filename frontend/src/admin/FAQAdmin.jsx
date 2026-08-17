@@ -8,8 +8,11 @@ import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
+
+const FAQ_SEARCH_FIELDS = ['question', 'answer', 'category'];
 
 const emptyForm = () => ({
   question: '',
@@ -30,7 +33,18 @@ export default function AdminFAQ() {
   const [error, setError] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(faqs);
+  const {
+    search,
+    setSearch,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(faqs, { searchFields: FAQ_SEARCH_FIELDS });
   const isDirty = useDirtySnapshot(form, modalOpen);
 
   const load = () => api.get('/faqs').then((r) => setFaqs(r.data)).finally(() => setLoading(false));
@@ -130,10 +144,22 @@ export default function AdminFAQ() {
         </button>
       </div>
 
+      {faqs.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search question, answer, category…"
+        />
+      )}
+
       <div className="space-y-3">
         {faqs.length === 0 ? (
           <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
             No FAQs yet. Click Add FAQ to create one.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-aegean-600 text-sm bg-white rounded-xl border border-aegean-100 p-6">
+            No FAQs match this search.
           </p>
         ) : (
           pageItems.map((faq) => (
@@ -157,7 +183,7 @@ export default function AdminFAQ() {
             </div>
           ))
         )}
-        {faqs.length > 0 && (
+        {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}

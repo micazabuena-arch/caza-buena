@@ -6,7 +6,10 @@ import UploadLabelButton from '../components/ui/UploadLabelButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+
+const GALLERY_SEARCH_FIELDS = ['title', 'category'];
 
 export default function AdminGallery() {
   const [images, setImages] = useState([]);
@@ -14,7 +17,18 @@ export default function AdminGallery() {
   const [uploading, setUploading] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(images);
+  const {
+    search,
+    setSearch,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(images, { searchFields: GALLERY_SEARCH_FIELDS });
 
   const load = () =>
     api
@@ -81,8 +95,19 @@ export default function AdminGallery() {
           Upload Image
         </UploadLabelButton>
       </div>
+      {images.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search photo title or category…"
+        />
+      )}
       {loading ? (
         <Loading />
+      ) : images.length === 0 ? (
+        <p className="text-aegean-600 text-sm">No gallery photos yet.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-aegean-600 text-sm">No photos match this search.</p>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {pageItems.map((img) => (
@@ -99,7 +124,7 @@ export default function AdminGallery() {
           ))}
         </div>
       )}
-      {!loading && images.length > 0 && (
+      {!loading && filtered.length > 0 && (
         <Pagination
           page={page}
           totalPages={totalPages}

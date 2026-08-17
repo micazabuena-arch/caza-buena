@@ -5,8 +5,15 @@ import SubmitButton from '../components/ui/SubmitButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+import {
+  ACTIVE_STATUS_FILTER_OPTIONS,
+  matchActiveStatus,
+} from '../utils/adminListFilter';
 import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
+
+const DISCOUNT_SEARCH_FIELDS = ['code', 'description'];
 
 export default function AdminDiscounts() {
   const [discounts, setDiscounts] = useState([]);
@@ -14,7 +21,23 @@ export default function AdminDiscounts() {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(discounts);
+  const {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(discounts, {
+    searchFields: DISCOUNT_SEARCH_FIELDS,
+    matchStatus: matchActiveStatus,
+  });
   const [form, setForm] = useState({
     code: '', description: '', type: 'percentage', value: 10, min_nights: 1,
   });
@@ -85,11 +108,27 @@ export default function AdminDiscounts() {
         </SubmitButton>
       </form>
 
+      {discounts.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search code or description…"
+          status={status}
+          onStatusChange={setStatus}
+          statusOptions={ACTIVE_STATUS_FILTER_OPTIONS}
+        />
+      )}
+
       {loading ? (
         <Loading />
       ) : (
         <div className="space-y-3">
-          {pageItems.map((d) => (
+          {filtered.length === 0 ? (
+            <p className="text-aegean-600 text-sm">
+              {discounts.length === 0 ? 'No discount codes yet.' : 'No discounts match this filter.'}
+            </p>
+          ) : (
+            pageItems.map((d) => (
             <div key={d.id} className="bg-white p-4 rounded-xl flex justify-between items-center">
               <div>
                 <span className="font-mono font-medium">{d.code}</span>
@@ -101,8 +140,9 @@ export default function AdminDiscounts() {
                 {d.is_active ? 'Deactivate' : 'Activate'}
               </button>
             </div>
-          ))}
-          {discounts.length > 0 && (
+          ))
+          )}
+          {filtered.length > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}

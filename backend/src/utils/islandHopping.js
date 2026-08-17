@@ -267,17 +267,33 @@ export function resolveAdminIslandHoppingPricing(
   if (ihData.soa_summary) {
     const pax = parseInt(ihData.summary_pax, 10);
     const amount = Math.round(parseFloat(ihData.summary_amount) * 100) / 100;
-    const boatAllocations = planBoatsForPax(pax, rates);
+    const quotedBoats = Array.isArray(ihData.summary_boats)
+      ? ihData.summary_boats.filter((boat) => boat && (boat.label || boat.id))
+      : [];
+    const boatAllocations = quotedBoats.length ? null : planBoatsForPax(pax, rates);
+    const boatPlan =
+      quotedBoats.length > 0
+        ? quotedBoats
+            .map((boat) => {
+              const label = boat.label || boat.id || 'Boat';
+              const rate = Number(boat.rate);
+              return Number.isFinite(rate) && rate > 0
+                ? `${label} — ₱${rate.toLocaleString('en-PH', { maximumFractionDigits: 2 })}`
+                : label;
+            })
+            .join(' + ')
+        : formatBoatPlanLabel(boatAllocations);
     return {
       amount,
       stored: {
         soa_summary: true,
         summary_pax: pax,
         summary_amount: amount,
+        summary_boats: quotedBoats,
         total: amount,
         passenger_count: pax,
-        boat_plan: formatBoatPlanLabel(boatAllocations),
-        boat_count: boatAllocations?.length || 0,
+        boat_plan: boatPlan,
+        boat_count: quotedBoats.length || boatAllocations?.length || 0,
         passengers: [],
         passenger_address: '',
         payor_name: '',

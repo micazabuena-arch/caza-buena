@@ -52,6 +52,7 @@ export async function createManualBooking(body) {
     quoted_stay_subtotal,
     quoted_room_line_subtotals,
     quotation_id,
+    quoted_addons: quotedAddonsBody = [],
   } = body;
 
   const hasRoomLines = Array.isArray(roomLinesBody) && roomLinesBody.length > 0;
@@ -148,12 +149,22 @@ export async function createManualBooking(body) {
   });
   if (discountResolved.error) return { error: discountResolved.error };
 
+  const quotedAddons = (Array.isArray(quotedAddonsBody) ? quotedAddonsBody : [])
+    .map((row) => ({
+      label: String(row?.label || '').trim() || 'Add-on',
+      description: String(row?.description || row?.detail || '').trim() || null,
+      amount: Number(row?.amount),
+    }))
+    .filter((row) => Number.isFinite(row.amount) && row.amount !== 0);
+  const quotedAddonsTotal = quotedAddons.reduce((sum, row) => sum + row.amount, 0);
+
   const roomTotal = Math.max(0, subtotal - (discountResolved.amount || 0));
   const total =
     roomTotal +
     islandHoppingAmount +
     extrasValidation.bilao_amount +
-    extrasValidation.boodle_fight_amount;
+    extrasValidation.boodle_fight_amount +
+    quotedAddonsTotal;
 
   const [settingRows] = await pool.query(
     "SELECT setting_value FROM site_settings WHERE setting_key = 'booking_deposit_percent'"
@@ -228,6 +239,30 @@ export async function createManualBooking(body) {
   );
 
   await insertBookingRooms(pool, result.insertId, pricedLines);
+
+  for (let i = 0; i < quotedAddons.length; i += 1) {
+    const addon = quotedAddons[i];
+    await pool.query(
+      `INSERT INTO booking_addons (booking_id, label, description, amount, include_in_soa, include_in_confirmation, sort_order)
+       VALUES (?, ?, ?, ?, 1, 1, ?)`,
+      [result.insertId, addon.label, addon.description, addon.amount, i]
+    );
+  }
+
+  // Confirmed / already-paid manual bookings start the payment series with this amount.
+  if (payResolved.amount > 0 && ['confirmed', 'payment_submitted'].includes(status)) {
+    try {
+      const { seedBookingPaymentIfEmpty } = await import('./bookingPayments.js');
+      await seedBookingPaymentIfEmpty(pool, result.insertId, {
+        payment_type: payment_option || 'custom',
+        amount: payResolved.amount,
+        note: 'Initial payment on manual booking',
+        paid_at: confirmedAt || new Date(),
+      });
+    } catch (err) {
+      console.warn('[manual booking] payment ledger seed skipped:', err.message);
+    }
+  }
 
   const roomNames = pricedLines.map((l) => l.room.name).join(', ');
   const bookingRow = {

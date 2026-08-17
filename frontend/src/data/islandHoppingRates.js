@@ -224,6 +224,7 @@ export const emptyIslandHoppingForm = () => ({
   soa_summary: false,
   summary_pax: '',
   summary_amount: '',
+  summary_boats: [],
   passengers: [emptyPassenger()],
   passenger_address: '',
   payor_name: '',
@@ -232,6 +233,20 @@ export const emptyIslandHoppingForm = () => ({
   emergency_contact_name: '',
   emergency_contact_phone: '',
 });
+
+/** SOA summary boat line from a quoted tour (keeps the quoted rate, not a live catalog guess). */
+export function formatQuotedBoatPlanLabel(boats) {
+  if (!Array.isArray(boats) || boats.length === 0) return '';
+  return boats
+    .map((boat) => {
+      const label = boat.label || boat.id || 'Boat';
+      const rate = Number(boat.rate);
+      return Number.isFinite(rate) && rate > 0
+        ? `${label} — ₱${rate.toLocaleString('en-PH', { maximumFractionDigits: 2 })}`
+        : label;
+    })
+    .join(' + ');
+}
 
 /** Admin manual booking: total from summary mode or computed passenger list. */
 export function getAdminIslandHoppingTotal(data, rates = ISLAND_HOPPING_RATES) {

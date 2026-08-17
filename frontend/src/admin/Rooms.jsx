@@ -11,9 +11,14 @@ import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
 import { ROOM_INVENTORY } from '../data/resortRules';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
+import {
+  ACTIVE_STATUS_FILTER_OPTIONS,
+  matchActiveStatus,
+} from '../utils/adminListFilter';
 
 const emptyForm = () => ({
   name: '',
@@ -51,6 +56,8 @@ function slugify(text) {
     .replace(/^-|-$/g, '');
 }
 
+const ROOM_SEARCH_FIELDS = ['name', 'slug', 'room_type', 'short_description'];
+
 export default function AdminRooms() {
   const [rooms, setRooms] = useState([]);
   const { isFullAdmin } = useAuth();
@@ -68,7 +75,23 @@ export default function AdminRooms() {
   const [holidayRates, setHolidayRates] = useState([]);
   const [newHoliday, setNewHoliday] = useState(emptyHolidayForm());
   const [holidaySaving, setHolidaySaving] = useState(false);
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(rooms);
+  const {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(rooms, {
+    searchFields: ROOM_SEARCH_FIELDS,
+    matchStatus: matchActiveStatus,
+  });
   const isDirty = useDirtySnapshot({ form, newHoliday }, Boolean(editingId));
 
   // Staff may add rooms and set the NEW room's nightly/weekend rates, but they
@@ -410,6 +433,17 @@ export default function AdminRooms() {
           <Plus size={18} /> Add Room
         </button>
       </div>
+
+      {rooms.length > 0 && (
+        <AdminListFilters
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search room name, slug, type…"
+          status={status}
+          onStatusChange={setStatus}
+          statusOptions={ACTIVE_STATUS_FILTER_OPTIONS}
+        />
+      )}
 
       <AdminModal
         open={Boolean(editingId)}
@@ -782,6 +816,8 @@ export default function AdminRooms() {
         <div className="grid gap-4">
           {rooms.length === 0 ? (
             <p className="text-aegean-600 text-center py-12 bg-white rounded-xl">No rooms yet. Click Add Room to create one.</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-aegean-600 text-center py-12 bg-white rounded-xl">No rooms match this filter.</p>
           ) : (
             pageItems.map((room) => (
               <div
@@ -844,7 +880,7 @@ export default function AdminRooms() {
               </div>
             ))
           )}
-          {rooms.length > 0 && (
+          {filtered.length > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}

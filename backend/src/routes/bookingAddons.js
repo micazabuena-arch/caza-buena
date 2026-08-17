@@ -4,17 +4,17 @@ import pool from '../config/database.js';
 
 const router = Router();
 
-/** Adjust booking totals when a custom add-on amount changes. */
+/** Adjust booking total when a custom add-on amount changes.
+ *  Do not bump amount_to_pay — that field tracks recorded payments / pay-now. */
 async function adjustBookingTotals(bookingId, delta) {
   const amount = Math.round(Number(delta) * 100) / 100;
   if (!bookingId || !Number.isFinite(amount) || amount === 0) return;
 
   await pool.query(
     `UPDATE bookings
-     SET total_amount = GREATEST(0, total_amount + ?),
-         amount_to_pay = GREATEST(0, amount_to_pay + ?)
+     SET total_amount = GREATEST(0, total_amount + ?)
      WHERE id = ?`,
-    [amount, amount, bookingId]
+    [amount, bookingId]
   );
 }
 

@@ -23,6 +23,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/ui/Loading';
 import api from '../api/client';
+import { msUntilNextPhtMidnight } from '../utils/datetime';
 
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -126,7 +127,7 @@ export default function AdminLayout() {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) return undefined;
     const loadCounts = () => {
       api
         .get('/admin/guests/daily-counts')
@@ -134,8 +135,20 @@ export default function AdminLayout() {
         .catch(() => {});
     };
     loadCounts();
-    const timer = setInterval(loadCounts, 5 * 60 * 1000);
-    return () => clearInterval(timer);
+    // Poll periodically, and also refresh right at 12:00 AM PHT so the badge flips promptly.
+    const pollTimer = setInterval(loadCounts, 5 * 60 * 1000);
+    let midnightTimer = null;
+    const scheduleMidnightRefresh = () => {
+      midnightTimer = setTimeout(() => {
+        loadCounts();
+        scheduleMidnightRefresh();
+      }, msUntilNextPhtMidnight());
+    };
+    scheduleMidnightRefresh();
+    return () => {
+      clearInterval(pollTimer);
+      if (midnightTimer) clearTimeout(midnightTimer);
+    };
   }, [user]);
 
   useEffect(() => {

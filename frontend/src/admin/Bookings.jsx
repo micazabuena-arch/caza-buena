@@ -14,8 +14,10 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
 import { formatGuestCount } from '../utils/guestCount';
+import { STAY_SEARCH_FIELDS, getStayCheckIn } from '../utils/adminListFilter';
 import { getBookingPaymentSummary } from '../utils/bookingPayment';
 import BookingDateEditor from '../components/admin/BookingDateEditor';
 import AdminModal from '../components/admin/AdminModal';
@@ -78,7 +80,12 @@ export default function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [statusForm, setStatusForm] = useState({ status: '', admin_notes: '', rejection_reason: '' });
+  const [statusForm, setStatusForm] = useState({
+    status: '',
+    admin_notes: '',
+    rejection_reason: '',
+    send_confirmation_email: false,
+  });
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [detailTab, setDetailTab] = useState('booking');
@@ -112,7 +119,15 @@ export default function AdminBookings() {
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
 
+  // Status dropdown still loads from the API; search + check-in dates filter the current result set.
   const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filtered,
     page,
     setPage,
     pageItems,
@@ -120,11 +135,14 @@ export default function AdminBookings() {
     totalItems,
     from,
     to,
-  } = usePagination(bookings);
-
-  useEffect(() => {
-    setPage(1);
-  }, [filter, setPage]);
+  } = useFilteredPagination(
+    bookings,
+    {
+      searchFields: STAY_SEARCH_FIELDS,
+      getDate: getStayCheckIn,
+    },
+    filter
+  );
 
   const openDetail = async (id, { silent = false } = {}) => {
     if (!silent) setActionLoading(`${id}-manage`);
@@ -137,6 +155,7 @@ export default function AdminBookings() {
         status: data.status,
         admin_notes: data.admin_notes || '',
         rejection_reason: data.rejection_reason || '',
+        send_confirmation_email: data.status !== 'confirmed',
       });
     } catch (err) {
       toast.error(getApiError(err));
@@ -185,9 +204,13 @@ export default function AdminBookings() {
       cancelled: 'cancel this booking',
     };
     const action = statusLabels[statusForm.status] || 'update this booking status';
+    const willEmail =
+      statusForm.status === 'confirmed' && statusForm.send_confirmation_email;
     const ok = await confirm({
       title: 'Save booking status?',
-      message: `Are you sure you want to ${action}? The guest may be notified by email.`,
+      message: willEmail
+        ? `Are you sure you want to ${action}? A confirmation email will be sent to the guest.`
+        : `Are you sure you want to ${action}?`,
       confirmLabel: 'Yes, save',
       variant: statusForm.status === 'rejected' || statusForm.status === 'cancelled' ? 'danger' : 'primary',
     });
@@ -201,11 +224,13 @@ export default function AdminBookings() {
         toast.success('Booking rejected. Rejection email is being sent to the guest.');
       } else if (data.email_pending && statusForm.status === 'confirmed') {
         toast.success('Booking confirmed. Confirmation email is being sent to the guest.');
-      } else if (statusForm.status === 'confirmed') {
+      } else if (statusForm.status === 'confirmed' && statusForm.send_confirmation_email) {
         toast.warning(
           data.email_hint ||
             'Booking confirmed, but the email was not sent. Check SMTP settings on the server.'
         );
+      } else if (statusForm.status === 'confirmed') {
+        toast.success('Booking confirmed. No confirmation email was sent.');
       } else if (statusForm.status === 'rejected') {
         toast.success('Booking rejected.');
       } else {
@@ -229,7 +254,10 @@ export default function AdminBookings() {
     if (!ok) return;
     setActionLoading(`${id}-approve`);
     try {
-      const { data } = await api.patch(`/bookings/admin/${id}/status`, { status: 'confirmed' });
+      const { data } = await api.patch(`/bookings/admin/${id}/status`, {
+        status: 'confirmed',
+        send_confirmation_email: true,
+      });
       if (data.email_sent) {
         toast.success('Booking approved. Confirmation email sent.');
       } else if (data.email_pending) {
@@ -357,12 +385,25 @@ export default function AdminBookings() {
         </p>
       </div>
 
+      <AdminListFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, reference, room, email, phone…"
+        showDates
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+      />
+
       {loading ? (
         <Loading />
       ) : (
         <div className="bg-white rounded-xl shadow-sm">
-          {bookings.length === 0 ? (
-            <p className="p-8 text-center text-aegean-500">No bookings for this filter.</p>
+          {filtered.length === 0 ? (
+            <p className="p-8 text-center text-aegean-500">
+              {bookings.length === 0 ? 'No bookings for this status.' : 'No bookings match this search.'}
+            </p>
           ) : (
             <div className="lg:hidden p-4 space-y-3">
               {pageItems.map((b) => (
@@ -443,7 +484,7 @@ export default function AdminBookings() {
               </tr>
             </thead>
             <tbody>
-              {bookings.length > 0 &&
+              {filtered.length > 0 &&
                 pageItems.map((b) => (
                   <tr key={b.id} className={`border-t ${selected === b.id ? 'bg-aegean-50' : ''}`}>
                     <td className="p-4 font-mono text-xs">{b.reference_code}</td>
@@ -519,6 +560,7 @@ export default function AdminBookings() {
                 ))}
             </tbody>
           </AdminTableShell>
+          {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}
@@ -527,6 +569,7 @@ export default function AdminBookings() {
             to={to}
             onPageChange={setPage}
           />
+          )}
         </div>
       )}
 
@@ -631,12 +674,25 @@ export default function AdminBookings() {
                     return (
                       <>
                         <p><strong>Booking total:</strong> ₱{pay.total.toLocaleString()}</p>
-                        <p>
-                          <strong>{pay.upfrontLabel}:</strong> ₱{pay.payNow.toLocaleString()}
-                          {pay.paymentOptionLabel && (
-                            <span className="text-aegean-500 text-sm"> ({pay.paymentOptionLabel})</span>
-                          )}
-                        </p>
+                        {pay.paymentLines?.length > 0 ? (
+                          <>
+                            {pay.paymentLines.map((line) => (
+                              <p key={line.id || `${line.label}-${line.amount}`}>
+                                <strong>{line.label}:</strong> ₱{line.amount.toLocaleString()}
+                              </p>
+                            ))}
+                            <p>
+                              <strong>Total amount paid:</strong> ₱{pay.payNow.toLocaleString()}
+                            </p>
+                          </>
+                        ) : (
+                          <p>
+                            <strong>{pay.upfrontLabel}:</strong> ₱{pay.payNow.toLocaleString()}
+                            {pay.paymentOptionLabel && (
+                              <span className="text-aegean-500 text-sm"> ({pay.paymentOptionLabel})</span>
+                            )}
+                          </p>
+                        )}
                         {pay.isPartial && (
                           <p><strong>Balance due:</strong> ₱{pay.balance.toLocaleString()}</p>
                         )}
@@ -834,7 +890,17 @@ export default function AdminBookings() {
                 <label className="block text-sm font-medium mb-1">Booking status</label>
                 <select
                   value={statusForm.status}
-                  onChange={(e) => setStatusForm((f) => ({ ...f, status: e.target.value }))}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setStatusForm((f) => ({
+                      ...f,
+                      status: next,
+                      send_confirmation_email:
+                        next === 'confirmed' && detail.status !== 'confirmed'
+                          ? true
+                          : f.send_confirmation_email,
+                    }));
+                  }}
                   className="w-full border rounded-lg px-3 py-2"
                 >
                   {statuses.map((s) => (
@@ -842,6 +908,36 @@ export default function AdminBookings() {
                   ))}
                 </select>
               </div>
+              {statusForm.status === 'confirmed' && (
+                <label className="flex items-start gap-2 text-sm text-aegean-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(statusForm.send_confirmation_email)}
+                    onChange={(e) =>
+                      setStatusForm((f) => ({ ...f, send_confirmation_email: e.target.checked }))
+                    }
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    Send confirmation email to guest
+                    {detail.status === 'confirmed' ? (
+                      <span className="block text-xs text-aegean-500 mt-0.5">
+                        Check this to send (or resend) the confirmation now. Saving without it will
+                        not email the guest.
+                      </span>
+                    ) : (
+                      <span className="block text-xs text-aegean-500 mt-0.5">
+                        Uncheck if you want to confirm now and email the guest later.
+                      </span>
+                    )}
+                    {!detail.guest_email && (
+                      <span className="block text-xs text-red-600 mt-0.5">
+                        Add a guest email on the stay first — there is no address to send to.
+                      </span>
+                    )}
+                  </span>
+                </label>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1">Admin notes (internal)</label>
                 <textarea

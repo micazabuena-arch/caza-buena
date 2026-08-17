@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import api from '../api/client';
 import Loading from '../components/ui/Loading';
 import Pagination from '../components/ui/Pagination';
-import { usePagination } from '../hooks/usePagination';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+import { STAY_SEARCH_FIELDS, getStayCheckIn } from '../utils/adminListFilter';
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
@@ -21,7 +23,25 @@ export default function AdminDashboard() {
 }
 
 function DashboardContent({ stats, recent_bookings }) {
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(recent_bookings);
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filtered,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(recent_bookings, {
+    searchFields: STAY_SEARCH_FIELDS,
+    getDate: getStayCheckIn,
+  });
 
   return (
     <div>
@@ -54,7 +74,23 @@ function DashboardContent({ stats, recent_bookings }) {
       </div>
 
       <h2 className="text-lg sm:text-xl font-serif mb-4">Recent Bookings</h2>
+      <AdminListFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, reference, room…"
+        showDates
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+      />
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {filtered.length === 0 ? (
+          <p className="p-8 text-center text-aegean-500">
+            {recent_bookings.length === 0 ? 'No recent bookings.' : 'No bookings match this filter.'}
+          </p>
+        ) : (
+          <>
         <div className="lg:hidden divide-y divide-aegean-100">
           {pageItems.map((b) => (
             <Link
@@ -97,7 +133,7 @@ function DashboardContent({ stats, recent_bookings }) {
             ))}
           </tbody>
         </table>
-        {recent_bookings.length > 0 && (
+        {filtered.length > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}
@@ -106,6 +142,8 @@ function DashboardContent({ stats, recent_bookings }) {
             to={to}
             onPageChange={setPage}
           />
+        )}
+          </>
         )}
       </div>
     </div>

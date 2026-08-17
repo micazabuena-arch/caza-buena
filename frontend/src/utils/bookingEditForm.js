@@ -47,6 +47,7 @@ export function bookingToEditState(booking) {
           soa_summary: Boolean(islandRaw.soa_summary),
           summary_pax: islandRaw.summary_pax ?? '',
           summary_amount: islandRaw.summary_amount ?? '',
+          summary_boats: Array.isArray(islandRaw.summary_boats) ? islandRaw.summary_boats : [],
           passengers: (islandRaw.passengers || []).map((p) => ({
             full_name: p.full_name || '',
             age: p.age ?? '',
@@ -130,6 +131,7 @@ export function editStateToPayload(state, roomLines = []) {
         soa_summary: true,
         summary_pax: parseInt(state.islandHopping.summary_pax, 10) || 0,
         summary_amount: parseFloat(state.islandHopping.summary_amount) || 0,
+        summary_boats: state.islandHopping.summary_boats || [],
       };
     } else {
       payload.island_hopping_data = {

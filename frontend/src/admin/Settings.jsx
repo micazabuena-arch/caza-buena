@@ -11,6 +11,9 @@ import SubmitButton from '../components/ui/SubmitButton';
 import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import AdminTableShell from '../components/ui/AdminTableShell';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
+import AdminListFilters from '../components/ui/AdminListFilters';
+import { useAdminListFilter } from '../hooks/useAdminListFilter';
+import { ACTIVE_STATUS_FILTER_OPTIONS } from '../utils/adminListFilter';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -32,8 +35,15 @@ function FieldLabel({ children, required }) {
   );
 }
 
+const ACCOUNT_SEARCH_FIELDS = ['name', 'email', 'role'];
+
 function accountIsActive(account) {
   return account?.is_active == null || Number(account.is_active) === 1;
+}
+
+function matchAccountActive(item, status) {
+  const active = accountIsActive(item);
+  return status === 'active' ? active : !active;
 }
 
 export default function AdminSettings() {
@@ -62,6 +72,16 @@ export default function AdminSettings() {
   const [accountError, setAccountError] = useState('');
   const passwordDirty = useDirtySnapshot(passwordForm, passwordModalOpen);
   const accountDirty = useDirtySnapshot(accountForm, accountModalOpen);
+  const {
+    search,
+    setSearch,
+    status,
+    setStatus,
+    filtered: filteredAccounts,
+  } = useAdminListFilter(accounts, {
+    searchFields: ACCOUNT_SEARCH_FIELDS,
+    matchStatus: matchAccountActive,
+  });
 
   const loadAccounts = () =>
     api
@@ -299,8 +319,25 @@ export default function AdminSettings() {
           )}
         </div>
 
+        {accounts.length > 0 && (
+          <AdminListFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, email, role…"
+            status={status}
+            onStatusChange={setStatus}
+            statusOptions={ACTIVE_STATUS_FILTER_OPTIONS}
+          />
+        )}
+
+        {filteredAccounts.length === 0 ? (
+          <p className="text-sm text-aegean-600 mb-4">
+            {accounts.length === 0 ? 'No accounts yet.' : 'No accounts match this filter.'}
+          </p>
+        ) : null}
+
         <div className="lg:hidden space-y-3">
-          {accounts.map((account) => {
+          {filteredAccounts.map((account) => {
             const active = accountIsActive(account);
             return (
               <div
@@ -351,7 +388,7 @@ export default function AdminSettings() {
             </tr>
           </thead>
           <tbody>
-            {accounts.map((account) => {
+            {filteredAccounts.map((account) => {
               const active = accountIsActive(account);
               return (
                 <tr

@@ -408,6 +408,56 @@ async function run() {
     'TINYINT(1) NOT NULL DEFAULT 1 AFTER `role`'
   );
 
+  // Stay payments listed as a series (DP → partial → full) instead of one overwritten total.
+  console.log('\nbooking_payments table:');
+  const [bookingPaymentsTable] = await pool.query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'booking_payments'`
+  );
+  if (Number(bookingPaymentsTable[0].c) === 0) {
+    await pool.query(`
+      CREATE TABLE booking_payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        booking_id INT NOT NULL,
+        payment_type ENUM('deposit', 'partial', 'full', 'custom') NOT NULL DEFAULT 'custom',
+        amount DECIMAL(10, 2) NOT NULL,
+        note VARCHAR(255) NULL,
+        paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_booking_payments_booking (booking_id),
+        CONSTRAINT fk_booking_payments_booking
+          FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('  + created booking_payments');
+  } else {
+    console.log('  ✓ booking_payments (already exists)');
+  }
+
+  // Seed one ledger row from amount_to_pay for bookings that already look paid.
+  const [backfill] = await pool.query(`
+    INSERT INTO booking_payments (booking_id, payment_type, amount, note, paid_at)
+    SELECT b.id,
+           CASE
+             WHEN b.payment_option IN ('deposit', 'full', 'custom') THEN b.payment_option
+             ELSE 'custom'
+           END,
+           b.amount_to_pay,
+           'Migrated from booking amount paid',
+           COALESCE(b.confirmed_at, b.created_at, NOW())
+    FROM bookings b
+    WHERE b.amount_to_pay > 0
+      AND b.status IN ('confirmed', 'payment_submitted')
+      AND NOT EXISTS (
+        SELECT 1 FROM booking_payments bp WHERE bp.booking_id = b.id
+      )
+  `);
+  if (backfill.affectedRows > 0) {
+    console.log(`  + backfilled ${backfill.affectedRows} payment row(s) from amount_to_pay`);
+  } else {
+    console.log('  ✓ no amount_to_pay rows to backfill');
+  }
+
   console.log('\nDone. Restart the API (npm run dev) and try saving the room again.');
   await pool.end();
 }

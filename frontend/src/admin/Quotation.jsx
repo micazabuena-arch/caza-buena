@@ -7,9 +7,11 @@ import QuotationDocument from '../components/admin/QuotationDocument';
 import Loading from '../components/ui/Loading';
 import Pagination from '../components/ui/Pagination';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
+import AdminListFilters from '../components/ui/AdminListFilters';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
-import { usePagination } from '../hooks/usePagination';
+import { useFilteredPagination } from '../hooks/useAdminListFilter';
+import { toDateKey } from '../utils/adminListFilter';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import { islandHoppingRatesFromSettings } from '../utils/islandHoppingRatesConfig';
 import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../utils/foodAddOnRatesConfig';
@@ -41,6 +43,12 @@ import { openQuotationPrint } from '../utils/openQuotationPrint';
 import { formatDateTimePHT } from '../utils/datetime';
 import { format } from 'date-fns';
 import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
+
+const QUOTE_SEARCH_FIELDS = ['reference_code', 'guest_name'];
+
+function quoteUpdatedDate(item) {
+  return toDateKey(item.updated_at || item.created_at);
+}
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -80,8 +88,25 @@ export default function AdminQuotation() {
   const [viewLoading, setViewLoading] = useState(false);
   const [quoteBaselineKey, setQuoteBaselineKey] = useState(0);
 
-  const { page, setPage, pageItems, totalPages, totalItems, from, to } =
-    usePagination(savedQuotes);
+  const {
+    search,
+    setSearch,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    filtered: filteredQuotes,
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    from,
+    to,
+  } = useFilteredPagination(savedQuotes, {
+    searchFields: QUOTE_SEARCH_FIELDS,
+    getDate: quoteUpdatedDate,
+  });
   const quoteDirty = useDirtySnapshot(quote, isEditor, quoteBaselineKey);
   useUnsavedNavigation(quoteDirty);
 
@@ -235,7 +260,15 @@ export default function AdminQuotation() {
   };
 
   const addBoat = () => {
-    setQuote((q) => ({ ...q, boats: [...(q.boats || []), emptyQuotationBoat()] }));
+    const catalog =
+      islandHoppingRates.boat.find((b) => b.id === 'small') || islandHoppingRates.boat[0];
+    setQuote((q) => ({
+      ...q,
+      boats: [
+        ...(q.boats || []),
+        { boatTierId: catalog?.id || 'small', rate: catalog?.rate ?? '' },
+      ],
+    }));
   };
 
   const removeBoat = (index) => {
@@ -378,12 +411,17 @@ export default function AdminQuotation() {
 
   /** Open manual booking pre-filled from the quotation currently on screen. */
   const loadToBookingFromQuote = () => {
+    const boatsWithRates = (quote.boats || []).map((boat) => {
+      if (parseFloat(boat.rate) > 0) return boat;
+      const catalog = islandHoppingRates.boat.find((b) => b.id === boat.boatTierId);
+      return { ...boat, rate: catalog?.rate ?? boat.rate };
+    });
     navigate('/admin/bookings', {
       state: {
         fromQuotation: {
           id: savedId,
           reference_code: referenceCode,
-          quote_data: normalizeQuotation(quote),
+          quote_data: normalizeQuotation({ ...quote, boats: boatsWithRates }),
           guest_name: quote.guestName?.trim() || '',
         },
       },
@@ -568,6 +606,22 @@ export default function AdminQuotation() {
       ) : savedQuotes.length === 0 ? (
         <p className="text-sm text-aegean-500">No saved quotations yet. Click New quote to create one.</p>
       ) : (
+        <>
+          <AdminListFilters
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search reference or guest…"
+            showDates
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            dateFromLabel="Updated from"
+            dateToLabel="Updated to"
+          />
+          {filteredQuotes.length === 0 ? (
+            <p className="text-sm text-aegean-500">No quotations match this filter.</p>
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -612,7 +666,7 @@ export default function AdminQuotation() {
               ))}
             </tbody>
           </table>
-          {savedQuotes.length > 0 && (
+          {filteredQuotes.length > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}
@@ -623,6 +677,8 @@ export default function AdminQuotation() {
             />
           )}
         </div>
+          )}
+        </>
       )}
     </section>
   );
@@ -1116,7 +1172,14 @@ export default function AdminQuotation() {
                         <select
                           className={inputClass}
                           value={boatRow.boatTierId}
-                          onChange={(e) => patchBoat(index, { boatTierId: e.target.value })}
+                          onChange={(e) => {
+                            const boatTierId = e.target.value;
+                            const catalog = islandHoppingRates.boat.find((b) => b.id === boatTierId);
+                            patchBoat(index, {
+                              boatTierId,
+                              rate: catalog?.rate ?? '',
+                            });
+                          }}
                         >
                           {islandHoppingRates.boat.map((b) => (
                             <option key={b.id} value={b.id}>
@@ -1124,6 +1187,16 @@ export default function AdminQuotation() {
                             </option>
                           ))}
                         </select>
+                      </Field>
+                      <Field label="Boat rate (₱)">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className={inputClass}
+                          value={boatRow.rate}
+                          onChange={(e) => patchBoat(index, { rate: e.target.value })}
+                        />
                       </Field>
                     </div>
                   ))}

@@ -132,17 +132,40 @@ export function formatSoaAmount(value) {
 
 const PAID_STATUSES = new Set(['confirmed', 'payment_submitted']);
 
+const PAYMENT_TYPE_LABELS = {
+  deposit: 'Down payment',
+  partial: 'Partial payment',
+  full: 'Full payment',
+  custom: 'Custom payment',
+};
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 /** Upfront amount + balance for SOA / payment summaries. */
 export function getBookingPaymentSummary(booking) {
   const total = Number(booking?.total_amount) || 0;
-  const payNow = Number(booking?.amount_to_pay ?? booking?.total_amount) || 0;
-  const balance = Math.max(0, Math.round((total - payNow) * 100) / 100);
+  const payments = Array.isArray(booking?.payments) ? booking.payments : [];
+  const paymentsTotal = roundMoney(
+    payments.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+  );
+  const payNow =
+    payments.length > 0
+      ? paymentsTotal
+      : Number(booking?.amount_to_pay ?? booking?.total_amount) || 0;
+  const balance = Math.max(0, roundMoney(total - payNow));
 
   return {
     total,
     payNow,
     balance,
-    upfrontLabel: PAID_STATUSES.has(booking?.status) ? 'Amount Paid' : 'Pay now',
+    payments,
+    paymentLines: payments.map((row) => ({
+      label: PAYMENT_TYPE_LABELS[row.payment_type] || 'Payment',
+      amount: Number(row.amount) || 0,
+    })),
+    upfrontLabel: PAID_STATUSES.has(booking?.status) || payments.length > 0 ? 'Amount Paid' : 'Pay now',
   };
 }
 

@@ -8,7 +8,7 @@ export function emptyQuotationRoom() {
 }
 
 export function emptyQuotationBoat() {
-  return { boatTierId: 'small' };
+  return { boatTierId: 'small', rate: '' };
 }
 
 export function emptyQuotationBilaoLine() {
@@ -529,8 +529,11 @@ export function normalizeQuotation(quote) {
 
   const boats =
     quote.boats?.length > 0
-      ? quote.boats.map((b) => ({ boatTierId: b.boatTierId || 'small' }))
-      : [{ boatTierId: quote.boatTierId || 'small' }];
+      ? quote.boats.map((b) => ({
+          boatTierId: b.boatTierId || 'small',
+          rate: b.rate ?? '',
+        }))
+      : [{ boatTierId: quote.boatTierId || 'small', rate: quote.boatRate ?? '' }];
 
   let bilaoLines = quote.bilaoLines;
   if (!Array.isArray(bilaoLines)) {
@@ -695,10 +698,13 @@ export function computeTour(quote, options = {}) {
       const selectedBoat =
         boatList.find((b) => b.id === entry.boatTierId) || boatList.find((b) => b.id === 'small');
       if (!selectedBoat) return null;
+      // Quoted line rate wins so extract/print keep the number shown on the quotation.
+      const storedRate = parseMoney(entry.rate);
+      const rate = storedRate > 0 ? storedRate : selectedBoat.rate;
       return {
         boat: selectedBoat,
-        rate: selectedBoat.rate,
-        lineTotal: selectedBoat.rate,
+        rate,
+        lineTotal: rate,
       };
     })
     .filter(Boolean);

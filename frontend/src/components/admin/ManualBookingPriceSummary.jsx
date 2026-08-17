@@ -21,6 +21,7 @@ export default function ManualBookingPriceSummary({
   islandHoppingEnabled = false,
   extrasQuote,
   bookingExtras,
+  quotedAddons = [],
   totalAmount,
 }) {
   const bookedLines = roomLines.filter((line) => line.room_id);
@@ -28,8 +29,9 @@ export default function ManualBookingPriceSummary({
   const foodTotal = extrasQuote?.valid
     ? (extrasQuote.bilao_amount || 0) + (extrasQuote.boodle_fight_amount || 0)
     : 0;
+  const quotedAddonsTotal = quotedAddons.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  if (roomSubtotal <= 0 && islandTotal <= 0 && foodTotal <= 0) return null;
+  if (roomSubtotal <= 0 && islandTotal <= 0 && foodTotal <= 0 && quotedAddonsTotal <= 0) return null;
 
   return (
     <div className="rounded-lg border border-aegean-100 bg-aegean-50/40 p-4 space-y-3">
@@ -99,6 +101,21 @@ export default function ManualBookingPriceSummary({
             <span>Food subtotal</span>
             <span>₱{foodTotal.toLocaleString()}</span>
           </div>
+        </div>
+      )}
+
+      {quotedAddons.length > 0 && (
+        <div className="border-t border-aegean-100 pt-2 space-y-1.5">
+          <p className="text-sm font-medium text-aegean-800">Quoted add-ons</p>
+          {quotedAddons.map((row, index) => (
+            <div key={`${row.label}-${index}`} className={rowClass}>
+              <span>
+                {row.label}
+                {row.description ? ` · ${row.description}` : ''}
+              </span>
+              <span>₱{Number(row.amount || 0).toLocaleString()}</span>
+            </div>
+          ))}
         </div>
       )}
 

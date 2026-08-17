@@ -233,10 +233,21 @@ export async function sendBookingConfirmation(booking, room) {
   let soaPdf = null;
   try {
     const { generateBookingSoaPdf } = await import('../utils/bookingSoaPdf.js');
+    let bookingForPdf = booking;
+    // Load payment series for SOA so DP stays visible after later payments.
+    if (!Array.isArray(booking.payments) && booking.id) {
+      try {
+        const pool = (await import('../config/database.js')).default;
+        const { attachBookingPayments } = await import('../utils/bookingPayments.js');
+        bookingForPdf = await attachBookingPayments(pool, { ...booking });
+      } catch {
+        bookingForPdf = booking;
+      }
+    }
     soaPdf = await generateBookingSoaPdf(
       {
-        ...booking,
-        room_name: formatBookingRoomsPlainLabel(booking, room),
+        ...bookingForPdf,
+        room_name: formatBookingRoomsPlainLabel(bookingForPdf, room),
       },
       { docType: 'confirmation' }
     );

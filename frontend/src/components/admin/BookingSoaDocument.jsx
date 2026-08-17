@@ -104,8 +104,21 @@ export default function BookingSoaDocument({
               {formatSoaAmount(payment.total)}
             </td>
           </tr>
+          {/* Keep each DP / partial / full line so guests still see earlier payments. */}
+          {payment.paymentLines?.length > 0
+            ? payment.paymentLines.map((line, index) => (
+                <tr key={`pay-${line.label}-${index}`}>
+                  <td className="border border-black px-3 py-1.5">{line.label}</td>
+                  <td className="border border-black px-3 py-1.5 text-right w-[140px]">
+                    {formatSoaAmount(line.amount)}
+                  </td>
+                </tr>
+              ))
+            : null}
           <tr>
-            <td className="border border-black px-3 py-1.5 font-bold">Amount Paid</td>
+            <td className="border border-black px-3 py-1.5 font-bold">
+              {payment.paymentLines?.length > 0 ? 'Total Amount Paid' : 'Amount Paid'}
+            </td>
             <td className="border border-black px-3 py-1.5 text-right font-bold w-[140px]">
               {formatSoaAmount(payment.payNow)}
             </td>

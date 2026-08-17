@@ -554,6 +554,9 @@ router.post(
     body('quoted_room_line_subtotals').optional().isArray(),
     body('quoted_room_line_subtotals.*').optional().isFloat({ min: 0 }),
     body('quotation_id').optional({ values: 'falsy' }).toInt().isInt({ min: 1 }),
+    body('quoted_addons').optional().isArray(),
+    body('quoted_addons.*.label').optional().trim(),
+    body('quoted_addons.*.amount').optional().isFloat(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -721,6 +724,8 @@ router.patch('/admin/:id', authenticateAdmin, async (req, res) => {
 
     const { attachBookingRooms } = await import('../utils/bookingRooms.js');
     const booking = await attachBookingRooms(pool, updated[0]);
+    const { attachBookingPayments } = await import('../utils/bookingPayments.js');
+    await attachBookingPayments(pool, booking);
 
     res.json({ message: 'Booking updated', booking });
   } catch (err) {
@@ -834,6 +839,16 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
     return res.status(400).json({ message: payResolved.error });
   }
 
+  // Prefer ledger sum so date edits don't collapse DP → full into one amount.
+  let amountToPay = payResolved.amount;
+  try {
+    const { listBookingPayments, sumPaymentAmounts } = await import('../utils/bookingPayments.js');
+    const payments = await listBookingPayments(pool, booking.id);
+    if (payments.length > 0) amountToPay = sumPaymentAmounts(payments);
+  } catch {
+    /* table may be missing before migrate */
+  }
+
   await pool.query(
     `UPDATE bookings SET
        check_in = ?, check_out = ?, nights = ?,
@@ -848,7 +863,7 @@ router.patch('/admin/:id/dates', authenticateAdmin, async (req, res) => {
       discountAmount || 0,
       total,
       stay.extraPersonCharges || 0,
-      payResolved.amount,
+      amountToPay,
       booking.id,
     ]
   );
@@ -902,9 +917,18 @@ router.patch('/admin/:id/stay-addons', authenticateAdmin, async (req, res) => {
     const payResolved = resolveAmountToPay(total, booking.payment_option, customAmount, depositPercent);
     if (payResolved.error) return res.status(400).json({ message: payResolved.error });
 
+    let amountToPay = payResolved.amount;
+    try {
+      const { listBookingPayments, sumPaymentAmounts } = await import('../utils/bookingPayments.js');
+      const payments = await listBookingPayments(pool, booking.id);
+      if (payments.length > 0) amountToPay = sumPaymentAmounts(payments);
+    } catch {
+      /* table may be missing before migrate */
+    }
+
     await pool.query(
       `UPDATE bookings SET stay_addons = ?, total_amount = ?, amount_to_pay = ? WHERE id = ?`,
-      [JSON.stringify(parsed.addons), total, payResolved.amount, booking.id]
+      [JSON.stringify(parsed.addons), total, amountToPay, booking.id]
     );
 
     const [updated] = await pool.query(
@@ -941,6 +965,22 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
   const hadPaymentProof =
     Boolean(booking.payment_proof_url) || booking.status === 'payment_submitted';
   const shouldEmailRejection = status === 'rejected' && hadPaymentProof;
+  const becomingConfirmed = status === 'confirmed' && booking.status !== 'confirmed';
+  const alreadyConfirmed = status === 'confirmed' && booking.status === 'confirmed';
+  const sendFlag =
+    req.body.send_confirmation_email === true ||
+    req.body.send_confirmation_email === 'true' ||
+    req.body.send_confirmation_email === 1 ||
+    req.body.send_confirmation_email === '1';
+  const skipConfirmEmail =
+    req.body.send_confirmation_email === false ||
+    req.body.send_confirmation_email === 'false' ||
+    req.body.send_confirmation_email === 0 ||
+    req.body.send_confirmation_email === '0';
+  // First confirm (including Approve) still emails unless staff unchecks the box.
+  // Already-confirmed saves only email when the box is checked, so they can send later.
+  const sendConfirmationEmail =
+    (becomingConfirmed && !skipConfirmEmail) || (alreadyConfirmed && sendFlag);
 
   const confirmedAt = status === 'confirmed' ? new Date() : null;
   await pool.query(
@@ -949,20 +989,35 @@ router.patch('/admin/:id/status', authenticateAdmin, async (req, res) => {
     [status, admin_notes || null, rejection_reason || null, confirmedAt, req.params.id]
   );
 
-  if (status === 'confirmed' && rows[0].discount_code) {
+  if (becomingConfirmed && booking.discount_code) {
     await pool.query(
       'UPDATE discounts SET used_count = used_count + 1 WHERE code = ?',
-      [rows[0].discount_code]
+      [booking.discount_code]
     );
+  }
+
+  // First confirm: if no ledger yet, record amount_to_pay as the initial payment entry.
+  if (becomingConfirmed && Number(booking.amount_to_pay) > 0) {
+    try {
+      const { seedBookingPaymentIfEmpty } = await import('../utils/bookingPayments.js');
+      await seedBookingPaymentIfEmpty(pool, booking.id, {
+        payment_type: booking.payment_option || 'custom',
+        amount: booking.amount_to_pay,
+        note: 'Recorded on confirmation',
+        paid_at: confirmedAt || new Date(),
+      });
+    } catch (err) {
+      console.warn('[Booking confirm] payment ledger seed skipped:', err.message);
+    }
   }
 
   res.json({
     message: 'Booking updated',
     email_sent: false,
-    email_pending: status === 'confirmed' || shouldEmailRejection,
+    email_pending: sendConfirmationEmail || shouldEmailRejection,
   });
 
-  if (status === 'confirmed') {
+  if (sendConfirmationEmail) {
     prepareBookingForEmail(pool, { ...booking, status: 'confirmed' })
       .then((emailBooking) =>
         sendBookingConfirmation(emailBooking, { name: emailBooking.room_name })
@@ -1022,6 +1077,9 @@ router.get('/admin/:id', authenticateAdmin, async (req, res) => {
     console.warn('[Booking detail] booking_addons unavailable:', err.message);
     booking.addons = [];
   }
+
+  const { attachBookingPayments } = await import('../utils/bookingPayments.js');
+  await attachBookingPayments(pool, booking);
 
   res.json(booking);
 });

@@ -95,7 +95,7 @@ const emptyForm = () => ({
   check_out: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
   status: 'confirmed',
   special_requests: '',
-  send_confirmation_email: false,
+  send_confirmation_email: true,
   payment_method_id: '',
   payment_option: 'full',
   custom_payment_amount: '',
@@ -110,11 +110,13 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
   const [rooms, setRooms] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [depositPercent, setDepositPercent] = useState(20);
+  const [catalogsReady, setCatalogsReady] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [roomLines, setRoomLines] = useState(() => [createRoomLine()]);
   const [lineQuotes, setLineQuotes] = useState({});
   const [lineQuotesLoading, setLineQuotesLoading] = useState(false);
   const [quotationPricing, setQuotationPricing] = useState(null);
+  const [quotedAddons, setQuotedAddons] = useState([]);
   const [islandHoppingEnabled, setIslandHoppingEnabled] = useState(false);
   const [islandHopping, setIslandHopping] = useState(emptyIslandHoppingForm);
   const [islandHoppingRates, setIslandHoppingRates] = useState(ISLAND_HOPPING_RATES);
@@ -150,11 +152,12 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
           setFoodAddOnRates(foodAddOnRatesFromSettings(settingsRes.data));
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCatalogsReady(true));
   }, []);
 
   useEffect(() => {
-    if (!quotationSeed || rooms.length === 0) return;
+    if (!quotationSeed || rooms.length === 0 || !catalogsReady) return;
 
     const seedKey =
       quotationSeed.id ||
@@ -183,6 +186,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     setBookingExtras(mapped.bookingExtras);
     setIslandHoppingEnabled(mapped.islandHoppingEnabled);
     setIslandHopping(mapped.islandHopping);
+    setQuotedAddons(mapped.quotedAddons || []);
     setFieldErrors({});
     setError('');
     setActiveTab('stay');
@@ -194,7 +198,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     toast.success(
       `Loaded from ${label}${discountPart}. Add guest contact details, then create the booking.`
     );
-  }, [quotationSeed, rooms, depositPercent, islandHoppingRates, foodAddOnRates, toast]);
+  }, [quotationSeed, rooms, catalogsReady, depositPercent, islandHoppingRates, foodAddOnRates, toast]);
 
   // Price each selected room for the shared check-in / check-out dates.
   useEffect(() => {
@@ -316,7 +320,9 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     Number.isFinite(manualDiscountRaw) && manualDiscountRaw > 0
       ? Math.min(manualDiscountRaw, roomSubtotal)
       : 0;
-  const totalAmount = Math.max(0, roomSubtotal - manualDiscount) + islandTotal + addOnsTotal;
+  const quotedAddonsTotal = quotedAddons.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const totalAmount =
+    Math.max(0, roomSubtotal - manualDiscount) + islandTotal + addOnsTotal + quotedAddonsTotal;
 
   const customPay = parseFloat(form.custom_payment_amount);
   const amountToPay =
@@ -456,6 +462,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               soa_summary: true,
               summary_pax: parseInt(islandHopping.summary_pax, 10) || 0,
               summary_amount: parseFloat(islandHopping.summary_amount) || 0,
+              summary_boats: islandHopping.summary_boats || [],
             }
           : {
             passengers: islandHopping.passengers.map((p) => ({
@@ -498,6 +505,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
       quoted_room_line_subtotals: quotationPricing?.lineSubtotals?.length
         ? quotationPricing.lineSubtotals
         : undefined,
+      quoted_addons: quotedAddons.length ? quotedAddons : undefined,
     };
   };
 
@@ -847,6 +855,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               islandHoppingEnabled={islandHoppingEnabled}
               extrasQuote={extrasQuote}
               bookingExtras={bookingExtras}
+              quotedAddons={quotedAddons}
               totalAmount={totalAmount}
             />
             <PaymentAmountSelect
@@ -875,15 +884,21 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
                 placeholder="Guest requests"
               />
             </Field>
-            <label className="flex items-center gap-2 text-sm text-aegean-700">
+            <label className="flex items-start gap-2 text-sm text-aegean-700">
               <input
                 type="checkbox"
                 checked={form.send_confirmation_email}
                 disabled={form.status !== 'confirmed'}
                 onChange={(e) => update({ send_confirmation_email: e.target.checked })}
-                className="rounded"
+                className="mt-0.5 rounded"
               />
-              Send confirmation email to guest (only when status is Confirmed)
+              <span>
+                Send confirmation email to guest now
+                <span className="block text-xs text-aegean-500 mt-0.5">
+                  Only when status is Confirmed. If you skip this, you can still send it later from
+                  Manage booking.
+                </span>
+              </span>
             </label>
           </Panel>
         )}

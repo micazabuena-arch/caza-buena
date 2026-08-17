@@ -57,3 +57,30 @@ export function formatDatePHT(value, options = {}) {
     ...options,
   });
 }
+
+/**
+ * YYYY-MM-DD for "today" in Philippine Time.
+ * Check-in / check-out badges and filters use this so they flip at 12:00 AM PHT.
+ */
+export function todayYmdPHT(referenceDate = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: PHT_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(referenceDate);
+}
+
+/** True when a YYYY-MM-DD stay date is the current calendar day in PHT. */
+export function isTodayPHT(dateStr, referenceDate = new Date()) {
+  if (!dateStr) return false;
+  return String(dateStr).slice(0, 10) === todayYmdPHT(referenceDate);
+}
+
+/** Milliseconds until the next 12:00 AM Asia/Manila (for badge refresh). */
+export function msUntilNextPhtMidnight(referenceDate = new Date()) {
+  const today = todayYmdPHT(referenceDate);
+  const startOfTodayPht = new Date(`${today}T00:00:00+08:00`);
+  const startOfTomorrowPht = new Date(startOfTodayPht.getTime() + 24 * 60 * 60 * 1000);
+  return Math.max(1000, startOfTomorrowPht.getTime() - referenceDate.getTime());
+}
