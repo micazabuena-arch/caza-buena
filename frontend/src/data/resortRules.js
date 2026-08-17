@@ -31,18 +31,18 @@ export function bedroomCountLabel(roomType) {
   return roomType === 'suite' ? '2 bedrooms' : '1 bedroom';
 }
 
-/** Remove unit numbers from a stored room name (ROOM 101 → leftover title). */
+/** Remove pure physical unit codes only (ROOM 101). Keep "Queen Room 1". */
 export function stripRoomNumberFromName(name) {
   if (!name) return '';
-  return String(name)
-    .replace(/\broom\s*#?\s*\d+\b/gi, '')
-    .replace(/#?\b\d{3}\b/g, '')
-    .replace(/\s*[-–—]\s*$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const raw = String(name).trim();
+  if (/^room\s*#?\s*\d+$/i.test(raw) || /^\d{3}$/.test(raw)) return '';
+  return raw;
 }
 
-/** Guest-facing name: keep the room title, hide the unit number. */
+/**
+ * Guest-facing name: keep inventory labels (Queen Room 1 / 2).
+ * Only replace pure physical codes (ROOM 101) with the generic type label.
+ */
 export function getGuestRoomLabel(room) {
   if (!room) return 'Room';
   if (typeof room === 'string') {
@@ -50,8 +50,8 @@ export function getGuestRoomLabel(room) {
     if (room === 'queen') return ROOM_INVENTORY.queen.label;
     return room;
   }
-  const stripped = stripRoomNumberFromName(room.name);
-  if (stripped && !/^room$/i.test(stripped)) return stripped;
+  const name = String(room.name || '').trim();
+  if (name && stripRoomNumberFromName(name)) return name;
   if (room.room_type === 'suite') return ROOM_INVENTORY.suite.label;
   if (room.room_type === 'queen') return ROOM_INVENTORY.queen.label;
   return room.name || 'Room';

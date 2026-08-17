@@ -1,35 +1,44 @@
-/** Guest-facing room labels — hide physical unit numbers (ROOM 101, etc.). */
+/** Guest-facing room labels for bookings & the public rooms catalog. */
 
 const GUEST_LABELS = {
   suite: 'Suite Room (2 bedrooms)',
   queen: 'Queen Room (1 bedroom)',
 };
 
-/** Remove unit numbers from a stored room name (ROOM 101 → empty / leftover title). */
-export function stripRoomNumberFromName(name) {
-  if (!name) return '';
-  return String(name)
-    .replace(/\broom\s*#?\s*\d+\b/gi, '')
-    .replace(/#?\b\d{3}\b/g, '')
-    .replace(/\s*[-–—]\s*$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+/** True when the stored name is only a physical unit code (e.g. ROOM 101). */
+export function isPhysicalRoomCode(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return false;
+  return /^room\s*#?\s*\d+$/i.test(raw) || /^\d{3}$/.test(raw);
 }
 
+/**
+ * Guest-visible room title.
+ * Keep inventory labels like "Queen Room 1" / "QUEEN ROOM 2".
+ * Only collapse pure physical codes (ROOM 101) to the generic type label.
+ * Booking-level assigned_room_number stays admin-only via sanitizeBookingForGuest.
+ */
 export function getGuestRoomLabel(roomOrType) {
   if (!roomOrType) return 'Room';
   if (typeof roomOrType === 'string') {
     return GUEST_LABELS[roomOrType] || 'Room';
   }
 
-  const stripped = stripRoomNumberFromName(roomOrType.name);
-  if (stripped && !/^room$/i.test(stripped)) return stripped;
+  const name = String(roomOrType.name || '').trim();
+  if (name && !isPhysicalRoomCode(name)) return name;
 
   const type = roomOrType.room_type;
-  return GUEST_LABELS[type] || roomOrType.name || 'Room';
+  return GUEST_LABELS[type] || name || 'Room';
 }
 
-/** Strip admin-only fields and mask room numbers for public guest views. */
+/** @deprecated kept for older imports — prefer isPhysicalRoomCode / getGuestRoomLabel */
+export function stripRoomNumberFromName(name) {
+  if (!name) return '';
+  if (isPhysicalRoomCode(name)) return '';
+  return String(name).trim();
+}
+
+/** Strip admin-only fields; keep friendly unit names on guest booking views. */
 export function sanitizeBookingForGuest(booking) {
   if (!booking) return booking;
 
@@ -75,7 +84,7 @@ export function enrichBookingRoomLine(line) {
   };
 }
 
-/** Keep every room, but hide unit numbers on public APIs. */
+/** Public rooms API — show Queen Room 1 / 2, hide only pure physical codes. */
 export function sanitizeRoomForGuest(room) {
   if (!room) return room;
   const guest_name = getGuestRoomLabel(room);
