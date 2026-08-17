@@ -4,10 +4,11 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
-import AdminModal from '../components/admin/AdminModal';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { groupMenuByCategory } from '../utils/menuGrouping';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 
 const DEFAULT_CATEGORIES = ['All Day Breakfast', 'Rice Meals', 'Snacks & Extras', 'Drinks'];
 
@@ -144,6 +145,7 @@ export default function AdminMenu() {
   const [error, setError] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
+  const isDirty = useDirtySnapshot(form, modalOpen);
 
   const categoryOptions = useMemo(() => {
     const fromItems = items.map((i) => i.category?.trim()).filter(Boolean);
@@ -340,6 +342,7 @@ export default function AdminMenu() {
       <AdminModal
         open={modalOpen}
         onClose={closeModal}
+        isDirty={isDirty}
         title={editingId ? 'Edit menu item' : 'Add menu item'}
         description={
           editingId
@@ -364,9 +367,7 @@ export default function AdminMenu() {
             <SubmitButton loading={saving} loadingLabel="Saving..." className="text-sm">
               {editingId ? 'Save changes' : 'Add item'}
             </SubmitButton>
-            <button type="button" onClick={closeModal} className="btn-outline text-sm">
-              Cancel
-            </button>
+            <AdminModalCancel />
           </div>
         </form>
       </AdminModal>

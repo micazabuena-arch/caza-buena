@@ -37,6 +37,8 @@ import {
   totalGuestsFromLines,
   usedRoomIds,
 } from '../../utils/bookingRoomLines';
+import { useDirtySnapshot } from '../../hooks/useConfirmLeave';
+import { useAdminModalClose, useRegisterModalDirty } from './AdminModal';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -122,6 +124,12 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const requestClose = useAdminModalClose();
+  const isDirty = useDirtySnapshot(
+    { form, roomLines, bookingExtras, islandHoppingEnabled, islandHopping },
+    true
+  );
+  useRegisterModalDirty(isDirty);
 
   useEffect(() => {
     Promise.all([
@@ -913,7 +921,11 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
             </SubmitButton>
           )}
           {onCancel && (
-            <button type="button" onClick={onCancel} className="text-sm text-aegean-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => (requestClose || onCancel)?.()}
+              className="text-sm text-aegean-600 hover:underline"
+            >
               Cancel
             </button>
           )}

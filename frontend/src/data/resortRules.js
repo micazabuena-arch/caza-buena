@@ -31,12 +31,29 @@ export function bedroomCountLabel(roomType) {
   return roomType === 'suite' ? '2 bedrooms' : '1 bedroom';
 }
 
-/** Generic label shown to guests online (hides ROOM 101, etc.). */
+/** Remove unit numbers from a stored room name (ROOM 101 → leftover title). */
+export function stripRoomNumberFromName(name) {
+  if (!name) return '';
+  return String(name)
+    .replace(/\broom\s*#?\s*\d+\b/gi, '')
+    .replace(/#?\b\d{3}\b/g, '')
+    .replace(/\s*[-–—]\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Guest-facing name: keep the room title, hide the unit number. */
 export function getGuestRoomLabel(room) {
   if (!room) return 'Room';
-  const type = room.room_type || room;
-  if (type === 'suite') return ROOM_INVENTORY.suite.label;
-  if (type === 'queen') return ROOM_INVENTORY.queen.label;
+  if (typeof room === 'string') {
+    if (room === 'suite') return ROOM_INVENTORY.suite.label;
+    if (room === 'queen') return ROOM_INVENTORY.queen.label;
+    return room;
+  }
+  const stripped = stripRoomNumberFromName(room.name);
+  if (stripped && !/^room$/i.test(stripped)) return stripped;
+  if (room.room_type === 'suite') return ROOM_INVENTORY.suite.label;
+  if (room.room_type === 'queen') return ROOM_INVENTORY.queen.label;
   return room.name || 'Room';
 }
 

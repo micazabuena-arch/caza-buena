@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import pool from '../config/database.js';
 import { authenticateAdmin } from '../middleware/auth.js';
-import { dedupeRoomsByTypeForGuest, sanitizeRoomForGuest } from '../utils/roomLabels.js';
+import { sanitizeRoomForGuest, sanitizeRoomsForGuest } from '../utils/roomLabels.js';
 
 const router = Router();
 
@@ -42,7 +42,7 @@ router.get('/', async (_req, res) => {
     room.amenities = room.amenities_json ? JSON.parse(room.amenities_json) : [];
     delete room.amenities_json;
   }
-  res.json(dedupeRoomsByTypeForGuest(rooms));
+  res.json(sanitizeRoomsForGuest(rooms));
 });
 
 router.get('/:slug', async (req, res) => {

@@ -182,7 +182,7 @@ router.get('/available-rooms', async (req, res) => {
     check_out: checkOut,
     guests: guestCount,
     nights,
-    rooms: (await import('../utils/roomLabels.js')).dedupeRoomsByTypeForGuest(available),
+    rooms: (await import('../utils/roomLabels.js')).sanitizeRoomsForGuest(available),
   });
 });
 

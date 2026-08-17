@@ -4,11 +4,12 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
-import AdminModal from '../components/admin/AdminModal';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 
 const emptyForm = () => ({
   title: '',
@@ -29,6 +30,7 @@ export default function AdminPolicies() {
   const toast = useToast();
   const confirm = useConfirm();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(policies);
+  const isDirty = useDirtySnapshot(form, modalOpen);
 
   const load = () =>
     api
@@ -181,6 +183,7 @@ export default function AdminPolicies() {
       <AdminModal
         open={modalOpen}
         onClose={closeModal}
+        isDirty={isDirty}
         title={editingId ? 'Edit policy' : 'Add policy'}
         description={
           editingId
@@ -224,9 +227,7 @@ export default function AdminPolicies() {
             <SubmitButton loading={submitting} loadingLabel="Saving..." className="text-sm">
               {editingId ? 'Save changes' : 'Add policy'}
             </SubmitButton>
-            <button type="button" onClick={closeModal} className="btn-outline text-sm">
-              Cancel
-            </button>
+            <AdminModalCancel />
           </div>
         </form>
       </AdminModal>

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
+import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
 import { EXTRA_PERSON_RATES } from '../data/resortRules';
 import { ISLAND_HOPPING_RATES } from '../data/islandHoppingRates';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES, PET_DEPOSIT_PER_PET } from '../data/bookingAddOns';
@@ -90,6 +91,13 @@ export default function AdminPricing() {
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pricingBaselineKey, setPricingBaselineKey] = useState(0);
+  const pricingDirty = useDirtySnapshot(
+    { extraRatesForm, islandRatesForm, foodRatesForm },
+    isFullAdmin && !loading,
+    pricingBaselineKey
+  );
+  useUnsavedNavigation(pricingDirty);
 
   const loadPricingSettings = () =>
     api
@@ -149,6 +157,7 @@ export default function AdminPricing() {
         [EXTRA_PAX_KEYS.child_7_12]: String(child),
       });
       toast.success('Extra guest rates saved.');
+      setPricingBaselineKey((n) => n + 1);
     } catch (err) {
       const msg = getApiError(err);
       setError(msg);
@@ -184,6 +193,7 @@ export default function AdminPricing() {
       });
       await loadPricingSettings();
       toast.success('Food add-on rates saved.');
+      setPricingBaselineKey((n) => n + 1);
     } catch (err) {
       const msg = getApiError(err);
       setError(msg);
@@ -205,6 +215,7 @@ export default function AdminPricing() {
       });
       await loadPricingSettings();
       toast.success('Pet deposit saved.');
+      setPricingBaselineKey((n) => n + 1);
     } catch (err) {
       const msg = getApiError(err);
       setError(msg);
@@ -226,6 +237,7 @@ export default function AdminPricing() {
       });
       await loadPricingSettings();
       toast.success('Island hopping rates saved.');
+      setPricingBaselineKey((n) => n + 1);
     } catch (err) {
       const msg = getApiError(err);
       setError(msg);

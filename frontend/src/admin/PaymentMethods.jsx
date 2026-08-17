@@ -5,12 +5,13 @@ import api, { getApiError } from '../api/client';
 import { getAssetUrl } from '../utils/assetUrl';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
-import AdminModal from '../components/admin/AdminModal';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 
 const PAYMENT_TYPES = [
   { value: 'gcash', label: 'GCash' },
@@ -59,6 +60,7 @@ export default function AdminPaymentMethods() {
   // Payment methods hold bank / e-wallet account details — only full admins may manage them.
   const { isFullAdmin } = useAuth();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(methods);
+  const isDirty = useDirtySnapshot(form, modalOpen);
 
   const editingMethod = editingId ? methods.find((m) => m.id === editingId) : null;
 
@@ -284,6 +286,7 @@ export default function AdminPaymentMethods() {
       <AdminModal
         open={modalOpen}
         onClose={closeModal}
+        isDirty={isDirty}
         title={editingId ? 'Edit payment method' : 'Add payment method'}
         description={
           editingId
@@ -385,9 +388,7 @@ export default function AdminPaymentMethods() {
             <SubmitButton loading={saving} loadingLabel="Saving..." className="text-sm">
               {editingId ? 'Save changes' : 'Add payment method'}
             </SubmitButton>
-            <button type="button" onClick={closeModal} className="btn-outline text-sm">
-              Cancel
-            </button>
+            <AdminModalCancel />
           </div>
         </form>
       </AdminModal>

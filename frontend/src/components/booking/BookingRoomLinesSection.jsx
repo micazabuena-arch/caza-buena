@@ -44,16 +44,6 @@ function RoomLineCard({
     return true;
   });
 
-  const roomOptions = guestFacing
-    ? Array.from(
-        availableRooms.reduce((map, room) => {
-          const type = room.room_type || 'queen';
-          if (!map.has(type)) map.set(type, room);
-          return map;
-        }, new Map()).values()
-      )
-    : availableRooms;
-
   const update = (patch) => onChange(line.id, patch);
   const calendarConflict =
     line.room_id && lineQuote && !lineQuote.available && !lineQuote.occupancy_error;
@@ -115,7 +105,7 @@ function RoomLineCard({
               className={inputClass}
             >
               <option value="">Select a room</option>
-              {roomOptions.map((r) => (
+              {availableRooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   {guestFacing ? getGuestRoomLabel(r) : r.name} ({r.min_guests ?? 1}–
                   {r.max_guests ?? r.capacity} guests)

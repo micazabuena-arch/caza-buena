@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 
 import { getAssetUrl } from '../utils/assetUrl';
+import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
 
 
 
@@ -75,6 +76,9 @@ export default function WhatsNewAdmin() {
   const toast = useToast();
 
   const confirm = useConfirm();
+  const [whatsNewBaselineKey, setWhatsNewBaselineKey] = useState(0);
+  const whatsNewDirty = useDirtySnapshot(form, !loading, whatsNewBaselineKey);
+  useUnsavedNavigation(whatsNewDirty);
 
 
 
@@ -151,6 +155,7 @@ export default function WhatsNewAdmin() {
       setForm(normalizeData(data));
 
       toast.success(`Image ${slot} uploaded.`);
+      setWhatsNewBaselineKey((n) => n + 1);
 
     } catch (err) {
 
@@ -213,6 +218,7 @@ export default function WhatsNewAdmin() {
       setForm(normalizeData(data));
 
       toast.success("What's New page updated.");
+      setWhatsNewBaselineKey((n) => n + 1);
 
     } catch (err) {
 

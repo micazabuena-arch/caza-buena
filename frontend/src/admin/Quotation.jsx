@@ -40,6 +40,7 @@ import {
 import { openQuotationPrint } from '../utils/openQuotationPrint';
 import { formatDateTimePHT } from '../utils/datetime';
 import { format } from 'date-fns';
+import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -77,9 +78,12 @@ export default function AdminQuotation() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewQuote, setViewQuote] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
+  const [quoteBaselineKey, setQuoteBaselineKey] = useState(0);
 
   const { page, setPage, pageItems, totalPages, totalItems, from, to } =
     usePagination(savedQuotes);
+  const quoteDirty = useDirtySnapshot(quote, isEditor, quoteBaselineKey);
+  useUnsavedNavigation(quoteDirty);
 
   const loadSavedList = useCallback(() => {
     setListLoading(true);
@@ -97,6 +101,7 @@ export default function AdminQuotation() {
       setQuote(normalizeQuotation(data.quote_data));
       setSavedId(data.id);
       setReferenceCode(data.reference_code || '');
+      setQuoteBaselineKey((n) => n + 1);
     } catch (err) {
       toast.error(getApiError(err));
       navigate('/admin/quotation', { replace: true });
@@ -115,6 +120,7 @@ export default function AdminQuotation() {
       setReferenceCode('');
       setQuote(emptyQuotation());
       setPageLoading(false);
+      setQuoteBaselineKey((n) => n + 1);
       return;
     }
     if (routeId) {
@@ -415,12 +421,14 @@ export default function AdminQuotation() {
         await api.put(`/quotations/admin/${savedId}`, payload);
         toast.success('Quotation updated.');
         loadSavedList();
+        setQuoteBaselineKey((n) => n + 1);
       } else {
         const { data } = await api.post('/quotations/admin', payload);
         setSavedId(data.id);
         setReferenceCode(data.reference_code || '');
         toast.success('Quotation saved.');
         loadSavedList();
+        setQuoteBaselineKey((n) => n + 1);
         navigate(`/admin/quotation/${data.id}`, { replace: true });
       }
     } catch (err) {

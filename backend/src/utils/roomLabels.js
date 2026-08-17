@@ -5,18 +5,36 @@ const GUEST_LABELS = {
   queen: 'Queen Room (1 bedroom)',
 };
 
-export function getGuestRoomLabel(roomOrType) {
-  if (!roomOrType) return 'Room';
-  const type = typeof roomOrType === 'string' ? roomOrType : roomOrType.room_type;
-  return GUEST_LABELS[type] || 'Room';
+/** Remove unit numbers from a stored room name (ROOM 101 → empty / leftover title). */
+export function stripRoomNumberFromName(name) {
+  if (!name) return '';
+  return String(name)
+    .replace(/\broom\s*#?\s*\d+\b/gi, '')
+    .replace(/#?\b\d{3}\b/g, '')
+    .replace(/\s*[-–—]\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-/** Strip admin-only fields and mask room names for public guest views. */
+export function getGuestRoomLabel(roomOrType) {
+  if (!roomOrType) return 'Room';
+  if (typeof roomOrType === 'string') {
+    return GUEST_LABELS[roomOrType] || 'Room';
+  }
+
+  const stripped = stripRoomNumberFromName(roomOrType.name);
+  if (stripped && !/^room$/i.test(stripped)) return stripped;
+
+  const type = roomOrType.room_type;
+  return GUEST_LABELS[type] || roomOrType.name || 'Room';
+}
+
+/** Strip admin-only fields and mask room numbers for public guest views. */
 export function sanitizeBookingForGuest(booking) {
   if (!booking) return booking;
 
   const room_lines = (booking.room_lines || []).map((line) => {
-    const guest_room_label = getGuestRoomLabel(line.room_type);
+    const guest_room_label = getGuestRoomLabel(line);
     return {
       id: line.id,
       room_id: line.room_id,
@@ -47,7 +65,7 @@ export function sanitizeBookingForGuest(booking) {
 
 /** Enrich a booking_rooms row for API responses. */
 export function enrichBookingRoomLine(line) {
-  const guest_room_label = getGuestRoomLabel(line.room_type);
+  const guest_room_label = getGuestRoomLabel(line);
   const assigned_room_number = line.assigned_room_number?.trim() || null;
   return {
     ...line,
@@ -57,7 +75,7 @@ export function enrichBookingRoomLine(line) {
   };
 }
 
-/** Mask physical unit numbers on a room record for public APIs. */
+/** Keep every room, but hide unit numbers on public APIs. */
 export function sanitizeRoomForGuest(room) {
   if (!room) return room;
   const guest_name = getGuestRoomLabel(room);
@@ -65,18 +83,9 @@ export function sanitizeRoomForGuest(room) {
     ...room,
     name: guest_name,
     guest_room_label: guest_name,
-    physical_name: room.name,
   };
 }
 
-/** One card per room type on public browse / availability (hides ROOM 101, etc.). */
-export function dedupeRoomsByTypeForGuest(rooms) {
-  const byType = new Map();
-  for (const room of rooms || []) {
-    const type = room.room_type || 'queen';
-    if (!byType.has(type)) {
-      byType.set(type, sanitizeRoomForGuest(room));
-    }
-  }
-  return Array.from(byType.values());
+export function sanitizeRoomsForGuest(rooms) {
+  return (rooms || []).map(sanitizeRoomForGuest);
 }

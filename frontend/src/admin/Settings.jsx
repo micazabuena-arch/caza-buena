@@ -5,9 +5,10 @@ import api, { getApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
-import AdminModal from '../components/admin/AdminModal';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import AdminTableShell from '../components/ui/AdminTableShell';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 
@@ -59,6 +60,8 @@ export default function AdminSettings() {
   const [accountForm, setAccountForm] = useState(emptyAccountForm);
   const [accountSubmitting, setAccountSubmitting] = useState(false);
   const [accountError, setAccountError] = useState('');
+  const passwordDirty = useDirtySnapshot(passwordForm, passwordModalOpen);
+  const accountDirty = useDirtySnapshot(accountForm, accountModalOpen);
 
   const loadAccounts = () =>
     api
@@ -405,6 +408,7 @@ export default function AdminSettings() {
       <AdminModal
         open={passwordModalOpen}
         onClose={closePasswordModal}
+        isDirty={passwordDirty}
         title="Change password"
         description="Enter your current password, then choose a new one (at least 8 characters)."
       >
@@ -446,9 +450,7 @@ export default function AdminSettings() {
             />
           </div>
           <div className="flex flex-wrap gap-3 justify-end pt-2">
-            <button type="button" onClick={closePasswordModal} className="btn-outline text-sm py-2 px-4">
-              Cancel
-            </button>
+            <AdminModalCancel className="btn-outline text-sm py-2 px-4" />
             <SubmitButton loading={passwordSubmitting} loadingLabel="Saving...">
               Update password
             </SubmitButton>
@@ -459,6 +461,7 @@ export default function AdminSettings() {
       <AdminModal
         open={accountModalOpen}
         onClose={closeAccountModal}
+        isDirty={accountDirty}
         title={editingAccount ? 'Edit account' : 'Add admin account'}
         description={
           editingAccount
@@ -536,9 +539,7 @@ export default function AdminSettings() {
             </select>
           </div>
           <div className="flex flex-wrap gap-3 justify-end pt-2">
-            <button type="button" onClick={closeAccountModal} className="btn-outline text-sm py-2 px-4">
-              Cancel
-            </button>
+            <AdminModalCancel className="btn-outline text-sm py-2 px-4" />
             <SubmitButton
               loading={accountSubmitting}
               loadingLabel={editingAccount ? 'Saving...' : 'Creating...'}

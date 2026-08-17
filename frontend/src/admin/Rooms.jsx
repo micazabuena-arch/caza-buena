@@ -12,7 +12,8 @@ import { useAuth } from '../context/AuthContext';
 import { ROOM_INVENTORY } from '../data/resortRules';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
-import AdminModal from '../components/admin/AdminModal';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 
 const emptyForm = () => ({
   name: '',
@@ -68,6 +69,7 @@ export default function AdminRooms() {
   const [newHoliday, setNewHoliday] = useState(emptyHolidayForm());
   const [holidaySaving, setHolidaySaving] = useState(false);
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(rooms);
+  const isDirty = useDirtySnapshot({ form, newHoliday }, Boolean(editingId));
 
   // Staff may add rooms and set the NEW room's nightly/weekend rates, but they
   // cannot change an existing room's prices (those stay admin-only). Holiday
@@ -412,6 +414,7 @@ export default function AdminRooms() {
       <AdminModal
         open={Boolean(editingId)}
         onClose={closeForm}
+        isDirty={isDirty}
         title={editingId === 'new' ? 'Add new room' : 'Edit room'}
         size="xl"
         padding={false}
@@ -757,9 +760,7 @@ export default function AdminRooms() {
             >
               {editingId === 'new' ? 'Create Room' : 'Save Changes'}
             </SubmitButton>
-            <button type="button" onClick={closeForm} className="btn-outline text-sm">
-              Cancel
-            </button>
+            <AdminModalCancel />
             {editingId !== 'new' && isFullAdmin && (
               <button
                 type="button"

@@ -12,6 +12,7 @@ import SubmitButton from '../components/ui/SubmitButton';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
 import { formatGuestCount } from '../utils/guestCount';
@@ -165,6 +166,11 @@ export default function AdminBookings() {
   };
 
   const islandHop = detail ? parseIslandHoppingData(detail) : null;
+  const statusDirty = useDirtySnapshot(
+    statusForm,
+    Boolean(detail),
+    detail?.id || 0
+  );
   const roomStayTotal = detail
     ? Number(detail.total_amount) -
       Number(detail.island_hopping_amount || 0) -
@@ -528,6 +534,7 @@ export default function AdminBookings() {
         <AdminModal
           open={Boolean(detail)}
           onClose={closeDetail}
+          isDirty={statusDirty}
           title={`Booking ${detail.reference_code}`}
           size="md"
         >

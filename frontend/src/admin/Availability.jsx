@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
+import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
 
 export default function AdminAvailability() {
   const [rooms, setRooms] = useState([]);
@@ -18,6 +19,9 @@ export default function AdminAvailability() {
   const toast = useToast();
   const confirm = useConfirm();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(blocks);
+  const [availabilityBaselineKey, setAvailabilityBaselineKey] = useState(0);
+  const availabilityDirty = useDirtySnapshot(form, true, availabilityBaselineKey);
+  useUnsavedNavigation(availabilityDirty);
 
   useEffect(() => {
     api.get('/rooms/admin/all').then((r) => {
@@ -45,6 +49,7 @@ export default function AdminAvailability() {
     try {
       await api.post('/admin/availability', { room_id: parseInt(roomId, 10), ...form });
       setForm({ start_date: '', end_date: '', reason: '' });
+      setAvailabilityBaselineKey((n) => n + 1);
       const { data } = await api.get(`/admin/availability/${roomId}`);
       setBlocks(data);
       toast.success('Dates blocked.');

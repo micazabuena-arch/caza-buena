@@ -4,11 +4,12 @@ import api, { getApiError } from '../api/client';
 import Loading from '../components/ui/Loading';
 import SubmitButton from '../components/ui/SubmitButton';
 import IconActionButton, { IconActionGroup } from '../components/ui/IconActionButton';
-import AdminModal from '../components/admin/AdminModal';
+import AdminModal, { AdminModalCancel } from '../components/admin/AdminModal';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
+import { useDirtySnapshot } from '../hooks/useConfirmLeave';
 
 const emptyForm = () => ({
   question: '',
@@ -30,6 +31,7 @@ export default function AdminFAQ() {
   const toast = useToast();
   const confirm = useConfirm();
   const { page, setPage, pageItems, totalPages, totalItems, from, to } = usePagination(faqs);
+  const isDirty = useDirtySnapshot(form, modalOpen);
 
   const load = () => api.get('/faqs').then((r) => setFaqs(r.data)).finally(() => setLoading(false));
 
@@ -170,6 +172,7 @@ export default function AdminFAQ() {
       <AdminModal
         open={modalOpen}
         onClose={closeModal}
+        isDirty={isDirty}
         title={editingId ? 'Edit FAQ' : 'Add FAQ'}
         description={
           editingId
@@ -213,9 +216,7 @@ export default function AdminFAQ() {
             <SubmitButton loading={submitting} loadingLabel="Saving..." className="text-sm">
               {editingId ? 'Save changes' : 'Add FAQ'}
             </SubmitButton>
-            <button type="button" onClick={closeModal} className="btn-outline text-sm">
-              Cancel
-            </button>
+            <AdminModalCancel />
           </div>
         </form>
       </AdminModal>

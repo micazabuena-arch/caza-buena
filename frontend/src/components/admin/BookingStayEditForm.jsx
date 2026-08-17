@@ -28,6 +28,7 @@ import {
   usedRoomIds,
 } from '../../utils/bookingRoomLines';
 import BookingCustomAddons from './BookingCustomAddons';
+import { useAdminModalClose, useRegisterModalDirty } from './AdminModal';
 
 const inputClass =
   'w-full border border-aegean-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-aegean-400 outline-none bg-white';
@@ -83,12 +84,16 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const [rebookQuoteLoading, setRebookQuoteLoading] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+  const requestClose = useAdminModalClose();
+  const [dirty, setDirty] = useState(false);
+  useRegisterModalDirty(dirty);
 
   useEffect(() => {
     setForm(bookingToEditState(booking));
     setRoomLines(bookingToRoomLines(booking));
     setError('');
     setActiveTab('stay');
+    setDirty(false);
   }, [booking?.id]);
 
   const originalRoomLines = useMemo(() => bookingToRoomLines(booking), [booking?.id]);
@@ -256,16 +261,19 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
   const handleLineChange = (lineId, patch) => {
     setRoomLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
     setError('');
+    setDirty(true);
   };
 
   const handleAddLine = () => {
     setRoomLines((prev) => [...prev, createRoomLine()]);
     setError('');
+    setDirty(true);
   };
 
   const handleRemoveLine = (lineId) => {
     setRoomLines((prev) => (prev.length <= 1 ? prev : prev.filter((line) => line.id !== lineId)));
     setError('');
+    setDirty(true);
   };
 
   const manualDiscountRaw = parseFloat(form.admin_discount_amount);
@@ -280,6 +288,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       cleanPatch.guest_phone = digitsOnly(cleanPatch.guest_phone);
     }
     setForm((f) => ({ ...f, ...cleanPatch }));
+    setDirty(true);
   };
 
   const validate = () => {
@@ -701,7 +710,11 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
             </SubmitButton>
           )}
           {onCancel && (
-            <button type="button" onClick={onCancel} className="text-sm text-aegean-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => (requestClose || onCancel)?.()}
+              className="text-sm text-aegean-600 hover:underline"
+            >
               Cancel
             </button>
           )}

@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import Pagination from '../components/ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
+import { useDirtySnapshot, useUnsavedNavigation } from '../hooks/useConfirmLeave';
 
 export default function AdminDiscounts() {
   const [discounts, setDiscounts] = useState([]);
@@ -17,6 +18,9 @@ export default function AdminDiscounts() {
   const [form, setForm] = useState({
     code: '', description: '', type: 'percentage', value: 10, min_nights: 1,
   });
+  const [discountBaselineKey, setDiscountBaselineKey] = useState(0);
+  const discountDirty = useDirtySnapshot(form, true, discountBaselineKey);
+  useUnsavedNavigation(discountDirty);
 
   const load = () => api.get('/admin/discounts').then((r) => setDiscounts(r.data)).finally(() => setLoading(false));
   useEffect(() => {
@@ -35,6 +39,7 @@ export default function AdminDiscounts() {
     try {
       await api.post('/admin/discounts', form);
       setForm({ code: '', description: '', type: 'percentage', value: 10, min_nights: 1 });
+      setDiscountBaselineKey((n) => n + 1);
       load();
       toast.success('Discount created.');
     } catch (err) {
