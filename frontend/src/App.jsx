@@ -1,5 +1,11 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Outlet,
+  Route,
+  RouterProvider,
+} from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ConfirmProvider } from './context/ConfirmContext';
@@ -55,92 +61,112 @@ function Lazy({ children }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
 
+/** Data-router shell — required for useBlocker (unsaved leave) on Quotation / Pricing / etc. */
+function AppShell() {
+  return (
+    <>
+      <ScrollToTop />
+      <Outlet />
+    </>
+  );
+}
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppShell />}>
+      <Route element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="about" element={<Lazy><About /></Lazy>} />
+        <Route path="rooms" element={<Lazy><Rooms /></Lazy>} />
+        <Route path="rooms/:slug" element={<Lazy><RoomDetail /></Lazy>} />
+        <Route path="amenities" element={<Lazy><Amenities /></Lazy>} />
+        <Route path="gallery" element={<Lazy><Gallery /></Lazy>} />
+        <Route path="meals" element={<Lazy><Meals /></Lazy>} />
+        <Route path="whats-new" element={<Lazy><WhatsNew /></Lazy>} />
+        <Route path="booking" element={<Lazy><Booking /></Lazy>} />
+        <Route
+          path="booking/confirm/:reference"
+          element={
+            <Lazy>
+              <BookingConfirmation />
+            </Lazy>
+          }
+        />
+        <Route path="contact" element={<Lazy><Contact /></Lazy>} />
+        <Route path="faq" element={<Lazy><FAQ /></Lazy>} />
+        <Route path="policies" element={<Lazy><Policies /></Lazy>} />
+      </Route>
+
+      <Route
+        path="admin/login"
+        element={
+          <Lazy>
+            <AdminLogin />
+          </Lazy>
+        }
+      />
+      <Route
+        path="admin/quotation/print"
+        element={
+          <Lazy>
+            <QuotationPrint />
+          </Lazy>
+        }
+      />
+      <Route
+        path="admin/bookings/:bookingId/print-island"
+        element={
+          <Lazy>
+            <IslandHoppingPrint />
+          </Lazy>
+        }
+      />
+      <Route
+        path="admin/bookings/:bookingId/print-soa"
+        element={
+          <Lazy>
+            <BookingSoaPrint />
+          </Lazy>
+        }
+      />
+      <Route
+        path="admin"
+        element={
+          <Lazy>
+            <AdminLayout />
+          </Lazy>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="bookings" element={<AdminBookings />} />
+        <Route path="calendar" element={<AdminCalendar />} />
+        <Route path="rooms" element={<AdminRooms />} />
+        <Route path="availability" element={<AdminAvailability />} />
+        <Route path="payments" element={<AdminPaymentMethods />} />
+        <Route path="pricing" element={<AdminPricing />} />
+        <Route path="quotation" element={<AdminQuotation />} />
+        <Route path="quotation/new" element={<AdminQuotation />} />
+        <Route path="quotation/:id" element={<AdminQuotation />} />
+        <Route path="guests" element={<AdminGuests />} />
+        <Route path="inquiries" element={<AdminInquiries />} />
+        <Route path="gallery" element={<AdminGallery />} />
+        <Route path="menu" element={<AdminMenu />} />
+        <Route path="faq" element={<AdminFAQ />} />
+        <Route path="policies" element={<AdminPolicies />} />
+        <Route path="whats-new" element={<WhatsNewAdmin />} />
+        <Route path="settings" element={<AdminSettings />} />
+      </Route>
+    </Route>
+  )
+);
+
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-      <ConfirmProvider>
-      <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Home />} />
-            <Route path="about" element={<Lazy><About /></Lazy>} />
-            <Route path="rooms" element={<Lazy><Rooms /></Lazy>} />
-            <Route path="rooms/:slug" element={<Lazy><RoomDetail /></Lazy>} />
-            <Route path="amenities" element={<Lazy><Amenities /></Lazy>} />
-            <Route path="gallery" element={<Lazy><Gallery /></Lazy>} />
-            <Route path="meals" element={<Lazy><Meals /></Lazy>} />
-            <Route path="whats-new" element={<Lazy><WhatsNew /></Lazy>} />
-            <Route path="booking" element={<Lazy><Booking /></Lazy>} />
-            <Route path="booking/confirm/:reference" element={<Lazy><BookingConfirmation /></Lazy>} />
-            <Route path="contact" element={<Lazy><Contact /></Lazy>} />
-            <Route path="faq" element={<Lazy><FAQ /></Lazy>} />
-            <Route path="policies" element={<Lazy><Policies /></Lazy>} />
-          </Route>
-
-          <Route
-            path="admin/login"
-            element={
-              <Lazy>
-                <AdminLogin />
-              </Lazy>
-            }
-          />
-          <Route
-            path="admin/quotation/print"
-            element={
-              <Lazy>
-                <QuotationPrint />
-              </Lazy>
-            }
-          />
-          <Route
-            path="admin/bookings/:bookingId/print-island"
-            element={
-              <Lazy>
-                <IslandHoppingPrint />
-              </Lazy>
-            }
-          />
-          <Route
-            path="admin/bookings/:bookingId/print-soa"
-            element={
-              <Lazy>
-                <BookingSoaPrint />
-              </Lazy>
-            }
-          />
-          <Route
-            path="admin"
-            element={
-              <Lazy>
-                <AdminLayout />
-              </Lazy>
-            }
-          >
-            <Route index element={<AdminDashboard />} />
-            <Route path="bookings" element={<AdminBookings />} />
-            <Route path="calendar" element={<AdminCalendar />} />
-            <Route path="rooms" element={<AdminRooms />} />
-            <Route path="availability" element={<AdminAvailability />} />
-            <Route path="payments" element={<AdminPaymentMethods />} />
-            <Route path="pricing" element={<AdminPricing />} />
-            <Route path="quotation" element={<AdminQuotation />} />
-            <Route path="quotation/new" element={<AdminQuotation />} />
-            <Route path="quotation/:id" element={<AdminQuotation />} />
-            <Route path="guests" element={<AdminGuests />} />
-            <Route path="inquiries" element={<AdminInquiries />} />
-            <Route path="gallery" element={<AdminGallery />} />
-            <Route path="menu" element={<AdminMenu />} />
-            <Route path="faq" element={<AdminFAQ />} />
-            <Route path="policies" element={<AdminPolicies />} />
-            <Route path="whats-new" element={<WhatsNewAdmin />} />
-            <Route path="settings" element={<AdminSettings />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-      </ConfirmProvider>
+        <ConfirmProvider>
+          <RouterProvider router={router} />
+        </ConfirmProvider>
       </ToastProvider>
     </AuthProvider>
   );
