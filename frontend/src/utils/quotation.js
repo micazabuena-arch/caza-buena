@@ -847,6 +847,21 @@ export function computeQuotationTotals(quote, options = {}) {
   return { accommodation, tour, bilao, boodleFight, customAddons, addOnsTotal, grandTotal };
 }
 
+/** Grand-total row label — only lists sections that are enabled on the quote. */
+export function buildQuotationGrandTotalLabel(quote, customAddons = {}) {
+  const parts = ['accommodation'];
+  if (quote?.tourEnabled) parts.push('tour');
+  if (quote?.bilaoEnabled) parts.push('seafood bilao');
+  if (quote?.boodleEnabled) parts.push('boodle fight');
+  if (
+    quote?.customAddonsEnabled &&
+    (Number(customAddons.total) > 0 || (customAddons.lines?.length ?? 0) > 0)
+  ) {
+    parts.push('other add-ons');
+  }
+  return parts.length === 1 ? 'Total' : `Total (${parts.join(' + ')})`;
+}
+
 /** Format for document cells — 2 decimals when needed. */
 export function formatQuoteAmount(value) {
   const num = Number(value) || 0;

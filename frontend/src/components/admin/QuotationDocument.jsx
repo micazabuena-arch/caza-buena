@@ -2,6 +2,7 @@ import { resort } from '../../data/placeholders';
 import { BILAO_PACKAGES, BOODLE_FIGHT_PACKAGES } from '../../data/bookingAddOns';
 import { ISLAND_HOPPING_RATES } from '../../data/islandHoppingRates';
 import {
+  buildQuotationGrandTotalLabel,
   computeQuotationTotals,
   formatQuoteAmount,
   formatQuoteParen,
@@ -402,8 +403,7 @@ export default function QuotationDocument({
         <tbody>
           <tr className="q-grand-total font-bold">
             <td className={`${td} border-gray-400 text-[10pt]`} colSpan={4}>
-              Total (accommodation + tour + seafood bilao + boodle fight
-              {customAddons.total > 0 ? ' + other add-ons' : ''})
+              {buildQuotationGrandTotalLabel(quote, customAddons)}
             </td>
             <td className={`${tdRight} border-gray-400 text-[10pt]`}>
               {formatQuoteAmount(grandTotal)}
