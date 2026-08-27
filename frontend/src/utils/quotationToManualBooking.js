@@ -201,14 +201,14 @@ function resolvePaymentFields(quote, totals, depositPercent = 20) {
 function buildQuotedAccommodationPricing(quote, bookingRoomLines) {
   const normalized = normalizeQuotation(quote);
   const accommodation = computeAccommodation(normalized);
-  const mainNights = normalized.nights > 0 ? normalized.nights : 1;
 
-  const quoteRooms = (normalized.rooms || []).filter(
-    (entry) => entry?.roomId || entry?.roomType
-  );
-  const quoteRoomTotals = quoteRooms.map((row) => parseMoney(row.rate) * mainNights);
-  const roomOnlyTotal = quoteRoomTotals.reduce((sum, total) => sum + total, 0);
-  const additionalPaxTotal = Math.max(0, accommodation.roomSubtotal - roomOnlyTotal);
+  // Room rows already include occupancy extras folded into total; Additional pax stays separate.
+  const quoteRoomTotals = (accommodation.roomLines || [])
+    .filter((line) => !String(line.roomType || '').startsWith('Additional pax'))
+    .map((line) => Number(line.total) || 0);
+  const additionalPaxTotal = (accommodation.roomLines || [])
+    .filter((line) => String(line.roomType || '').startsWith('Additional pax'))
+    .reduce((sum, line) => sum + (Number(line.total) || 0), 0);
 
   const bookedLines = (bookingRoomLines || []).filter((line) => line.room_id);
   const lineSubtotals = bookedLines.map((_, index) => {

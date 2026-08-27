@@ -1,13 +1,11 @@
 import FoodAddOnsOrderSummary from '../booking/FoodAddOnsOrderSummary';
-import {
-  collectBookingExtraChargeLines,
-  quoteRoomDisplayAmount,
-} from '../../utils/extraGuestLabels';
+import { quoteRoomDisplayAmount } from '../../utils/extraGuestLabels';
 
 const rowClass = 'flex justify-between gap-4 text-sm text-aegean-700';
 
 /**
  * Itemized price summary for admin manual booking (payment step).
+ * Extra guest fees are included in each room line total.
  */
 export default function ManualBookingPriceSummary({
   roomLines,
@@ -25,7 +23,6 @@ export default function ManualBookingPriceSummary({
   totalAmount,
 }) {
   const bookedLines = roomLines.filter((line) => line.room_id);
-  const extraChargeLines = collectBookingExtraChargeLines(roomLines, lineQuotes, rooms);
   const foodTotal = extrasQuote?.valid
     ? (extrasQuote.bilao_amount || 0) + (extrasQuote.boodle_fight_amount || 0)
     : 0;
@@ -52,21 +49,6 @@ export default function ManualBookingPriceSummary({
               </div>
             );
           })}
-
-          {extraChargeLines.length > 0 && (
-            <div className="space-y-1 pt-1 border-t border-aegean-100">
-              <p className="text-xs font-medium text-aegean-600">Extra guest charges</p>
-              {extraChargeLines.map((item, idx) => (
-                <div
-                  key={`${item.label}-${idx}`}
-                  className="flex justify-between gap-4 text-xs text-aegean-600"
-                >
-                  <span className="min-w-0">{item.label}</span>
-                  <span className="shrink-0">₱{Number(item.amount).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
 
           <div className={`${rowClass} font-medium pt-1 border-t border-aegean-100`}>
             <span>{bookedLines.length > 1 ? 'Room stay subtotal' : 'Room stay'}</span>

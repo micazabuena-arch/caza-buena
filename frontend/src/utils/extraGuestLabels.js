@@ -94,11 +94,11 @@ export function collectBookingExtraChargeLines(roomLines, lineQuotes, rooms) {
   return lines;
 }
 
-/** Room line amount — base rate only when extra guest charges are shown separately. */
+/**
+ * Room line amount for price summaries.
+ * Extra adults/children within the stay are folded into the room total
+ * (not shown as a separate "Extra guest charges" block).
+ */
 export function quoteRoomDisplayAmount(quote) {
-  const extra = Number(quote?.extra_person_charges) || 0;
-  if (extra > 0 && quote?.room_subtotal != null) {
-    return Number(quote.room_subtotal);
-  }
-  return Number(quote?.subtotal || 0);
+  return Number(quote?.subtotal || quote?.room_subtotal || 0);
 }

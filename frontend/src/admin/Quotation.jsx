@@ -36,6 +36,7 @@ import {
   getQuotationCheckIn,
   getQuotedRoomNightlyRate,
   getQuotationStayNights,
+  computeQuoteRoomOccupancyExtra,
   normalizeQuotation,
   parseQuotationDateRange,
 } from '../utils/quotation';
@@ -399,6 +400,7 @@ export default function AdminQuotation() {
       roomType: room.name?.toUpperCase() || '',
       rate: checkIn ? getQuotedRoomNightlyRate(room, checkIn, nights) : room.price_per_night ?? '',
       occupants: room.included_adults ?? room.min_guests ?? 2,
+      includedAdults: room.included_adults ?? 2,
     });
   };
 
@@ -950,10 +952,24 @@ export default function AdminQuotation() {
                   </Field>
                 </div>
                 <p className="text-xs text-aegean-500">
-                  Line total: ₱
-                  {formatQuoteAmount((parseFloat(row.rate) || 0) * stayNights)}
-                  {' · '}
-                  {stayNights} night{stayNights !== 1 ? 's' : ''}
+                  {(() => {
+                    const base = (parseFloat(row.rate) || 0) * stayNights;
+                    const occupancyExtra = computeQuoteRoomOccupancyExtra(row, {
+                      ...getAdditionalPaxContext(quote, { extraPersonRates }),
+                      fallbackNights: stayNights,
+                    });
+                    const lineTotal = base + occupancyExtra;
+                    return (
+                      <>
+                        Line total: ₱{formatQuoteAmount(lineTotal)}
+                        {occupancyExtra > 0
+                          ? ` (includes ₱${formatQuoteAmount(occupancyExtra)} for guests above package)`
+                          : ''}
+                        {' · '}
+                        {stayNights} night{stayNights !== 1 ? 's' : ''}
+                      </>
+                    );
+                  })()}
                 </p>
               </div>
             ))}
@@ -968,6 +984,11 @@ export default function AdminQuotation() {
                   <Plus size={14} /> Add additional pax
                 </button>
               </div>
+              <p className="text-xs text-aegean-500">
+                Guests above the room package (e.g. 3rd/4th on a Queen) are already included in the
+                room total when you raise Occupants. Use this section for children or other charges
+                not covered by room occupants.
+              </p>
               {(quote.additionalPaxLines || []).map((paxRow, index) => (
                 <div
                   key={`additional-pax-${index}`}

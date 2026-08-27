@@ -121,12 +121,6 @@ export default function BookingStayDetails({ booking, onViewPaymentProof, onEdit
               value={`${booking.check_in} → ${booking.check_out} (${booking.nights} night${booking.nights !== 1 ? 's' : ''})`}
             />
             <Row label="Guests" value={formatGuestCount(booking)} />
-            {Number(booking.extra_person_charges) > 0 && (
-              <Row
-                label="Extra guest charges"
-                value={`₱${Number(booking.extra_person_charges).toLocaleString()}`}
-              />
-            )}
           </Panel>
         )}
 

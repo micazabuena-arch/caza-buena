@@ -4,7 +4,7 @@ import { ISLAND_HOPPING_RATES, resolveFacilitationFee } from '../data/islandHopp
 import { addDays, differenceInCalendarDays, format, isValid, parse, parseISO } from 'date-fns';
 
 export function emptyQuotationRoom() {
-  return { roomId: '', roomType: '', occupants: 2, rate: '', nights: 1 };
+  return { roomId: '', roomType: '', occupants: 2, includedAdults: 2, rate: '', nights: 1 };
 }
 
 export function emptyQuotationBoat() {
@@ -375,6 +375,43 @@ export function getAdditionalPaxContext(quote, options = {}) {
   };
 }
 
+/** Adults covered by the base room rate on a quotation room line. */
+export function resolveQuoteRoomIncludedAdults(row) {
+  if (row?.includedAdults !== '' && row?.includedAdults != null) {
+    const n = parseIntSafe(row.includedAdults);
+    if (n > 0) return n;
+  }
+  const type = String(row?.roomType || '').toLowerCase();
+  if (type.includes('suite')) return 2;
+  if (type.includes('queen')) return 2;
+  return 2;
+}
+
+/**
+ * Extra-adult fees for occupants above the room package.
+ * Folded into the room line total (not shown as "Additional pax").
+ */
+export function computeQuoteRoomOccupancyExtra(row, paxContext = {}) {
+  const occupants = Math.max(1, parseIntSafe(row?.occupants) || 1);
+  const included = resolveQuoteRoomIncludedAdults(row);
+  const extraAdults = Math.max(0, occupants - included);
+  if (extraAdults <= 0) return 0;
+
+  const nights = Math.max(
+    1,
+    paxContext.fallbackNights || parseIntSafe(row?.nights) || 1
+  );
+  const rates = paxContext.rates || EXTRA_PERSON_RATES;
+  const { weekdayNights, weekendNights } = countWeekdayWeekendNights(
+    paxContext.checkIn,
+    nights
+  );
+  return (
+    extraAdults *
+    (weekdayNights * rates.adult_weekday + weekendNights * rates.adult_weekend)
+  );
+}
+
 function resolveAdditionalPaxLineNights(row, fallbackNights = 1) {
   const maxNights = Math.max(1, parseIntSafe(fallbackNights) || 1);
   const requested =
@@ -608,6 +645,10 @@ export function normalizeQuotation(quote) {
     rooms: (quote.rooms || [emptyQuotationRoom()]).map((row) => ({
       ...row,
       nights: mainNights,
+      includedAdults:
+        row.includedAdults !== '' && row.includedAdults != null
+          ? row.includedAdults
+          : resolveQuoteRoomIncludedAdults(row),
     })),
     boats,
     bilaoEnabled,
@@ -625,17 +666,24 @@ export function computeAccommodation(quote, options = {}) {
   const q = normalizeQuotation(quote);
   const paxContext = getAdditionalPaxContext(q, options);
   const mainNights = paxContext.fallbackNights;
+  // Extra adults above the room package are folded into the room total (not a separate line).
   const roomLines = (q.rooms || []).map((row) => {
-    const rate = parseMoney(row.rate);
+    const baseRate = parseMoney(row.rate);
     const nights = mainNights > 0 ? mainNights : Math.max(1, parseIntSafe(row.nights) || 1);
     const occupants = Math.max(1, parseIntSafe(row.occupants) || 1);
-    const total = rate * nights;
+    const occupancyExtra = computeQuoteRoomOccupancyExtra(row, {
+      ...paxContext,
+      fallbackNights: nights,
+    });
+    const total = baseRate * nights + occupancyExtra;
+    const rate = nights > 0 ? Math.round((total / nights) * 100) / 100 : baseRate;
     return {
       roomType: row.roomType?.trim() || 'Room',
       occupants,
       rate,
       nights,
       total,
+      occupancyExtra,
     };
   });
 

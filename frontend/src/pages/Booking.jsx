@@ -40,10 +40,7 @@ import {
   totalGuestsFromLines,
   usedRoomIds,
 } from '../utils/bookingRoomLines';
-import {
-  collectBookingExtraChargeLines,
-  quoteRoomDisplayAmount,
-} from '../utils/extraGuestLabels';
+import { quoteRoomDisplayAmount } from '../utils/extraGuestLabels';
 
 
 export default function Booking() {
@@ -199,16 +196,6 @@ export default function Booking() {
 
   const nights = Object.values(lineQuotes)[0]?.nights || 0;
   const subtotal = roomLines.reduce((sum, line) => sum + (Number(lineQuotes[line.id]?.subtotal) || 0), 0);
-  const extraCharges = roomLines.reduce(
-    (sum, line) => sum + (Number(lineQuotes[line.id]?.extra_person_charges) || 0),
-    0
-  );
-  const roomSubtotal = roomLines.reduce(
-    (sum, line) =>
-      sum +
-      (Number(lineQuotes[line.id]?.room_subtotal) || Number(lineQuotes[line.id]?.subtotal) || 0),
-    0
-  );
   const allLinesReady =
     roomLines.length > 0 &&
     roomLines.every((line) => line.room_id) &&
@@ -218,11 +205,6 @@ export default function Booking() {
       return quote?.available && !quote?.occupancy_error;
     });
   const roomTotal = subtotal;
-
-  const extraChargeLines = useMemo(
-    () => collectBookingExtraChargeLines(roomLines, lineQuotes, rooms),
-    [roomLines, lineQuotes, rooms]
-  );
 
   const islandQuote =
     islandHoppingEnabled && islandHopping.passengers?.length
@@ -675,9 +657,10 @@ export default function Booking() {
                   guestFacing
                 />
                 <p className="text-xs text-aegean-500 mt-3">
-                  Extra adult ₱{extraPersonRates.adult_weekday}/night (Mon–Thu) or ₱
-                  {extraPersonRates.adult_weekend}/night (Fri–Sun) above included adults · child 7–12
-                  ₱{extraPersonRates.child_7_12}/night · child 6 & below free.
+                  Guests above the room package are added into the room total automatically (extra
+                  adult ₱{extraPersonRates.adult_weekday}/night Mon–Thu or ₱
+                  {extraPersonRates.adult_weekend}/night Fri–Sun · child 7–12 ₱
+                  {extraPersonRates.child_7_12}/night · child 6 & below free).
                 </p>
               </div>
               </FormSection>
@@ -816,25 +799,7 @@ export default function Booking() {
                     {roomLines.length > 1 && (
                       <div className="flex justify-between font-medium pt-1 border-t border-aegean-200">
                         <span>All rooms subtotal</span>
-                        <span>₱{Number(roomSubtotal).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {extraChargeLines.length > 0 && (
-                      <div className="border-t border-aegean-200 pt-2 space-y-1.5">
-                        <p className="text-xs font-medium text-aegean-700">Extra guest charges</p>
-                        {extraChargeLines.map((item, idx) => (
-                          <div
-                            key={`${item.label}-${idx}`}
-                            className="flex justify-between gap-4 text-xs text-aegean-600"
-                          >
-                            <span className="min-w-0">{item.label}</span>
-                            <span className="shrink-0">₱{Number(item.amount).toLocaleString()}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between text-xs font-medium text-aegean-700 pt-0.5">
-                          <span>Extra guest subtotal</span>
-                          <span>₱{Number(extraCharges).toLocaleString()}</span>
-                        </div>
+                        <span>₱{Number(roomTotal).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
