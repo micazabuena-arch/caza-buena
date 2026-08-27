@@ -21,6 +21,7 @@ import BookingStayEditForm from '../components/admin/BookingStayEditForm';
 import AdminModal from '../components/admin/AdminModal';
 import AdminBookingCard from '../components/admin/AdminBookingCard';
 import AdminTableShell from '../components/ui/AdminTableShell';
+import BookingRoomsCell, { BookingStatusBadges } from '../components/admin/BookingRoomsCell';
 import { exportGuestBookingsExcel } from '../utils/guestExport';
 import { formatMoney } from '../utils/money';
 
@@ -292,6 +293,14 @@ export default function AdminGuests() {
                   formatGuestCount={formatGuestCount}
                   payLabel="Total"
                   payAmount={Number(b.total_amount)}
+                  statusBadge={
+                    <BookingStatusBadges
+                      booking={b}
+                      statusColors={statusColors}
+                      formatStatus={formatStatus}
+                    />
+                  }
+                  roomsCell={<BookingRoomsCell booking={b} />}
                   actions={
                     <IconActionGroup>
                       <IconActionButton icon={Eye} label="View stay" onClick={() => openView(b)} />
@@ -335,7 +344,9 @@ export default function AdminGuests() {
                       <p className="text-xs text-aegean-500">{b.guest_email}</p>
                     </td>
                     <td className="p-4 text-aegean-700 whitespace-nowrap">{formatGuestCount(b)}</td>
-                    <td className="p-4">{b.room_names || b.room_name}</td>
+                    <td className="p-4">
+                      <BookingRoomsCell booking={b} />
+                    </td>
                     <td className="p-4 whitespace-nowrap">
                       {b.check_in} → {b.check_out}
                     </td>
@@ -343,13 +354,11 @@ export default function AdminGuests() {
                       ₱{formatMoney(b.total_amount)}
                     </td>
                     <td className="p-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
-                          statusColors[b.status] || 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {formatStatus(b.status)}
-                      </span>
+                      <BookingStatusBadges
+                        booking={b}
+                        statusColors={statusColors}
+                        formatStatus={formatStatus}
+                      />
                     </td>
                     <td className="p-4">
                       <IconActionGroup>
