@@ -92,7 +92,7 @@ function SidebarContent({ onNavigate, guestDayCounts }) {
               <span
                 className={`min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold flex items-center justify-center ${
                   guestBadgeTotal > 0
-                    ? 'bg-amber-400 text-aegean-900'
+                    ? 'bg-white text-aegean-800'
                     : 'bg-aegean-600/80 text-aegean-200'
                 }`}
                 title={`${guestDayCounts.check_ins_today} check-in · ${guestDayCounts.check_outs_today} check-out today`}
