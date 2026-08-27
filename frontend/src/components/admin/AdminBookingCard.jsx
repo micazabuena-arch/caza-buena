@@ -9,6 +9,8 @@ export default function AdminBookingCard({
   payLabel = 'Pay now',
   payAmount,
   paySubtext,
+  statusBadge,
+  roomsCell,
   actions,
 }) {
   const pay =
@@ -23,13 +25,15 @@ export default function AdminBookingCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-mono text-xs text-aegean-600 break-all">{booking.reference_code}</p>
-        <span
-          className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
-            statusColors[booking.status] || 'bg-gray-100 text-gray-700'
-          }`}
-        >
-          {formatStatus(booking.status)}
-        </span>
+        {statusBadge || (
+          <span
+            className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
+              statusColors[booking.status] || 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {formatStatus(booking.status)}
+          </span>
+        )}
       </div>
 
       <div className="space-y-1 text-sm">
@@ -42,7 +46,9 @@ export default function AdminBookingCard({
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
           <dt className="text-aegean-500">Room</dt>
-          <dd className="text-aegean-800 font-medium">{booking.room_name}</dd>
+          <dd className="text-aegean-800 font-medium">
+            {roomsCell || booking.room_name}
+          </dd>
         </div>
         <div>
           <dt className="text-aegean-500">Guests</dt>

@@ -24,8 +24,10 @@ import AdminModal from '../components/admin/AdminModal';
 import AdminBookingCard from '../components/admin/AdminBookingCard';
 import ManualBookingForm from '../components/admin/ManualBookingForm';
 import AdminTableShell from '../components/ui/AdminTableShell';
+import BookingRoomsCell, { BookingStatusBadges } from '../components/admin/BookingRoomsCell';
 import { openBookingSoaPrint } from '../utils/openBookingSoaPrint';
 import { SOA_DOCUMENT_TYPES } from '../utils/soaDocumentTitle';
+import { isBookingStayPast } from '../utils/bookingListDisplay';
 
 const statuses = [
   'pending',
@@ -92,6 +94,8 @@ export default function AdminBookings() {
   const [showManualForm, setShowManualForm] = useState(false);
   const [quotationSeed, setQuotationSeed] = useState(null);
   const [paymentProofUrl, setPaymentProofUrl] = useState(null);
+  // Stay timeline filter (independent of payment/booking status).
+  const [stayScope, setStayScope] = useState('all');
 
   const load = () => {
     setLoading(true);
@@ -119,6 +123,12 @@ export default function AdminBookings() {
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
 
+  const stayScopedBookings = bookings.filter((b) => {
+    if (stayScope === 'past') return isBookingStayPast(b);
+    if (stayScope === 'upcoming') return !isBookingStayPast(b);
+    return true;
+  });
+
   // Status dropdown still loads from the API; search + check-in dates filter the current result set.
   const {
     search,
@@ -136,12 +146,12 @@ export default function AdminBookings() {
     from,
     to,
   } = useFilteredPagination(
-    bookings,
+    stayScopedBookings,
     {
       searchFields: STAY_SEARCH_FIELDS,
       getDate: getStayCheckIn,
     },
-    filter
+    `${filter}|${stayScope}`
   );
 
   const openDetail = async (id, { silent = false } = {}) => {
@@ -352,6 +362,16 @@ export default function AdminBookings() {
               <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
             ))}
           </select>
+          <select
+            value={stayScope}
+            onChange={(e) => setStayScope(e.target.value)}
+            className="border rounded-lg px-4 py-2 text-sm w-full sm:w-auto"
+            title="Filter by whether the stay dates have ended"
+          >
+            <option value="all">All stays</option>
+            <option value="upcoming">Current & upcoming</option>
+            <option value="past">Past stays</option>
+          </select>
         </div>
       </div>
 
@@ -421,6 +441,14 @@ export default function AdminBookings() {
                       </span>
                     ) : null
                   }
+                  statusBadge={
+                    <BookingStatusBadges
+                      booking={b}
+                      statusColors={statusColors}
+                      formatStatus={formatStatus}
+                    />
+                  }
+                  roomsCell={<BookingRoomsCell booking={b} />}
                   actions={
                     <IconActionGroup>
                       <IconActionButton
@@ -493,7 +521,9 @@ export default function AdminBookings() {
                       <p className="text-xs text-aegean-500">{b.guest_email}</p>
                     </td>
                     <td className="p-4 text-aegean-700 whitespace-nowrap">{formatGuestCount(b)}</td>
-                    <td className="p-4">{b.room_names || b.room_name}</td>
+                    <td className="p-4">
+                      <BookingRoomsCell booking={b} />
+                    </td>
                     <td className="p-4 whitespace-nowrap">{b.check_in} → {b.check_out}</td>
                     <td className="p-4">
                       <span className="block">₱{Number(b.amount_to_pay ?? b.total_amount).toLocaleString()} due</span>
@@ -504,13 +534,11 @@ export default function AdminBookings() {
                       )}
                     </td>
                     <td className="p-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
-                          statusColors[b.status] || 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {formatStatus(b.status)}
-                      </span>
+                      <BookingStatusBadges
+                        booking={b}
+                        statusColors={statusColors}
+                        formatStatus={formatStatus}
+                      />
                     </td>
                     <td className="p-4">
                       <IconActionGroup>
