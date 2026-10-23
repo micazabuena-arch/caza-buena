@@ -29,7 +29,12 @@ function isInsideDir(parentDir, filePath) {
  */
 export function mountUploads(app, uploadsDir = UPLOADS_DIR) {
   const root = path.resolve(uploadsDir);
-  fs.mkdirSync(root, { recursive: true });
+  try {
+    fs.mkdirSync(root, { recursive: true });
+  } catch (err) {
+    // Never crash the API over uploads folder creation — serve what we can.
+    console.warn(`[upload] Could not ensure uploads dir ${root}:`, err.message);
+  }
 
   app.use('/uploads', (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {

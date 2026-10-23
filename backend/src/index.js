@@ -50,7 +50,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Locally stored uploads (payment proofs, gallery, QR codes)
 // Use readFile-based serving — Hostinger has rejected express.static/sendFile before.
-mountUploads(app, UPLOADS_DIR);
+try {
+  mountUploads(app, UPLOADS_DIR);
+} catch (err) {
+  console.error('[upload] Failed to mount /uploads — API will still start:', err.message);
+}
 
 app.get('/api/health', async (_req, res) => {
   let database = 'connected';

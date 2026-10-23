@@ -3,8 +3,10 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
-import sharp from 'sharp';
 import cloudinary, { isCloudinaryConfigured } from '../config/cloudinary.js';
+
+// Do NOT import sharp at top level — a native-binding failure on Hostinger
+// would crash the whole API (503). Load it only when converting HEIC.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,6 +138,7 @@ async function normalizeBufferForStorage(buffer, originalName = '', mimetype = '
   }
 
   try {
+    const sharp = (await import('sharp')).default;
     const jpeg = await sharp(buffer).rotate().jpeg({ quality: 90 }).toBuffer();
     const nextName = String(originalName || 'proof.heic').replace(/\.(heic|heif)$/i, '.jpg');
     return { buffer: jpeg, originalName: nextName.endsWith('.jpg') ? nextName : `${nextName}.jpg` };
