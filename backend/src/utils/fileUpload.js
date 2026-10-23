@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,16 +13,103 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Default: backend/uploads (fine for local dev).
  * Production (Hostinger): set UPLOADS_DIR to a folder OUTSIDE the git deploy
  * directory so pull/redeploy does not wipe gallery, QR, and payment proofs.
- * Example: UPLOADS_DIR=/home/USER/caza-buena-uploads
+ *
+ * Hostinger File Manager shows /files/... but Node cannot use that virtual path.
+ * We map /files/foo → $HOME/foo (e.g. /files/caza-buena-uploads → ~/caza-buena-uploads).
+ * A bad UPLOADS_DIR must never crash the API — we fall back to backend/uploads.
  */
 const defaultUploadsDir = path.join(__dirname, '../../uploads');
-const envUploadsDir = (process.env.UPLOADS_DIR || '').trim();
-export const UPLOADS_DIR = envUploadsDir
-  ? path.resolve(envUploadsDir)
-  : defaultUploadsDir;
 
-// Create root once so static serving and first upload never fail on a fresh host
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+function homeDir() {
+  return process.env.HOME || process.env.USERPROFILE || os.homedir() || '';
+}
+
+/** True if this folder already has copied site media (prefer over empty dirs). */
+function uploadsContentScore(dir) {
+  let score = 0;
+  for (const name of ['rooms', 'gallery', 'qr-codes', 'whats-new', 'payment-proofs']) {
+    try {
+      if (fs.existsSync(path.join(dir, name))) score += 1;
+    } catch {
+      /* ignore */
+    }
+  }
+  return score;
+}
+
+function tryUseDir(dir) {
+  if (!dir) return null;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    // Prove we can write (Hostinger may allow mkdir but not write elsewhere)
+    const probe = path.join(dir, '.write-test');
+    fs.writeFileSync(probe, 'ok');
+    fs.unlinkSync(probe);
+    return dir;
+  } catch (err) {
+    console.warn(`[upload] Cannot use uploads dir ${dir}:`, err.message);
+    return null;
+  }
+}
+
+function resolveUploadsDir() {
+  const raw = (process.env.UPLOADS_DIR || '').trim();
+  if (!raw) {
+    const fallback = tryUseDir(defaultUploadsDir) || defaultUploadsDir;
+    return fallback;
+  }
+
+  const home = homeDir();
+  const candidates = [];
+
+  // Hostinger File Manager path → real home path
+  if (raw === '/files' || raw.startsWith('/files/')) {
+    const rel = raw.replace(/^\/files\/?/, '');
+    if (home) candidates.push(path.join(home, rel));
+  }
+
+  if (raw.startsWith('~/')) {
+    if (home) candidates.push(path.join(home, raw.slice(2)));
+  } else if (raw === '~') {
+    if (home) candidates.push(home);
+  }
+
+  // Bare folder name sitting next to nodejs/ in File Manager home
+  if (!path.isAbsolute(raw) && !raw.startsWith('~')) {
+    candidates.push(path.resolve(raw));
+    if (home) candidates.push(path.join(home, raw));
+  } else if (path.isAbsolute(raw) && !raw.startsWith('/files')) {
+    candidates.push(path.resolve(raw));
+  }
+
+  // Always keep default as last resort so a bad env cannot 503 the site
+  candidates.push(defaultUploadsDir);
+
+  const usable = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    const ok = tryUseDir(resolved);
+    if (ok) usable.push(ok);
+  }
+
+  if (usable.length === 0) {
+    console.error('[upload] No writable uploads directory — using default path anyway');
+    return defaultUploadsDir;
+  }
+
+  usable.sort((a, b) => uploadsContentScore(b) - uploadsContentScore(a));
+  const chosen = usable[0];
+  if (chosen !== path.resolve(raw) && raw.startsWith('/files')) {
+    console.log(`[upload] Mapped Hostinger path ${raw} → ${chosen}`);
+  }
+  return chosen;
+}
+
+export const UPLOADS_DIR = resolveUploadsDir();
+console.log(`[upload] Using uploads directory: ${UPLOADS_DIR}`);
 
 /** Ensure upload subdirectory exists */
 function ensureDir(subfolder) {
