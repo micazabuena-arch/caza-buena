@@ -25,7 +25,10 @@ import {
 } from '../../data/islandHoppingRates';
 import { islandHoppingRatesFromSettings } from '../../utils/islandHoppingRatesConfig';
 import { defaultFoodAddOnRates, foodAddOnRatesFromSettings } from '../../utils/foodAddOnRatesConfig';
-import { validateManualBookingFields } from '../../utils/manualBookingValidation';
+import {
+  collectOverCapacityWarnings,
+  validateManualBookingFields,
+} from '../../utils/manualBookingValidation';
 import AdminBookingDiscountFields from './AdminBookingDiscountFields';
 import ManualBookingPriceSummary from './ManualBookingPriceSummary';
 import { minCheckOutDate, isPastStayDate } from '../../utils/stayDates';
@@ -291,13 +294,14 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     ? 'suite'
     : 'queen';
 
+  // Admin may exceed room max — still use live quote pricing when the API returned a subtotal.
   const roomSubtotal = quotationPricing?.accommodationSubtotal
     ? Number(quotationPricing.accommodationSubtotal)
     : roomLines.reduce((sum, line) => {
         const quote = lineQuotes[line.id];
-        if (!quote || quote.occupancy_error) return sum;
-        if (!(quote.available || anteDate)) return sum;
-        if (quote.subtotal == null) return sum;
+        if (!quote || quote.subtotal == null) return sum;
+        const calendarOk = quote.available || anteDate || quote.occupancy_error;
+        if (!calendarOk) return sum;
         return sum + Number(quote.subtotal);
       }, 0);
 
@@ -392,6 +396,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
       totalAmount,
       roomSubtotal,
       customPay,
+      allowOverCapacity: true,
     }),
     [
       roomLines,
@@ -546,14 +551,27 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
     e.preventDefault();
     if (!validateAll()) return;
 
+    const capacityWarnings = collectOverCapacityWarnings(
+      roomLines,
+      rooms,
+      displayLineQuotes
+    );
     const roomLabel = roomLines.length > 1 ? 'rooms' : 'room';
+    const baseMessage =
+      form.status === 'confirmed'
+        ? `This will block the ${roomLabel} on the website for these dates.`
+        : 'Create this booking record?';
+    const capacityNote =
+      capacityWarnings.length > 0
+        ? `\n\nGuest count exceeds the listed room capacity:\n• ${capacityWarnings.join('\n• ')}\n\nProceed anyway as staff override?`
+        : '';
     const ok = await confirm({
-      title: 'Create manual booking?',
-      message:
-        form.status === 'confirmed'
-          ? `This will block the ${roomLabel} on the website for these dates.`
-          : 'Create this booking record?',
-      confirmLabel: 'Yes, create',
+      title:
+        capacityWarnings.length > 0
+          ? 'Create booking over capacity?'
+          : 'Create manual booking?',
+      message: `${baseMessage}${capacityNote}`,
+      confirmLabel: capacityWarnings.length > 0 ? 'Yes, override & create' : 'Yes, create',
     });
     if (!ok) return;
 
@@ -673,6 +691,7 @@ export default function ManualBookingForm({ onSuccess, onCancel, quotationSeed =
               onRemoveLine={handleRemoveLine}
               usedRoomIds={usedRoomIds(roomLines)}
               allowUnavailable={anteDate}
+              allowOverCapacity
               showAssignedRoomNumber
             />
             {fieldErrors.room_id && (

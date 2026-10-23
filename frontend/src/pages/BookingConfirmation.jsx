@@ -59,7 +59,14 @@ export default function BookingConfirmation() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!file) {
+      toast.error('Please choose a payment screenshot or PDF first.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File is too large. Please use an image or PDF under 10MB.');
+      return;
+    }
     const ok = await confirm({
       title: 'Submit payment proof?',
       message: 'Make sure your screenshot or receipt is clear and shows the correct amount.',
@@ -263,11 +270,13 @@ export default function BookingConfirmation() {
                 <h4 className="font-medium flex items-center gap-2 text-aegean-800">
                   <Upload size={18} /> Step 3: Upload payment proof
                 </h4>
-                <p className="text-xs text-aegean-500">JPG, PNG, WebP, or PDF — max 10MB</p>
+                <p className="text-xs text-aegean-500">
+                  Phone screenshot, JPG, PNG, WebP, HEIC, or PDF — max 10MB
+                </p>
                 <input
                   type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setFile(e.target.files[0])}
+                  accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.pdf,application/pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
                   required
                   className="w-full text-sm border border-aegean-200 rounded-lg p-2"
                 />

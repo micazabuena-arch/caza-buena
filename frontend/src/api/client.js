@@ -27,9 +27,13 @@ api.interceptors.request.use((config) => {
   const token = getAdminToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  // Let browser set multipart boundary for file uploads
+  // Let browser set multipart boundary for file uploads (AxiosHeaders needs .set)
   if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Content-Type', false);
+    } else {
+      delete config.headers['Content-Type'];
+    }
   } else if (!config.headers['Content-Type']) {
     config.headers['Content-Type'] = 'application/json';
   }

@@ -27,6 +27,7 @@ import {
   roomLinesToPayload,
   usedRoomIds,
 } from '../../utils/bookingRoomLines';
+import { collectOverCapacityWarnings } from '../../utils/manualBookingValidation';
 import BookingCustomAddons from './BookingCustomAddons';
 import BookingPaymentsPanel from './BookingPaymentsPanel';
 import { useAdminModalClose, useRegisterModalDirty } from './AdminModal';
@@ -224,11 +225,12 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
     ? 'suite'
     : 'queen';
 
+  // Admin soft override: still price when API returns occupancy_error for over-capacity.
   const roomSubtotalFromQuotes = roomLines.reduce((sum, line) => {
     const quote = lineQuotes[line.id];
-    if (!quote || quote.occupancy_error) return sum;
-    if (!(quote.available || anteDate)) return sum;
-    if (quote.subtotal == null) return sum;
+    if (!quote || quote.subtotal == null) return sum;
+    const calendarOk = quote.available || anteDate || quote.occupancy_error;
+    if (!calendarOk) return sum;
     return sum + Number(quote.subtotal);
   }, 0);
 
@@ -308,10 +310,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       });
       if (unavailable) return 'One or more rooms are not available for the selected dates (tab 1).';
     }
-    for (const line of roomLines) {
-      const quote = lineQuotes[line.id];
-      if (quote?.occupancy_error) return `${quote.occupancy_error} (tab 1).`;
-    }
+    // Over-capacity is a soft staff override (confirmed on save) — do not hard-block here.
     if (!form.guest_name.trim()) return 'Guest name is required (tab 2).';
     if (!form.guest_email.trim()) return 'Email is required (tab 2).';
     if (!form.guest_phone.trim()) return 'Phone is required (tab 2).';
@@ -353,6 +352,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
       setError(validationError);
       return;
     }
+    const capacityWarnings = collectOverCapacityWarnings(roomLines, rooms, lineQuotes);
     const confirmMessage =
       stayConfigChanged && rebookQuote && !rebookQuote.error && roomLines.length === 1
         ? rebookConfirmMessage(
@@ -364,10 +364,17 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
         : stayConfigChanged
           ? 'Pricing will be recalculated based on your room and date updates.'
           : 'Pricing will be recalculated based on your updates.';
+    const capacityNote =
+      capacityWarnings.length > 0
+        ? `\n\nGuest count exceeds the listed room capacity:\n• ${capacityWarnings.join('\n• ')}\n\nProceed anyway as staff override?`
+        : '';
     const ok = await confirm({
-      title: 'Save booking changes?',
-      message: confirmMessage,
-      confirmLabel: 'Yes, save',
+      title:
+        capacityWarnings.length > 0
+          ? 'Save booking over capacity?'
+          : 'Save booking changes?',
+      message: `${confirmMessage}${capacityNote}`,
+      confirmLabel: capacityWarnings.length > 0 ? 'Yes, override & save' : 'Yes, save',
     });
     if (!ok) return;
 
@@ -482,6 +489,7 @@ export default function BookingStayEditForm({ booking, onSaved, onCancel }) {
               onRemoveLine={handleRemoveLine}
               usedRoomIds={usedRoomIds(roomLines)}
               allowUnavailable={anteDate}
+              allowOverCapacity
               showAssignedRoomNumber
             />
             {stayConfigChanged && roomLines.length === 1 && (

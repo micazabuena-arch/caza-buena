@@ -1104,56 +1104,76 @@ router.post(
   '/:reference/payment-proof',
   uploadPaymentProof.single('proof'),
   async (req, res) => {
-    const code = req.params.reference.toUpperCase();
-    const [rows] = await pool.query(
-      `SELECT b.*, r.name as room_name FROM bookings b
-       JOIN rooms r ON b.room_id = r.id WHERE b.reference_code = ?`,
-      [code]
-    );
-    if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
+    try {
+      const code = req.params.reference.toUpperCase();
+      // LEFT JOIN so a missing room row never blocks proof upload
+      const [rows] = await pool.query(
+        `SELECT b.*, r.name as room_name FROM bookings b
+         LEFT JOIN rooms r ON b.room_id = r.id WHERE b.reference_code = ?`,
+        [code]
+      );
+      if (rows.length === 0) return res.status(404).json({ message: 'Booking not found' });
 
-    const booking = rows[0];
-    if (!['awaiting_payment', 'payment_submitted'].includes(booking.status)) {
-      return res.status(400).json({ message: 'Payment cannot be uploaded for this booking status' });
-    }
+      const booking = rows[0];
+      if (!['awaiting_payment', 'payment_submitted'].includes(booking.status)) {
+        return res.status(400).json({
+          message: 'Payment cannot be uploaded for this booking status',
+        });
+      }
 
-    if (!req.file) return res.status(400).json({ message: 'Payment proof file required' });
+      if (!req.file) return res.status(400).json({ message: 'Payment proof file required' });
 
-    const isPdf = req.file.mimetype === 'application/pdf';
-    const { url: proofUrl, publicId } = await uploadFile(req.file.buffer, 'payment-proofs', {
-      originalName: req.file.originalname,
-      resourceType: isPdf ? 'raw' : 'image',
-    });
+      const isPdf = String(req.file.mimetype || '').toLowerCase() === 'application/pdf';
+      const { url: proofUrl, publicId } = await uploadFile(req.file.buffer, 'payment-proofs', {
+        originalName: req.file.originalname,
+        mimetype: req.file.mimetype,
+        resourceType: isPdf ? 'raw' : 'image',
+      });
 
-    const { payment_method_id } = req.body;
-    const sendAcknowledgmentEmail = booking.status === 'awaiting_payment';
+      const { payment_method_id } = req.body;
+      const sendAcknowledgmentEmail = booking.status === 'awaiting_payment';
 
-    await pool.query(
-      `UPDATE bookings SET
-        payment_proof_url = ?, payment_proof_public_id = ?,
-        status = 'payment_submitted',
-        payment_method_id = COALESCE(?, payment_method_id)
-       WHERE id = ?`,
-      [proofUrl, publicId, payment_method_id || null, booking.id]
-    );
+      await pool.query(
+        `UPDATE bookings SET
+          payment_proof_url = ?, payment_proof_public_id = ?,
+          status = 'payment_submitted',
+          payment_method_id = COALESCE(?, payment_method_id)
+         WHERE id = ?`,
+        [proofUrl, publicId, payment_method_id || null, booking.id]
+      );
 
-    res.json({
-      message: 'Payment proof uploaded. Our team will verify shortly.',
-      email_sent: false,
-      email_pending: sendAcknowledgmentEmail,
-    });
+      res.json({
+        message: 'Payment proof uploaded. Our team will verify shortly.',
+        email_sent: false,
+        email_pending: sendAcknowledgmentEmail,
+      });
 
-    if (sendAcknowledgmentEmail) {
-      prepareBookingForEmail(pool, { ...booking, status: 'payment_submitted' })
-        .then((emailBooking) =>
-          sendPaymentProofReceivedEmail(emailBooking, { name: emailBooking.room_name })
-        )
-        .then((emailResult) => {
-          if (!emailResult.sent) {
-            console.warn('[Payment proof] Guest email not sent:', emailResult.reason, emailResult.hint || '');
-          }
-        })
-        .catch((err) => console.error('[Payment proof] Guest email error:', err.message));
+      if (sendAcknowledgmentEmail) {
+        prepareBookingForEmail(pool, { ...booking, status: 'payment_submitted' })
+          .then((emailBooking) =>
+            sendPaymentProofReceivedEmail(emailBooking, {
+              name: emailBooking.room_name,
+            })
+          )
+          .then((emailResult) => {
+            if (!emailResult.sent) {
+              console.warn(
+                '[Payment proof] Guest email not sent:',
+                emailResult.reason,
+                emailResult.hint || ''
+              );
+            }
+          })
+          .catch((err) => console.error('[Payment proof] Guest email error:', err.message));
+      }
+    } catch (err) {
+      console.error('[Payment proof] Upload failed:', err);
+      res.status(500).json({
+        message:
+          err.message?.includes('EACCES') || err.code === 'EACCES'
+            ? 'Server could not save the payment proof. Please contact the resort.'
+            : 'Could not upload payment proof. Please try a JPG or PNG under 10MB.',
+      });
     }
   }
 );
@@ -1193,9 +1213,10 @@ router.post(
       return res.status(400).json({ message: 'Senior citizen ID is only required for guests aged 60+' });
     }
 
-    const isPdf = req.file.mimetype === 'application/pdf';
+    const isPdf = String(req.file.mimetype || '').toLowerCase() === 'application/pdf';
     const { url: idUrl, publicId } = await uploadFile(req.file.buffer, 'senior-ids', {
       originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
       resourceType: isPdf ? 'raw' : 'image',
     });
 
@@ -1253,9 +1274,10 @@ router.post(
       return res.status(400).json({ message: 'PWD ID is only required for guests marked as PWD' });
     }
 
-    const isPdf = req.file.mimetype === 'application/pdf';
+    const isPdf = String(req.file.mimetype || '').toLowerCase() === 'application/pdf';
     const { url: idUrl, publicId } = await uploadFile(req.file.buffer, 'pwd-ids', {
       originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
       resourceType: isPdf ? 'raw' : 'image',
     });
 

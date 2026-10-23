@@ -46,6 +46,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local image/file uploads (never commit; live Hostinger files must live OUTSIDE the repo via UPLOADS_DIR)
+backend/uploads/**
+!backend/uploads/.gitkeep
+
 # Logs
 *.log
 

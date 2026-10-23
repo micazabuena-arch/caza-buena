@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { seedAdminUser, seedMenuItems } from './config/seed.js';
 import { UPLOADS_DIR } from './utils/fileUpload.js';
+import { mountUploads } from './utils/serveUploads.js';
 import { isCloudinaryConfigured } from './config/cloudinary.js';
 import { isSmtpConfigured } from './services/email.js';
 import pool from './config/database.js';
@@ -48,7 +49,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Locally stored uploads (payment proofs, gallery, QR codes)
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Use readFile-based serving — Hostinger has rejected express.static/sendFile before.
+mountUploads(app, UPLOADS_DIR);
 
 app.get('/api/health', async (_req, res) => {
   let database = 'connected';
@@ -64,6 +66,8 @@ app.get('/api/health', async (_req, res) => {
     name: 'Caza Buena API',
     database,
     cloudinary: isCloudinaryConfigured() ? 'connected' : 'local uploads only',
+    // Absolute path so you can confirm live uploads survive outside the deploy folder
+    uploadsDir: UPLOADS_DIR,
     smtp: isSmtpConfigured() ? 'configured' : 'missing',
   });
 });
@@ -92,6 +96,10 @@ app.use((err, _req, res, _next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
   }
+  // Multer fileFilter errors (wrong image type from phone screenshots, etc.)
+  if (err.status === 400 || err.name === 'MulterError') {
+    return res.status(400).json({ message: err.message || 'Invalid upload' });
+  }
   res.status(err.status || 500).json({ message: err.message || 'Server error' });
 });
 
@@ -105,6 +113,11 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`Caza Buena API running on http://localhost:${PORT}`);
+    console.log(
+      isCloudinaryConfigured()
+        ? 'Uploads: Cloudinary'
+        : `Uploads: local disk → ${UPLOADS_DIR}`
+    );
   });
 }
 

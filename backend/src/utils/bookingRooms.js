@@ -38,11 +38,13 @@ export function normalizeRoomLines(body) {
  * @param {object} [options]
  * @param {boolean} [options.skipAvailabilityCheck] - Skip calendar conflicts (admin ante-date recording).
  * @param {boolean} [options.allowInactiveRooms] - Allow booking rooms marked inactive (admin only).
+ * @param {boolean} [options.allowOverCapacity] - Admin-only soft override of room max guests.
  */
 export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, options = {}) {
   const {
     skipAvailabilityCheck = false,
     allowInactiveRooms = false,
+    allowOverCapacity = false,
     excludeBookingId = null,
   } = options;
   const checkInStr = String(checkIn).slice(0, 10);
@@ -81,7 +83,7 @@ export async function validateAndPriceRoomLines(pool, checkIn, checkOut, rawLine
       childrenUnder6: line.children_under6,
       children7_12: line.children_7_12,
     };
-    const occCheck = validateOccupancy(room, occupancy);
+    const occCheck = validateOccupancy(room, occupancy, { allowOverCapacity });
     if (!occCheck.valid) {
       return { error: `Room ${i + 1} (${room.name}): ${occCheck.message}` };
     }

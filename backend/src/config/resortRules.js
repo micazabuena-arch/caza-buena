@@ -211,8 +211,17 @@ export function getIncludedAdultsForRoom(room, occupancy) {
 /**
  * Validate booking occupancy.
  * When Admin → Rooms has min/max set, that headcount is the only guest limit for that room.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.allowOverCapacity] - Admin-only: over max is a soft warning, not a hard fail.
+ *   Public booking must never set this. Min guests / at least 1 adult still hard-fail.
  */
-export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_12 = 0 }) {
+export function validateOccupancy(
+  room,
+  { adults, childrenUnder6 = 0, children7_12 = 0 },
+  options = {}
+) {
+  const { allowOverCapacity = false } = options;
   const a = Number(adults) || 0;
   const u6 = Number(childrenUnder6) || 0;
   const t712 = Number(children7_12) || 0;
@@ -233,10 +242,17 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
       };
     }
     if (total > adminMax) {
-      return {
-        valid: false,
-        message: `${prefix}allows up to ${adminMax} guest(s). You selected ${total}.`,
-      };
+      const message = `${prefix}allows up to ${adminMax} guest(s). You selected ${total}.`;
+      if (allowOverCapacity) {
+        return {
+          valid: true,
+          overCapacity: true,
+          warning: message,
+          roomType: limits.roomType,
+          capacitySummary: limits.capacitySummary,
+        };
+      }
+      return { valid: false, message };
     }
     return {
       valid: true,
@@ -251,7 +267,19 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
     childrenUnder6: u6,
     children7_12: t712,
   });
-  if (!typeCheck.valid) return typeCheck;
+  if (!typeCheck.valid) {
+    // Composition / type rules: staff may override the same way as an admin max cap.
+    if (allowOverCapacity) {
+      return {
+        valid: true,
+        overCapacity: true,
+        warning: typeCheck.message,
+        roomType,
+        capacitySummary: limits.capacitySummary,
+      };
+    }
+    return typeCheck;
+  }
 
   if (total < limits.minGuests) {
     return {
@@ -261,10 +289,17 @@ export function validateOccupancy(room, { adults, childrenUnder6 = 0, children7_
   }
 
   if (total > limits.maxGuests) {
-    return {
-      valid: false,
-      message: `${prefix}allows up to ${limits.maxGuests} guest(s). You selected ${total}.`,
-    };
+    const message = `${prefix}allows up to ${limits.maxGuests} guest(s). You selected ${total}.`;
+    if (allowOverCapacity) {
+      return {
+        valid: true,
+        overCapacity: true,
+        warning: message,
+        roomType,
+        capacitySummary: limits.capacitySummary,
+      };
+    }
+    return { valid: false, message };
   }
 
   return { valid: true, roomType, capacitySummary: limits.capacitySummary };

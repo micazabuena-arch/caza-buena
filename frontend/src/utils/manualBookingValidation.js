@@ -13,10 +13,39 @@ export function isValidGuestPhone(phone) {
 }
 
 /**
+ * Soft capacity warnings for admin override (over max_guests).
+ * Public booking must not use this — keep hard blocks there.
+ */
+export function collectOverCapacityWarnings(roomLines = [], rooms = [], lineQuotes = {}) {
+  const warnings = [];
+  for (const line of roomLines) {
+    if (!line.room_id) continue;
+    const room = rooms.find((r) => String(r.id) === String(line.room_id));
+    if (!room) continue;
+    const quote = lineQuotes[line.id];
+    const maxG =
+      quote?.room_limits?.max_guests ?? room.max_guests ?? room.capacity ?? 99;
+    const count = roomLineGuestCount(line);
+    if (count > maxG) {
+      warnings.push(
+        `${room.name} allows up to ${maxG} guest(s). You selected ${count}.`
+      );
+    } else if (quote?.occupancy_error) {
+      // API may still report composition / occupancy text even when totals match max.
+      warnings.push(quote.occupancy_error);
+    }
+  }
+  return warnings;
+}
+
+/**
  * Validate manual booking fields for a tab or full form.
- * Returns { fieldErrors, bannerError, tabId } — all fieldErrors values are strings.
+ * Returns { fieldErrors, bannerError, capacityWarnings, firstTabWithError }.
  * Past check-in is allowed (admin ante-date / late recording for SOA).
  * Supports multi-room via context.roomLines + context.lineQuotes.
+ *
+ * When context.allowOverCapacity is true (admin manual / quote→booking), guest counts
+ * above room max become soft warnings instead of hard errors.
  */
 export function validateManualBookingFields(form, context = {}) {
   const {
@@ -34,6 +63,7 @@ export function validateManualBookingFields(form, context = {}) {
     totalAmount,
     customPay,
     roomSubtotal,
+    allowOverCapacity = false,
     // Legacy single-room fields (kept for backwards compatibility)
     availability,
     availabilityChecking,
@@ -44,6 +74,7 @@ export function validateManualBookingFields(form, context = {}) {
   const fieldErrors = {};
   let bannerError = null;
   let firstTabWithError = null;
+  const capacityWarnings = [];
 
   const markTab = (tabId) => {
     if (!firstTabWithError) firstTabWithError = tabId;
@@ -84,13 +115,20 @@ export function validateManualBookingFields(form, context = {}) {
         if (!line.room_id) continue;
         const room = rooms.find((r) => String(r.id) === String(line.room_id));
         const count = roomLineGuestCount(line);
+        const maxG = room?.max_guests ?? room?.capacity ?? 99;
         if ((parseInt(line.adults, 10) || 0) < 1) {
           fieldErrors.adults = 'Each room needs at least 1 adult.';
           markTab('stay');
         }
-        if (room && count > (room.max_guests ?? room.capacity ?? 99)) {
-          fieldErrors.adults = `${room.name} allows up to ${room.max_guests ?? room.capacity} guests.`;
-          markTab('stay');
+        if (room && count > maxG) {
+          if (allowOverCapacity) {
+            capacityWarnings.push(
+              `${room.name} allows up to ${maxG} guest(s). You selected ${count}.`
+            );
+          } else {
+            fieldErrors.adults = `${room.name} allows up to ${maxG} guests.`;
+            markTab('stay');
+          }
         }
         if (room && count < (room.min_guests ?? 1)) {
           fieldErrors.adults = `${room.name} requires at least ${room.min_guests ?? 1} guest(s).`;
@@ -108,11 +146,22 @@ export function validateManualBookingFields(form, context = {}) {
             const room = rooms.find((r) => String(r.id) === String(line.room_id));
             const label = room?.name || 'Room';
             if (quote?.occupancy_error) {
-              bannerError = `${label}: ${quote.occupancy_error}`;
-              markTab('stay');
-              break;
+              if (allowOverCapacity) {
+                // Soft: staff confirm on submit; do not block Next / Create.
+                if (!capacityWarnings.includes(quote.occupancy_error)) {
+                  capacityWarnings.push(quote.occupancy_error);
+                }
+              } else {
+                bannerError = `${label}: ${quote.occupancy_error}`;
+                markTab('stay');
+                break;
+              }
             }
-            if (!quote?.available && !anteDate) {
+            // available=false can mean calendar conflict OR occupancy_error on the API.
+            // When over-capacity only, still allow pricing / proceed for admin.
+            const calendarBlocked =
+              quote && !quote.available && !quote.occupancy_error && !anteDate;
+            if (calendarBlocked) {
               bannerError = `${label} is not available for these dates.`;
               markTab('stay');
               break;
@@ -136,16 +185,25 @@ export function validateManualBookingFields(form, context = {}) {
         markTab('stay');
       }
       if (selectedRoom && guestCount > (selectedRoom.max_guests ?? selectedRoom.capacity ?? 99)) {
-        fieldErrors.adults = `This room allows up to ${selectedRoom.max_guests ?? selectedRoom.capacity} guests.`;
-        markTab('stay');
+        const maxG = selectedRoom.max_guests ?? selectedRoom.capacity;
+        if (allowOverCapacity) {
+          capacityWarnings.push(`This room allows up to ${maxG} guests.`);
+        } else {
+          fieldErrors.adults = `This room allows up to ${maxG} guests.`;
+          markTab('stay');
+        }
       }
       if (form.room_id && !dateError) {
         if (availabilityChecking) {
           bannerError = 'Checking availability for these dates…';
           markTab('stay');
         } else if (availability?.occupancy_error) {
-          bannerError = availability.occupancy_error;
-          markTab('stay');
+          if (allowOverCapacity) {
+            capacityWarnings.push(availability.occupancy_error);
+          } else {
+            bannerError = availability.occupancy_error;
+            markTab('stay');
+          }
         } else if (!availability?.available && !anteDate) {
           bannerError = 'Room is not available for these dates.';
           markTab('stay');
@@ -242,7 +300,7 @@ export function validateManualBookingFields(form, context = {}) {
     }
   }
 
-  return { fieldErrors, bannerError, firstTabWithError };
+  return { fieldErrors, bannerError, capacityWarnings, firstTabWithError };
 }
 
 export { minCheckOutDate };

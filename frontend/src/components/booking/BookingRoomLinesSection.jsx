@@ -19,6 +19,7 @@ function RoomLineCard({
   roomsSearchUrl,
   usedRoomIds,
   allowUnavailable,
+  allowOverCapacity,
   guestFacing,
   showAssignedRoomNumber,
 }) {
@@ -47,6 +48,14 @@ function RoomLineCard({
   const update = (patch) => onChange(line.id, patch);
   const calendarConflict =
     line.room_id && lineQuote && !lineQuote.available && !lineQuote.occupancy_error;
+  // Soft staff override: occupancy_error is a warning, not a hard stop.
+  const showOccupancyHardError = lineQuote?.occupancy_error && !allowOverCapacity;
+  const showOccupancySoftWarning =
+    allowOverCapacity && (overCapacity || lineQuote?.occupancy_error);
+  const showPricedSubtotal =
+    lineQuote?.subtotal != null &&
+    (lineQuote.available || allowUnavailable || (allowOverCapacity && lineQuote.occupancy_error)) &&
+    !showOccupancyHardError;
 
   return (
     <div className="rounded-xl border border-aegean-200 bg-white overflow-hidden">
@@ -174,19 +183,26 @@ function RoomLineCard({
         {quoteLoading && line.room_id && (
           <p className="text-xs text-aegean-500">Checking availability & pricing…</p>
         )}
-        {lineQuote?.occupancy_error && (
+        {showOccupancyHardError && (
           <p className="text-sm text-red-600">{lineQuote.occupancy_error}</p>
         )}
         {calendarConflict && !allowUnavailable && (
           <p className="text-sm text-red-600">Not available for selected dates</p>
         )}
         {calendarConflict && allowUnavailable && (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          <p className="text-sm text-aegean-800 bg-white border border-aegean-200 rounded-lg px-3 py-2">
             Calendar shows a conflict — ante-dated recording is still allowed for Statement of Account.
           </p>
         )}
-        {overCapacity && (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+        {showOccupancySoftWarning && (
+          <p className="text-sm text-aegean-800 bg-white border border-aegean-200 rounded-lg px-3 py-2">
+            {lineQuote?.occupancy_error ||
+              `This room allows up to ${maxG} guest${maxG !== 1 ? 's' : ''}. You selected ${guestCount}.`}{' '}
+            Staff can still proceed — you will be asked to confirm.
+          </p>
+        )}
+        {!allowOverCapacity && overCapacity && !lineQuote?.occupancy_error && (
+          <p className="text-sm text-aegean-800 bg-white border border-aegean-200 rounded-lg px-3 py-2">
             This room allows up to {maxG} guest{maxG !== 1 ? 's' : ''}. Add another room below or
             lower the guest count for this room.
           </p>
@@ -196,9 +212,7 @@ function RoomLineCard({
             This room requires at least {minG} guest{minG !== 1 ? 's' : ''}.
           </p>
         )}
-        {lineQuote?.subtotal != null &&
-          (lineQuote.available || allowUnavailable) &&
-          !lineQuote.occupancy_error && (
+        {showPricedSubtotal && (
           <p className="text-sm text-aegean-700">
             Room subtotal: <strong>₱{Number(lineQuote.subtotal).toLocaleString()}</strong>
             {lineQuote.nights ? ` · ${lineQuote.nights} night(s)` : ''}
@@ -221,6 +235,7 @@ export default function BookingRoomLinesSection({
   roomsSearchUrl,
   usedRoomIds,
   allowUnavailable = false,
+  allowOverCapacity = false,
   guestFacing = false,
   showAssignedRoomNumber = false,
 }) {
@@ -243,6 +258,7 @@ export default function BookingRoomLinesSection({
           roomsSearchUrl={roomsSearchUrl}
           usedRoomIds={usedRoomIds}
           allowUnavailable={allowUnavailable}
+          allowOverCapacity={allowOverCapacity}
           guestFacing={guestFacing}
           showAssignedRoomNumber={showAssignedRoomNumber}
         />

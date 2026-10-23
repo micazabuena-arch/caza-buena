@@ -82,6 +82,7 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     const priced = await validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, {
       skipAvailabilityCheck,
       allowInactiveRooms: true,
+      allowOverCapacity: true,
       excludeBookingId: existingBooking.id,
     });
     if (priced.error) return { error: priced.error };
@@ -114,11 +115,16 @@ export async function computeAdminBookingUpdate(pool, existingBooking, body) {
     }
 
     const { validateOccupancy } = await import('../config/resortRules.js');
-    const occCheck = validateOccupancy(room, {
-      adults: adultsN,
-      childrenUnder6,
-      children7_12: children712,
-    });
+    // Same admin soft override as multi-room path — staff may exceed max_guests.
+    const occCheck = validateOccupancy(
+      room,
+      {
+        adults: adultsN,
+        childrenUnder6,
+        children7_12: children712,
+      },
+      { allowOverCapacity: true }
+    );
     if (!occCheck.valid) return { error: occCheck.message };
 
     const { calculateStayTotal } = await import('./pricing.js');

@@ -49,7 +49,8 @@ Caza Buena/
 2. Double-click or run: `.\start-dev.ps1` — opens API + website in two terminals
 3. Open **http://localhost:5173**
 
-> Uploads (payment proofs, gallery, QR codes) work **without Cloudinary** — files are stored locally in `backend/uploads/`.
+> Uploads (payment proofs, gallery, QR codes) work **without Cloudinary** — files are stored on disk.
+> Locally that is `backend/uploads/`. On Hostinger set `UPLOADS_DIR` to a folder **outside** the git project so push/redeploy does not wipe images.
 
 ## Setup
 
@@ -110,8 +111,8 @@ See `backend/.env.example` and `frontend/.env.example`.
 **Required for full functionality:**
 - MySQL connection
 - `JWT_SECRET` for admin auth
-- Cloudinary for image/proof uploads (production)
 - SMTP for booking emails
+- Local uploads via `UPLOADS_DIR` (or Cloudinary if you prefer)
 
 ## Production deployment
 
@@ -119,6 +120,18 @@ See `backend/.env.example` and `frontend/.env.example`.
 - Serve `frontend/dist` via Nginx/Apache
 - Run API with PM2: `cd backend && npm start`
 - Point `FRONTEND_URL` and `VITE_API_URL` to production domains
+
+### Hostinger: keep local images after every Git push
+
+Git deploy replaces the app folder. Anything saved under `backend/uploads/` inside that folder is deleted.
+
+1. On the server, create a permanent folder **outside** the site/repo, e.g. `~/caza-buena-uploads`
+2. If images already exist under the app’s `backend/uploads`, **copy** them into that permanent folder once (before the next wipe)
+3. In Hostinger env / `.env` set:
+   `UPLOADS_DIR=/home/YOUR_USER/caza-buena-uploads`
+   (use the real absolute path)
+4. Restart the Node app
+5. Check `/api/health` — `uploadsDir` should show that permanent path, and `cloudinary` should stay `local uploads only`
 
 ### Admin password on Render / production
 

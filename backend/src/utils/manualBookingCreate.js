@@ -73,9 +73,11 @@ export async function createManualBooking(body) {
   });
 
   // Ante-dated stays skip calendar conflicts so staff can record late bookings / SOA.
+  // Over-capacity is allowed for admin (with UI confirm); public booking still hard-blocks.
   const priced = await validateAndPriceRoomLines(pool, checkIn, checkOut, rawLines, {
     skipAvailabilityCheck: isAnteDateCheckIn(checkIn),
     allowInactiveRooms: true,
+    allowOverCapacity: true,
   });
   if (priced.error) return { error: priced.error };
 
