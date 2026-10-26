@@ -16,11 +16,12 @@ const A4_ASPECT = 'aspect-[210/297]';
 function normalizeSlides(data) {
   let raw = [];
   if (Array.isArray(data?.slides) && data.slides.length) {
-    raw = data.slides.slice(0, 3);
+    raw = data.slides;
   } else if (Array.isArray(data?.images)) {
-    raw = data.images.slice(0, 3).map((url) => ({ image_url: url, heading: '', text: '' }));
+    raw = data.images.map((url) => ({ image_url: url, heading: '', text: '' }));
   }
 
+  // Only slides with an image appear on the public page
   return raw
     .map((slide, i) => ({
       id: `whats-new-${i + 1}`,
