@@ -429,7 +429,8 @@ router.post(
         bringing_car, car_count, pet_count, pet_deposit_amount,
         bilao_package, bilao_amount, bilao_lines, boodle_fight, boodle_fight_tier, boodle_fight_amount, boodle_lines,
         status, payment_method_id, payment_option, amount_to_pay
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
+      // 34 bound fields + literal status + payment_method_id/option/amount = 37 params
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
       [
         reference,
         pricedLines[0].room_id,
@@ -502,7 +503,20 @@ router.post(
     });
     } catch (err) {
       console.error('Create booking error:', err);
-      res.status(500).json({ message: 'Unable to submit booking. Please try again.' });
+      // Surface a safe hint so Hostinger logs / client can show the real DB cause
+      // (placeholder mismatch, missing migrate column, etc.) instead of a blind 500.
+      const sqlHint = err.sqlMessage || err.message || '';
+      const needsMigrate =
+        /Unknown column|doesn't exist|ER_BAD_FIELD_ERROR|ER_NO_SUCH_TABLE/i.test(sqlHint);
+      res.status(500).json({
+        message: needsMigrate
+          ? 'Booking could not be saved — database needs an update. Ask the resort to run: cd backend && npm run migrate'
+          : 'Unable to submit booking. Please try again.',
+        detail: process.env.NODE_ENV === 'production' ? undefined : sqlHint,
+        // Always include a short code-friendly hint for ops (no stack traces).
+        error_code: err.code || undefined,
+        error_hint: sqlHint ? String(sqlHint).slice(0, 180) : undefined,
+      });
     }
   }
 );
