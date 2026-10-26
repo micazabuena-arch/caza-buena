@@ -429,7 +429,6 @@ router.post(
         bringing_car, car_count, pet_count, pet_deposit_amount,
         bilao_package, bilao_amount, bilao_lines, boodle_fight, boodle_fight_tier, boodle_fight_amount, boodle_lines,
         status, payment_method_id, payment_option, amount_to_pay
-      // 34 bound fields + literal status + payment_method_id/option/amount = 37 params
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
       [
         reference,
