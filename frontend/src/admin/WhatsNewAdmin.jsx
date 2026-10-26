@@ -326,17 +326,6 @@ export default function WhatsNewAdmin() {
           })}
         </div>
 
-        {canAdd && (
-          <button
-            type="button"
-            onClick={addSlide}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-aegean-200 text-sm font-medium text-aegean-700 hover:border-aegean-400 hover:bg-aegean-50/50 transition-colors"
-          >
-            <Plus size={18} />
-            Add another slide
-          </button>
-        )}
-
         <div className="pt-2">
           <SubmitButton loading={saving} loadingLabel="Saving..." className="text-sm">
             Save What&apos;s New
